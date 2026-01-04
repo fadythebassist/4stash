@@ -1,0 +1,81 @@
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.topbar-scroll {
+  display: flex;
+  gap: var(--spacing-sm);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0 var(--spacing-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.topbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.topbar-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.topbar-chip:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.topbar-chip.active {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  border-color: transparent;
+  color: white;
+}
+
+.chip-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.chip-count {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.125rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.add-chip {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+  font-size: 1.25rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.add-chip:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+@media (min-width: 768px) {
+  .topbar-scroll {
+    padding: 0 var(--spacing-xl);
+  }
+}

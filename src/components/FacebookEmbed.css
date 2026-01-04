@@ -1,0 +1,39 @@
+.facebook-embed {
+  margin-bottom: var(--spacing-sm);
+}
+
+.facebook-embed-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.facebook-embed-spinner {
+  font-size: 1.5rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
+}
+
+.facebook-embed .fb-post,
+.facebook-embed .fb-video {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.facebook-embed .fb-post > span,
+.facebook-embed .fb-video > span,
+.facebook-embed .fb-post iframe,
+.facebook-embed .fb-video iframe {
+  width: 100% !important;
+  max-width: 100% !important;
+}
