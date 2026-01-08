@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { fetchLinkMetadataWithCache } from '@/services/LinkMetadataService';
+import HashtagInput from './HashtagInput';
 import './Modal.css';
 
 interface AddItemModalProps {
@@ -20,6 +22,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const [url, setUrl] = useState(initialUrl);
   const [content, setContent] = useState(initialContent);
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined);
+  const [tags, setTags] = useState<string[]>([]);
   const [listId, setListId] = useState(lists[0]?.id || '');
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
@@ -118,16 +121,17 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     fullUrl: string
   ): Promise<{ url?: string; title?: string; description?: string; image?: string } | null> => {
     try {
-      const response = await fetch(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`);
-      if (!response.ok) return null;
-      const data = await response.json();
+      console.log('[AddItemModal] Fetching metadata for:', fullUrl);
+      const metadata = await fetchLinkMetadataWithCache(fullUrl);
+      console.log('[AddItemModal] Metadata fetched:', metadata);
       return {
-        url: typeof data.url === 'string' ? data.url : undefined,
-        title: typeof data.title === 'string' ? data.title : undefined,
-        description: typeof data.description === 'string' ? data.description : undefined,
-        image: typeof data.image === 'string' ? data.image : undefined
+        url: undefined, // We don't resolve URLs in our service
+        title: metadata.title,
+        description: metadata.description,
+        image: metadata.image
       };
-    } catch {
+    } catch (err) {
+      console.warn('[AddItemModal] Error fetching metadata:', err);
       return null;
     }
   };
@@ -188,7 +192,19 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       
       // For Instagram (and as a general fallback), use our server-side unfurl endpoint
       if (url.hostname.includes('instagram.com')) {
+        console.log('[AddItemModal] Detected Instagram URL, fetching metadata...');
+        
+        // Try Instagram oEmbed API first
+        try {
+          const oembedUrl = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(fullUrl)}&access_token=`;
+          // Note: Instagram oEmbed requires an access token, so we'll skip this approach
+          // Instead, try general metadata fetch
+        } catch (err) {
+          console.log('[AddItemModal] Instagram oEmbed not available');
+        }
+        
         const meta = await fetchUnfurl(fullUrl);
+        console.log('[AddItemModal] Instagram raw metadata:', meta);
 
         // Fallback to URL-based title
         const pathParts = url.pathname.split('/').filter((p) => p);
@@ -206,11 +222,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           .trim();
 
         const metaTitle = meta?.title;
-        return {
+        const result = {
           title: !isGenericInstagramTitle(metaTitle) ? metaTitle : fallbackTitle,
           description: description || undefined,
           thumbnail: meta?.image
         };
+        console.log('[AddItemModal] Instagram metadata result:', result);
+        return result;
       }
       
       // For TikTok, use oEmbed API
@@ -247,6 +265,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
       // For Facebook
       if (url.hostname.includes('facebook.com') || url.hostname.includes('fb.watch')) {
+        console.log('[AddItemModal] Detected Facebook URL, fetching metadata...');
         const meta = await fetchUnfurl(fullUrl);
         const resolvedUrl = meta?.url || fullUrl;
 
@@ -259,12 +278,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         else if (url.pathname.includes('/share/')) fallbackTitle = 'Facebook Share';
 
         const metaTitle = meta?.title;
-        return {
+        const result = {
           url: resolvedUrl,
           title: !isGenericFacebookTitle(metaTitle) ? metaTitle : fallbackTitle,
           description: meta?.description,
           thumbnail: meta?.image
         };
+        console.log('[AddItemModal] Facebook metadata result:', result);
+        return result;
       }
       
       // For other URLs, try unfurl then fall back to domain
@@ -284,12 +305,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     setThumbnail(undefined);
     const source = detectSource(newUrl);
     setDetectedSource(source?.source ?? null);
-    if (!title.trim() && source) {
+    
+    // Set a temporary placeholder title while fetching
+    const hadNoTitle = !title.trim();
+    if (hadNoTitle && source) {
       setTitle(`${source.label} ${source.contentType}`);
     }
     
-    // Auto-fetch title if URL is provided and title is empty
-    if (newUrl.trim() && !title.trim()) {
+    // Auto-fetch metadata if URL is provided
+    if (newUrl.trim()) {
       setFetchingTitle(true);
       try {
         // Add timeout to prevent infinite fetching
@@ -303,7 +327,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           setUrl(fetched.url);
         }
 
-        if (fetched?.title) {
+        // Update title if we had no title before, or if we got better metadata
+        if (fetched?.title && hadNoTitle) {
           setTitle(fetched.title);
         }
         if (fetched?.thumbnail) {
@@ -368,7 +393,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         thumbnail: finalThumbnail,
         listId,
         type: url ? 'link' : 'text',
-        source: finalSource
+        source: finalSource,
+        tags: tags.length > 0 ? tags : undefined
       });
       
       onClose();
@@ -391,7 +417,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
         <form onSubmit={handleSubmit} className="modal-form">
           {/* Preview section when sharing from other apps */}
-          {(url || thumbnail || detectedSource) && (
+          {(url || thumbnail) && (
             <div className="share-preview">
               {fetchingTitle ? (
                 <div className="share-preview-loading">
@@ -404,39 +430,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                 </div>
               ) : thumbnail ? (
                 <img src={thumbnail} alt="Preview" className="share-preview-image" />
-              ) : detectedSource && (
-                <div className="share-preview-placeholder">
-                  <span className={`share-preview-icon ${detectedSource}`}>
-                    {detectedSource === 'facebook' && '📘'}
-                    {detectedSource === 'instagram' && '📷'}
-                    {detectedSource === 'twitter' && '🐦'}
-                    {detectedSource === 'youtube' && '▶️'}
-                    {detectedSource === 'tiktok' && '🎵'}
-                    {detectedSource === 'reddit' && '👽'}
-                  </span>
-                  <span className="share-preview-text">Preview not available</span>
-                </div>
-              )}
-              {detectedSource && (
-                <div className="share-preview-badge">
-                  <span className={`share-preview-badge-icon ${detectedSource}`}>
-                    {detectedSource === 'facebook' && '📘'}
-                    {detectedSource === 'instagram' && '📷'}
-                    {detectedSource === 'twitter' && '🐦'}
-                    {detectedSource === 'youtube' && '▶️'}
-                    {detectedSource === 'tiktok' && '🎵'}
-                    {detectedSource === 'reddit' && '👽'}
-                  </span>
-                  <span className="share-preview-badge-text">
-                    {detectedSource === 'facebook' && 'Facebook'}
-                    {detectedSource === 'instagram' && 'Instagram'}
-                    {detectedSource === 'twitter' && 'X/Twitter'}
-                    {detectedSource === 'youtube' && 'YouTube'}
-                    {detectedSource === 'tiktok' && 'TikTok'}
-                    {detectedSource === 'reddit' && 'Reddit'}
-                  </span>
-                </div>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -477,6 +471,16 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
               placeholder="Add any notes or description..."
               rows={4}
               disabled={loading}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Hashtags</label>
+            <HashtagInput
+              tags={tags}
+              onChange={setTags}
+              placeholder="Type hashtags or paste comma-separated values..."
+              maxTags={10}
             />
           </div>
 

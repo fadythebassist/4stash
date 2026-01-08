@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import './FacebookPreviewCard.css';
 
 export interface FacebookPreviewCardProps {
@@ -14,6 +14,12 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
   description,
   thumbnail
 }) => {
+  // Use provided data directly, no metadata fetching needed
+  // Facebook links typically don't have extractable metadata due to CORS and Facebook's policies
+  const displayTitle = title;
+  const displayDescription = description;
+  const displayThumbnail = thumbnail;
+
   const normalizedUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
   const handleOpen = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
@@ -39,7 +45,8 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
   };
   
   const contentType = getContentType();
-  const displayTitle = title && !title.toLowerCase().includes('facebook') ? title : `Facebook ${contentType.label}`;
+  const fallbackTitle = `Facebook ${contentType.label}`;
+  const finalTitle = displayTitle && !displayTitle.toLowerCase().includes('facebook') ? displayTitle : fallbackTitle;
 
   return (
     <div
@@ -59,9 +66,16 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
         <span className="facebook-content-type">{contentType.icon} {contentType.label}</span>
       </div>
       
-      {thumbnail ? (
+      {displayThumbnail ? (
         <div className="facebook-preview-image">
-          <img src={thumbnail} alt={displayTitle} />
+          <img 
+            src={displayThumbnail} 
+            alt={finalTitle}
+            onError={(e) => {
+              // If thumbnail fails to load, hide it
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
           <div className="facebook-preview-overlay">
             <span className="facebook-play-icon">{contentType.icon}</span>
           </div>
@@ -74,8 +88,8 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
       )}
       
       <div className="facebook-preview-content">
-        {displayTitle && <h4 className="facebook-preview-title">{displayTitle}</h4>}
-        {description && <p className="facebook-preview-description">{description}</p>}
+        {finalTitle && <h4 className="facebook-preview-title">{finalTitle}</h4>}
+        {displayDescription && <p className="facebook-preview-description">{displayDescription}</p>}
         <a
           href={normalizedUrl}
           target="_blank"

@@ -281,18 +281,71 @@
   gap: var(--spacing-sm);
   background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
   color: var(--text-secondary);
+  position: relative;
+  overflow: hidden;
+}
+
+.share-preview-placeholder.instagram {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  color: white;
+}
+
+.share-preview-placeholder.facebook {
+  background: linear-gradient(135deg, #1877f2 0%, #0e5bb5 100%);
+  color: white;
+}
+
+.share-preview-placeholder.twitter {
+  background: linear-gradient(135deg, #1da1f2 0%, #0c85d0 100%);
+  color: white;
+}
+
+.share-preview-placeholder.youtube {
+  background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+  color: white;
+}
+
+.share-preview-placeholder.tiktok {
+  background: linear-gradient(135deg, #000000 0%, #25f4ee 50%, #fe2c55 100%);
+  color: white;
+}
+
+.share-preview-placeholder.reddit {
+  background: linear-gradient(135deg, #ff4500 0%, #cc3700 100%);
+  color: white;
 }
 
 .share-preview-icon {
-  font-size: 3rem;
+  font-size: 4rem;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
 }
 
 .share-preview-icon.facebook { color: #1877f2; }
-.share-preview-icon.instagram { color: #e4405f; }
+.share-preview-icon.instagram { 
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 .share-preview-icon.twitter { color: #1da1f2; }
 .share-preview-icon.youtube { color: #ff0000; }
 .share-preview-icon.tiktok { color: #00f2ea; }
 .share-preview-icon.reddit { color: #ff4500; }
+
+/* Override icon colors when on colored backgrounds */
+.share-preview-placeholder.instagram .share-preview-icon,
+.share-preview-placeholder.facebook .share-preview-icon,
+.share-preview-placeholder.twitter .share-preview-icon,
+.share-preview-placeholder.youtube .share-preview-icon,
+.share-preview-placeholder.tiktok .share-preview-icon,
+.share-preview-placeholder.reddit .share-preview-icon {
+  color: white;
+  background: none;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: white;
+  background-clip: unset;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
 
 .share-preview-text {
   font-size: 0.875rem;

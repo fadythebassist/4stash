@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import FacebookPreviewCard from './FacebookPreviewCard';
+import { fetchLinkMetadataWithCache } from '../services/LinkMetadataService';
 import './FacebookEmbed.css';
 
 const FACEBOOK_SDK_SRC = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v18.0';

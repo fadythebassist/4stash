@@ -73,27 +73,6 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
     return undefined;
   }, [item.source, item.url]);
 
-  const getSourceBadge = () => {
-    const badges: Record<string, { emoji: string; color: string }> = {
-      youtube: { emoji: '▶️', color: '#ff0000' },
-      twitter: { emoji: '🐦', color: '#1da1f2' },
-      tiktok: { emoji: '🎵', color: '#000000' },
-      instagram: { emoji: '📷', color: '#e4405f' },
-      reddit: { emoji: '👽', color: 'var(--accent-primary)' },
-      facebook: { emoji: '📘', color: 'var(--accent-primary)' }
-    };
-
-    if (derivedSource && badges[derivedSource]) {
-      const badge = badges[derivedSource];
-      return (
-        <span className="source-badge" style={{ background: badge.color }}>
-          {badge.emoji}
-        </span>
-      );
-    }
-    return null;
-  };
-
   const displayThumbnail = resolvedThumbnail ?? item.thumbnail;
   const displayContent = item.content ?? resolvedContent;
 
@@ -219,7 +198,6 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
               <div className="instagram-logo">📷</div>
             </div>
           )}
-          {getSourceBadge()}
         </div>
       ) : !suppressTopMedia && item.type === 'video' ? (
         <div className="card-thumbnail placeholder">
@@ -227,7 +205,6 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
             <span>▶️</span>
             <p>{item.title}</p>
           </div>
-          {getSourceBadge()}
         </div>
       ) : !suppressTopMedia && displayThumbnail && thumbnailError ? (
         <div className="card-thumbnail placeholder">
@@ -235,7 +212,6 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
             <span>🖼️</span>
             <p>{item.title}</p>
           </div>
-          {getSourceBadge()}
         </div>
       ) : null}
       
@@ -315,9 +291,9 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
           
           {item.tags && item.tags.length > 0 && (
             <div className="card-tags">
-              {item.tags.slice(0, 2).map((tag, idx) => (
+              {item.tags.slice(0, 3).map((tag, idx) => (
                 <span key={idx} className="card-tag">
-                  {tag}
+                  #{tag}
                 </span>
               ))}
             </div>
