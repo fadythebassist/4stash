@@ -61,8 +61,8 @@ Enable users to connect their social media accounts to access private posts they
 
 3. Add to `.env`:
    ```env
-   VITE_FACEBOOK_APP_ID=1386216603247526
-   VITE_FACEBOOK_APP_SECRET=2561d685a6a44a2f82a6429a09e4a4d6
+   VITE_FACEBOOK_APP_ID=X
+   VITE_FACEBOOK_APP_SECRET=Y
    VITE_FACEBOOK_REDIRECT_URI=http://localhost:5174/auth/facebook/callback
    ```
 
