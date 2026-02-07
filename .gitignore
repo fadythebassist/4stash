@@ -33,3 +33,7 @@ dist-ssr
 .firebase
 firebase-debug.log
 firestore-debug.log
+
+
+# Social Auth
+SOCIAL_AUTH_PLAN.md
