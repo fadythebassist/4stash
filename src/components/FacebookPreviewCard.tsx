@@ -1,4 +1,19 @@
-import React, { useEffect, useState } from 'react';
+/**
+ * Facebook Preview Card Component
+ * 
+ * Displays a clean, clickable preview card for Facebook content.
+ * 
+ * Why we use a preview card instead of Facebook's embed SDK:
+ * 1. CORS Restrictions: Facebook blocks metadata fetching from client-side apps
+ * 2. Cookie Requirements: Facebook embeds require third-party cookies (often blocked)
+ * 3. Privacy Extensions: Ad blockers and privacy tools often block Facebook SDKs
+ * 4. Loading Performance: SDK embeds are slow and unreliable
+ * 5. User Experience: A simple preview card is faster and more consistent
+ * 
+ * This approach provides a better, more reliable experience for users.
+ */
+
+import React from 'react';
 import './FacebookPreviewCard.css';
 
 export interface FacebookPreviewCardProps {
@@ -14,12 +29,6 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
   description,
   thumbnail
 }) => {
-  // Use provided data directly, no metadata fetching needed
-  // Facebook links typically don't have extractable metadata due to CORS and Facebook's policies
-  const displayTitle = title;
-  const displayDescription = description;
-  const displayThumbnail = thumbnail;
-
   const normalizedUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
   const handleOpen = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
@@ -45,8 +54,7 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
   };
   
   const contentType = getContentType();
-  const fallbackTitle = `Facebook ${contentType.label}`;
-  const finalTitle = displayTitle && !displayTitle.toLowerCase().includes('facebook') ? displayTitle : fallbackTitle;
+  const displayTitle = title && !title.toLowerCase().includes('facebook') ? title : `Facebook ${contentType.label}`;
 
   return (
     <div
@@ -66,16 +74,9 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
         <span className="facebook-content-type">{contentType.icon} {contentType.label}</span>
       </div>
       
-      {displayThumbnail ? (
+      {thumbnail ? (
         <div className="facebook-preview-image">
-          <img 
-            src={displayThumbnail} 
-            alt={finalTitle}
-            onError={(e) => {
-              // If thumbnail fails to load, hide it
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
+          <img src={thumbnail} alt={displayTitle} />
           <div className="facebook-preview-overlay">
             <span className="facebook-play-icon">{contentType.icon}</span>
           </div>
@@ -88,8 +89,8 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
       )}
       
       <div className="facebook-preview-content">
-        {finalTitle && <h4 className="facebook-preview-title">{finalTitle}</h4>}
-        {displayDescription && <p className="facebook-preview-description">{displayDescription}</p>}
+        {displayTitle && <h4 className="facebook-preview-title">{displayTitle}</h4>}
+        {description && <p className="facebook-preview-description">{description}</p>}
         <a
           href={normalizedUrl}
           target="_blank"

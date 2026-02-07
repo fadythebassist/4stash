@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Item, List } from '@/types';
 import { useData } from '@/contexts/DataContext';
-import HashtagInput from './HashtagInput';
 import './Modal.css';
 
 interface EditItemModalProps {
@@ -15,7 +14,6 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ item, lists, onClose, onS
   const { updateItem } = useData();
   const [title, setTitle] = useState(item.title);
   const [content, setContent] = useState(item.content || '');
-  const [tags, setTags] = useState(item.tags || []);
   const [listId, setListId] = useState(item.listId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,8 +32,7 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ item, lists, onClose, onS
         id: item.id,
         title: title.trim() || item.title,
         content: content.trim() || undefined,
-        listId,
-        tags: tags.length > 0 ? tags : undefined
+        listId
       });
       onSave();
       onClose();
@@ -79,16 +76,6 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ item, lists, onClose, onS
               placeholder="Add any notes or description..."
               rows={4}
               disabled={loading}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Hashtags</label>
-            <HashtagInput
-              tags={tags}
-              onChange={setTags}
-              placeholder="Type hashtags or paste comma-separated values..."
-              maxTags={10}
             />
           </div>
 

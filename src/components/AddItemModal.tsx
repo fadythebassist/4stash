@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { fetchLinkMetadataWithCache } from '@/services/LinkMetadataService';
-import HashtagInput from './HashtagInput';
+import { fetchLinkMetadata } from '@/services/LinkMetadataService';
 import './Modal.css';
 
 interface AddItemModalProps {
@@ -11,6 +10,13 @@ interface AddItemModalProps {
   initialContent?: string;
 }
 
+// Decode HTML entities (e.g., &#x627; → Arabic characters)
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 const AddItemModal: React.FC<AddItemModalProps> = ({ 
   onClose, 
   initialUrl = '', 
@@ -18,11 +24,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   initialContent = ''
 }) => {
   const { lists, createItem } = useData();
-  const [title, setTitle] = useState(initialTitle);
+  const [title, setTitle] = useState(initialTitle ? decodeHtmlEntities(initialTitle) : '');
   const [url, setUrl] = useState(initialUrl);
-  const [content, setContent] = useState(initialContent);
+  const [content, setContent] = useState(initialContent ? decodeHtmlEntities(initialContent) : '');
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined);
-  const [tags, setTags] = useState<string[]>([]);
   const [listId, setListId] = useState(lists[0]?.id || '');
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
@@ -64,46 +69,51 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
   // Auto-fetch metadata when modal opens with initial URL
   useEffect(() => {
-    if (initialUrl && !initialTitle) {
-      // Detect source immediately for better UX
-      const source = detectSource(initialUrl);
-      if (source) {
-        setDetectedSource(source.source);
-        // Set a temporary title while fetching
-        setTitle(`${source.label} ${source.contentType}`);
-      }
-      
-      // Fetch actual metadata
-      const fetchInitialMetadata = async () => {
-        setFetchingTitle(true);
-        try {
-          const meta = await fetchUrlMetadata(initialUrl);
-          if (meta?.title) {
-            setTitle(meta.title);
-          }
-          if (meta?.thumbnail) {
-            setThumbnail(meta.thumbnail);
-          }
-          if (meta?.description && !content) {
-            setContent(meta.description);
-          }
-          if (meta?.url && meta.url !== initialUrl) {
-            setUrl(meta.url);
-          }
-        } catch (err) {
-          console.error('[AddItemModal] Error fetching initial metadata:', err);
-        } finally {
-          setFetchingTitle(false);
-        }
-      };
-      
-      fetchInitialMetadata();
-    } else if (initialUrl) {
-      const source = detectSource(initialUrl);
-      if (source) {
-        setDetectedSource(source.source);
-      }
+    if (!initialUrl) return;
+
+    const source = detectSource(initialUrl);
+    if (source) {
+      setDetectedSource(source.source);
     }
+
+    const hasGenericInitialTitle = !!initialTitle && !!source && (
+      (source.source === 'facebook' && isGenericFacebookTitle(initialTitle)) ||
+      (source.source === 'instagram' && isGenericInstagramTitle(initialTitle))
+    );
+
+    const shouldFetchInitialMetadata = !initialTitle || hasGenericInitialTitle;
+    if (!shouldFetchInitialMetadata) {
+      return;
+    }
+
+    if (source) {
+      setTitle(`${source.label} ${source.contentType}`);
+    }
+
+    const fetchInitialMetadata = async () => {
+      setFetchingTitle(true);
+      try {
+        const meta = await fetchUrlMetadata(initialUrl);
+        if (meta?.title) {
+          setTitle(decodeHtmlEntities(meta.title));
+        }
+        if (meta?.thumbnail) {
+          setThumbnail(meta.thumbnail);
+        }
+        if (meta?.description && !content) {
+          setContent(decodeHtmlEntities(meta.description));
+        }
+        if (meta?.url && meta.url !== initialUrl) {
+          setUrl(meta.url);
+        }
+      } catch (err) {
+        console.error('[AddItemModal] Error fetching initial metadata:', err);
+      } finally {
+        setFetchingTitle(false);
+      }
+    };
+
+    fetchInitialMetadata();
   }, []); // Only run once on mount
 
   const normalizeUrl = (urlStr: string): string | null => {
@@ -121,17 +131,32 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     fullUrl: string
   ): Promise<{ url?: string; title?: string; description?: string; image?: string } | null> => {
     try {
-      console.log('[AddItemModal] Fetching metadata for:', fullUrl);
-      const metadata = await fetchLinkMetadataWithCache(fullUrl);
-      console.log('[AddItemModal] Metadata fetched:', metadata);
+      // Try the API endpoint first
+      const response = await fetch(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`);
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          url: typeof data.url === 'string' ? data.url : undefined,
+          title: typeof data.title === 'string' ? data.title : undefined,
+          description: typeof data.description === 'string' ? data.description : undefined,
+          image: typeof data.image === 'string' ? data.image : undefined
+        };
+      }
+    } catch {
+      // API endpoint doesn't exist, fall back to LinkMetadataService
+    }
+    
+    // Fallback to LinkMetadataService
+    try {
+      const metadata = await fetchLinkMetadata(fullUrl);
       return {
-        url: undefined, // We don't resolve URLs in our service
+        url: fullUrl, // LinkMetadataService doesn't resolve redirects
         title: metadata.title,
         description: metadata.description,
         image: metadata.image
       };
-    } catch (err) {
-      console.warn('[AddItemModal] Error fetching metadata:', err);
+    } catch (error) {
+      console.error('[AddItemModal] Failed to fetch metadata:', error);
       return null;
     }
   };
@@ -149,17 +174,21 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     return false;
   };
 
+  /**
+   * Detect if a title is a generic Facebook error/placeholder
+   * Due to CORS restrictions, Facebook often returns error pages instead of metadata
+   */
   const isGenericFacebookTitle = (value?: string) => {
     if (!value) return true;
     const t = value.trim().toLowerCase();
-    if (t === '403') return true;
-    if (t === 'error') return true;
-    if (t === 'error facebook') return true;
-    if (t === 'facebook') return true;
-    if (t.includes('403')) return true;
-    if (t.includes('forbidden')) return true;
-    if (t.includes('access denied')) return true;
+    // Common error indicators
+    if (t === '403' || t === 'error' || t === 'facebook') return true;
+    if (t === 'error facebook' || t === 'facebook error') return true;
+    // Access restriction messages
+    if (t.includes('403') || t.includes('forbidden') || t.includes('access denied')) return true;
     if (t.includes('log in') || t.includes('login') || t.includes('sign up')) return true;
+    // Page not found or unavailable
+    if (t.includes('not found') || t.includes('unavailable') || t.includes('page')) return true;
     if (t.includes('content not found') || t.includes('not available')) return true;
     if (t.includes('something went wrong')) return true;
     return false;
@@ -192,19 +221,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       
       // For Instagram (and as a general fallback), use our server-side unfurl endpoint
       if (url.hostname.includes('instagram.com')) {
-        console.log('[AddItemModal] Detected Instagram URL, fetching metadata...');
-        
-        // Try Instagram oEmbed API first
-        try {
-          const oembedUrl = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(fullUrl)}&access_token=`;
-          // Note: Instagram oEmbed requires an access token, so we'll skip this approach
-          // Instead, try general metadata fetch
-        } catch (err) {
-          console.log('[AddItemModal] Instagram oEmbed not available');
-        }
-        
         const meta = await fetchUnfurl(fullUrl);
-        console.log('[AddItemModal] Instagram raw metadata:', meta);
 
         // Fallback to URL-based title
         const pathParts = url.pathname.split('/').filter((p) => p);
@@ -222,13 +239,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           .trim();
 
         const metaTitle = meta?.title;
-        const result = {
+        return {
           title: !isGenericInstagramTitle(metaTitle) ? metaTitle : fallbackTitle,
           description: description || undefined,
           thumbnail: meta?.image
         };
-        console.log('[AddItemModal] Instagram metadata result:', result);
-        return result;
       }
       
       // For TikTok, use oEmbed API
@@ -263,29 +278,42 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return { title: 'Tweet' };
       }
 
-      // For Facebook
+      // For Facebook - simplified approach
+      // Due to CORS and privacy restrictions, we provide smart fallback titles
       if (url.hostname.includes('facebook.com') || url.hostname.includes('fb.watch')) {
-        console.log('[AddItemModal] Detected Facebook URL, fetching metadata...');
-        const meta = await fetchUnfurl(fullUrl);
-        const resolvedUrl = meta?.url || fullUrl;
-
-        // Prefer a friendly title over the common "Error" that Facebook returns for share/redirect URLs.
+        // Determine content type from URL pattern
         let fallbackTitle = 'Facebook Post';
-        if (url.hostname.includes('fb.watch')) fallbackTitle = 'Facebook Watch';
-        if (url.pathname.includes('/share/v/')) fallbackTitle = 'Facebook Video';
-        else if (url.pathname.includes('/share/r/')) fallbackTitle = 'Facebook Reel';
-        else if (url.pathname.includes('/share/p/')) fallbackTitle = 'Facebook Post';
-        else if (url.pathname.includes('/share/')) fallbackTitle = 'Facebook Share';
+        if (url.hostname.includes('fb.watch')) {
+          fallbackTitle = 'Facebook Video';
+        } else if (url.pathname.includes('/video') || url.pathname.includes('/share/v/')) {
+          fallbackTitle = 'Facebook Video';
+        } else if (url.pathname.includes('/reel') || url.pathname.includes('/share/r/')) {
+          fallbackTitle = 'Facebook Reel';
+        } else if (url.pathname.includes('/photo') || url.pathname.includes('/share/p/')) {
+          fallbackTitle = 'Facebook Photo';
+        }
 
-        const metaTitle = meta?.title;
-        const result = {
-          url: resolvedUrl,
-          title: !isGenericFacebookTitle(metaTitle) ? metaTitle : fallbackTitle,
-          description: meta?.description,
-          thumbnail: meta?.image
-        };
-        console.log('[AddItemModal] Facebook metadata result:', result);
-        return result;
+        // Try to fetch metadata, but expect it to often fail due to CORS
+        try {
+          const meta = await fetchUnfurl(fullUrl);
+          const hasValidTitle = meta?.title && !isGenericFacebookTitle(meta.title);
+          
+          return {
+            url: meta?.url || fullUrl,
+            title: hasValidTitle ? meta.title : fallbackTitle,
+            description: meta?.description,
+            thumbnail: meta?.image
+          };
+        } catch (error) {
+          console.log('[AddItemModal] Facebook metadata fetch failed (expected):', error);
+          // Return fallback data without metadata
+          return {
+            url: fullUrl,
+            title: fallbackTitle,
+            description: undefined,
+            thumbnail: undefined
+          };
+        }
       }
       
       // For other URLs, try unfurl then fall back to domain
@@ -305,37 +333,65 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     setThumbnail(undefined);
     const source = detectSource(newUrl);
     setDetectedSource(source?.source ?? null);
-    
-    // Set a temporary placeholder title while fetching
-    const hadNoTitle = !title.trim();
-    if (hadNoTitle && source) {
+
+    const trimmedUrl = newUrl.trim();
+    const existingTitle = title.trim();
+
+    const isTitleGeneric = (src?: string) => {
+      if (!src) return !existingTitle;
+      if (src === 'facebook') return !existingTitle || isGenericFacebookTitle(existingTitle);
+      if (src === 'instagram') return !existingTitle || isGenericInstagramTitle(existingTitle);
+      return !existingTitle;
+    };
+
+    if (source && isTitleGeneric(source.source)) {
       setTitle(`${source.label} ${source.contentType}`);
     }
     
-    // Auto-fetch metadata if URL is provided
-    if (newUrl.trim()) {
+    const shouldResolveFacebookShare =
+      !!trimmedUrl &&
+      source?.source === 'facebook' &&
+      (trimmedUrl.includes('facebook.com/share/') || trimmedUrl.includes('fb.watch'));
+
+    const shouldFetchMetadata = !!trimmedUrl && (
+      shouldResolveFacebookShare ||
+      !existingTitle ||
+      (source?.source === 'facebook' && isGenericFacebookTitle(existingTitle)) ||
+      (source?.source === 'instagram' && isGenericInstagramTitle(existingTitle))
+    );
+    
+    // Auto-fetch metadata if URL is provided and title is missing or generic
+    if (shouldFetchMetadata) {
       setFetchingTitle(true);
       try {
         // Add timeout to prevent infinite fetching
         const timeoutPromise = new Promise<UrlMetadata | null>((resolve) => setTimeout(() => resolve(null), 5000));
-        const metaPromise = fetchUrlMetadata(newUrl.trim());
+        const metaPromise = fetchUrlMetadata(trimmedUrl);
         
         const fetched = await Promise.race([metaPromise, timeoutPromise]);
         
         // If an unfurl step resolves a redirect (e.g. Facebook /share/*), prefer saving the resolved URL.
-        if (fetched?.url && fetched.url !== newUrl.trim() && newUrl.includes('facebook.com/share/')) {
+        if (
+          fetched?.url &&
+          fetched.url !== trimmedUrl &&
+          (newUrl.includes('facebook.com/share/') || newUrl.includes('fb.watch'))
+        ) {
           setUrl(fetched.url);
         }
 
-        // Update title if we had no title before, or if we got better metadata
-        if (fetched?.title && hadNoTitle) {
-          setTitle(fetched.title);
+        const shouldUpdateTitle =
+          !existingTitle ||
+          (source?.source === 'facebook' && isGenericFacebookTitle(existingTitle)) ||
+          (source?.source === 'instagram' && isGenericInstagramTitle(existingTitle));
+
+        if (shouldUpdateTitle && fetched?.title) {
+          setTitle(decodeHtmlEntities(fetched.title));
         }
         if (fetched?.thumbnail) {
           setThumbnail(fetched.thumbnail);
         }
         if (fetched?.description && !content.trim()) {
-          setContent(fetched.description);
+          setContent(decodeHtmlEntities(fetched.description));
         }
       } catch (err) {
         console.error('[AddItemModal] Error fetching title:', err);
@@ -350,6 +406,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     
     // If no title provided, try to generate one from URL
     let finalTitle = title.trim();
+    let finalUrl = url.trim() || undefined;
     let finalThumbnail = thumbnail;
     let finalContent = content.trim() || undefined;
 
@@ -358,6 +415,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!finalTitle && hasUrl) {
       const meta = await fetchUrlMetadata(url.trim());
       const resolvedUrl = meta?.url || url.trim();
+      finalUrl = resolvedUrl;
       finalTitle = meta?.title || 'Untitled';
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
@@ -367,6 +425,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       // Title might already be a fallback (e.g. "Instagram Photo"), but we still want thumbnail/snippet.
       const meta = await fetchUrlMetadata(url.trim());
       const resolvedUrl = meta?.url || url.trim();
+      finalUrl = resolvedUrl;
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
@@ -384,17 +443,16 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     setLoading(true);
 
     try {
-      const finalSource = url.trim() ? detectSource(url.trim())?.source : undefined;
+      const finalSource = finalUrl ? detectSource(finalUrl)?.source : undefined;
 
       await createItem({
         title: finalTitle,
-        url: url.trim() || undefined,
+        url: finalUrl,
         content: finalContent,
         thumbnail: finalThumbnail,
         listId,
         type: url ? 'link' : 'text',
-        source: finalSource,
-        tags: tags.length > 0 ? tags : undefined
+        source: finalSource
       });
       
       onClose();
@@ -417,7 +475,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
         <form onSubmit={handleSubmit} className="modal-form">
           {/* Preview section when sharing from other apps */}
-          {(url || thumbnail) && (
+          {(url || thumbnail || detectedSource) && (
             <div className="share-preview">
               {fetchingTitle ? (
                 <div className="share-preview-loading">
@@ -428,9 +486,65 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                   </div>
                   <span>Loading preview...</span>
                 </div>
+              ) : detectedSource === 'facebook' && url.trim() ? (
+                /* Facebook: show thumbnail if available, otherwise branded card */
+                thumbnail ? (
+                  <div className="share-preview-fb-card">
+                    <div className="share-preview-fb-header">
+                      <svg viewBox="0 0 24 24" fill="white" width="18" height="18"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                      <span>Facebook</span>
+                    </div>
+                    <div className="share-preview-fb-thumb">
+                      <img src={thumbnail} alt="Facebook preview" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="share-preview-fb-card">
+                    <div className="share-preview-fb-header">
+                      <svg viewBox="0 0 24 24" fill="white" width="18" height="18"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                      <span>Facebook</span>
+                    </div>
+                    <div className="share-preview-fb-body">
+                      <span className="share-preview-fb-icon">{'\u{1F517}'}</span>
+                      <span className="share-preview-fb-text">Link saved — tap to view on Facebook</span>
+                    </div>
+                  </div>
+                )
               ) : thumbnail ? (
                 <img src={thumbnail} alt="Preview" className="share-preview-image" />
-              ) : null}
+              ) : detectedSource && (
+                <div className="share-preview-placeholder">
+                  <span className={`share-preview-icon ${detectedSource}`}>
+                    {detectedSource === 'facebook' && '📘'}
+                    {detectedSource === 'instagram' && '📷'}
+                    {detectedSource === 'twitter' && '🐦'}
+                    {detectedSource === 'youtube' && '▶️'}
+                    {detectedSource === 'tiktok' && '🎵'}
+                    {detectedSource === 'reddit' && '👽'}
+                  </span>
+                  <span className="share-preview-text">Preview not available</span>
+                </div>
+              )}
+              {detectedSource && (
+                <div className="share-preview-badge">
+                  <span className={`share-preview-badge-icon ${detectedSource}`}>
+                    {detectedSource === 'facebook' && '📘'}
+                    {detectedSource === 'instagram' && '📷'}
+                    {detectedSource === 'twitter' && '🐦'}
+                    {detectedSource === 'youtube' && '▶️'}
+                    {detectedSource === 'tiktok' && '🎵'}
+                    {detectedSource === 'reddit' && '👽'}
+                  </span>
+                  <span className="share-preview-badge-text">
+                    {detectedSource === 'facebook' && 'Facebook'}
+                    {detectedSource === 'instagram' && 'Instagram'}
+                    {detectedSource === 'twitter' && 'X/Twitter'}
+                    {detectedSource === 'youtube' && 'YouTube'}
+                    {detectedSource === 'tiktok' && 'TikTok'}
+                    {detectedSource === 'reddit' && 'Reddit'}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -471,16 +585,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
               placeholder="Add any notes or description..."
               rows={4}
               disabled={loading}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Hashtags</label>
-            <HashtagInput
-              tags={tags}
-              onChange={setTags}
-              placeholder="Type hashtags or paste comma-separated values..."
-              maxTags={10}
             />
           </div>
 

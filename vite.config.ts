@@ -129,7 +129,14 @@ function isGenericFacebookTitle(title?: string): boolean {
 
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
-  return h.includes('instagram.com') || h.endsWith('fbcdn.net') || h.includes('facebook.com');
+  return (
+    h.includes('instagram.com') ||
+    h.endsWith('fbcdn.net') ||
+    h.includes('facebook.com') ||
+    // Facebook crawler thumbnails often come from lookaside.fbsbx.com and are CORP-protected.
+    // Proxying them makes them render reliably in our UI.
+    h.endsWith('fbsbx.com')
+  );
 }
 
 function isFacebookShareLike(url: URL): boolean {
@@ -491,11 +498,19 @@ function unfurlPlugin(): Plugin {
           return true;
         }
 
+        const isFacebookImageHost = (() => {
+          const h = targetUrl.hostname.toLowerCase();
+          return h.endsWith('fbsbx.com') || h.endsWith('fbcdn.net') || h.includes('facebook.com');
+        })();
+
         const headers = {
-          'user-agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'user-agent': isFacebookImageHost
+            ? 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+            : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-          'accept-language': 'en-US,en;q=0.9'
+          'accept-language': 'en-US,en;q=0.9',
+          // Some Facebook image endpoints are sensitive to Referer.
+          ...(isFacebookImageHost ? { referer: 'https://www.facebook.com/' } : {})
         };
 
         const controller = new AbortController();
@@ -589,6 +604,14 @@ function unfurlPlugin(): Plugin {
         'accept-language': 'en-US,en;q=0.9'
       };
 
+      // Facebook often serves different HTML/redirect behavior depending on the user agent.
+      // For /share/* links specifically, a link-preview UA tends to get the canonical target URL.
+      const facebookPreviewHeaders = {
+        ...headers,
+        'user-agent':
+          'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+      };
+
       const isFacebook = targetUrl.hostname.includes('facebook.com') || targetUrl.hostname.includes('fb.watch');
       const isFacebookShare = isFacebook && isFacebookShareLike(targetUrl);
 
@@ -600,17 +623,36 @@ function unfurlPlugin(): Plugin {
           shareResolvedUrl = extracted.toString();
           targetUrl = extracted;
         } else {
-          const resolved = await followRedirectsWithHeadThenGet(targetUrl.toString(), headers, 8000, 5);
-          shareResolvedUrl = resolved;
-          try {
-            targetUrl = new URL(resolved);
-          } catch {
-            // keep original
+          const resolvedByHelper = await resolveFacebookShareUrlWithTimeout(targetUrl, facebookPreviewHeaders, 10000);
+          if (resolvedByHelper) {
+            shareResolvedUrl = resolvedByHelper;
+            try {
+              targetUrl = new URL(resolvedByHelper);
+            } catch {
+              // keep original
+            }
+          } else {
+            const resolved = await followRedirectsWithHeadThenGet(
+              targetUrl.toString(),
+              facebookPreviewHeaders,
+              8000,
+              5
+            );
+            shareResolvedUrl = resolved;
+            try {
+              targetUrl = new URL(resolved);
+            } catch {
+              // keep original
+            }
           }
         }
       }
 
-      const primary = await fetchTextWithTimeout(targetUrl.toString(), headers, 10000);
+      const primary = await fetchTextWithTimeout(
+        targetUrl.toString(),
+        isFacebookShare ? facebookPreviewHeaders : headers,
+        10000
+      );
       let finalUrl = primary.finalUrl;
       let contentType = primary.contentType;
       let meta = extractMetadata(primary.text);
@@ -620,7 +662,8 @@ function unfurlPlugin(): Plugin {
         shareResolve: { attempted: isFacebookShare, url: shareResolvedUrl },
         instagramJson: { attempted: false, ok: false },
         jina: { attempted: false, ok: false },
-        fallbackMediaUrl: { attempted: false, used: false }
+        fallbackMediaUrl: { attempted: false, used: false },
+        facebookJina: { attempted: false, ok: false }
       };
 
       // Instagram often returns a login/blocked page with generic metadata.
@@ -679,7 +722,90 @@ function unfurlPlugin(): Plugin {
 
       const isFacebookHost = targetUrl.hostname.includes('facebook.com') || targetUrl.hostname.includes('fb.watch');
 
-      // If Facebook host: use whatever OG data we already got; do not proxy-scrape further.
+      // Try Facebook oEmbed API first for better metadata
+      if (isFacebookHost && (!meta.title || !meta.description || !meta.image)) {
+        const appId = process.env.VITE_FACEBOOK_APP_ID;
+        const appSecret = process.env.VITE_FACEBOOK_APP_SECRET;
+        
+        if (appId && appSecret) {
+          attempts.facebookOembed = { attempted: true, ok: false };
+          try {
+            const accessToken = `${appId}|${appSecret}`;
+            const oembedUrl = `https://graph.facebook.com/v19.0/oembed_post?url=${encodeURIComponent(targetUrl.toString())}&access_token=${encodeURIComponent(accessToken)}&fields=author_name,author_url,provider_name,provider_url,type,width,height,html`;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const oembedRes = await fetch(oembedUrl, {
+              signal: controller.signal,
+              headers: {
+                'accept': 'application/json'
+              }
+            });
+            clearTimeout(timeoutId);
+            
+            if (oembedRes.ok) {
+              const oembedData: any = await oembedRes.json();
+              attempts.facebookOembed.ok = true;
+              
+              // Extract metadata from oEmbed response with proper HTML entity decoding
+              // Title: use author_name or extract from HTML
+              if (!meta.title && oembedData.author_name) {
+                meta.title = decodeHtmlEntities(oembedData.author_name);
+              } else if (!meta.title && oembedData.html) {
+                // Try to extract text content from HTML
+                const textMatch = oembedData.html.match(/>([^<]+)</);
+                if (textMatch?.[1]) {
+                  meta.title = decodeHtmlEntities(textMatch[1].trim());
+                }
+              }
+              
+              // Description: extract from HTML content and decode entities
+              if (!meta.description && oembedData.html) {
+                // Remove HTML tags and get text content
+                let descText = oembedData.html
+                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                // Decode HTML entities (&#x627; → actual characters)
+                if (descText) {
+                  meta.description = decodeHtmlEntities(descText);
+                }
+              }
+              
+              // Image: oEmbed doesn't provide direct image URLs, so we'll rely on OG tags
+              // but we can try to extract from the HTML iframe src
+              if (!meta.image && oembedData.html) {
+                const srcMatch = oembedData.html.match(/src=["']([^"']+)["']/);
+                if (srcMatch?.[1]) {
+                  attempts.facebookOembed.iframeSrc = srcMatch[1];
+                  // Note: iframe src won't give us an image, but we log it for debugging
+                }
+              }
+            }
+          } catch {
+            // Ignore oEmbed errors and fall back
+          }
+        }
+
+        // Fallback to Jina if oEmbed didn't provide enough data
+        if (!meta.title || !meta.description || !meta.image) {
+          attempts.facebookJina = { attempted: true, ok: false };
+          try {
+            const jinaUrl = `https://r.jina.ai/${targetUrl.toString()}`;
+            const proxied = await fetchTextWithTimeout(jinaUrl, headers, 10000);
+            attempts.facebookJina.ok = proxied.ok;
+            const fbMeta = extractMetadata(proxied.text);
+            if (!meta.title && fbMeta.title && !isGenericFacebookTitle(fbMeta.title)) meta.title = fbMeta.title;
+            if (!meta.description && fbMeta.description) meta.description = fbMeta.description;
+            if (!meta.image && fbMeta.image) meta.image = fbMeta.image;
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      // If Facebook host is still empty after fallback, return early without thumbnail/description
       if (isFacebookHost && !meta.title && !meta.description && !meta.image) {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -692,7 +818,8 @@ function unfurlPlugin(): Plugin {
             title: undefined,
             description: undefined,
             image: undefined,
-            shareResolvedUrl
+            shareResolvedUrl,
+            ...(debug ? { debug: { attempts } } : {})
           })
         );
         return true;

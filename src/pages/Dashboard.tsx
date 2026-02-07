@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import TopBar from '@/components/TopBar';
-import SourceFilter from '@/components/SourceFilter';
 import ContentCard from '@/components/ContentCard';
 import FAB from '@/components/FAB';
 import AddItemModal from '@/components/AddItemModal';
@@ -22,7 +21,6 @@ const Dashboard: React.FC = () => {
   const [showAddList, setShowAddList] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [selectedSource, setSelectedSource] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -38,94 +36,6 @@ const Dashboard: React.FC = () => {
   const handleArchiveItem = async (itemId: string) => {
     await archiveItem(itemId);
   };
-
-  // Get filter options by domain and media type
-  const getFilterOptions = () => {
-    const filterMap = new Map<string, { label: string; count: number; type: 'domain' | 'media' }>();
-
-    // Count by media type
-    const mediaTypes = new Map<string, number>();
-    mediaTypes.set('link', 0);
-    mediaTypes.set('text', 0);
-    mediaTypes.set('image', 0);
-    mediaTypes.set('video', 0);
-    mediaTypes.set('article', 0);
-
-    // Count by domain
-    const domains = new Map<string, number>();
-
-    items.forEach((item) => {
-      // Count by type
-      const type = item.type || 'link';
-      mediaTypes.set(type, (mediaTypes.get(type) || 0) + 1);
-
-      // Count by domain
-      if (item.url) {
-        try {
-          const url = new URL(item.url.startsWith('http') ? item.url : `https://${item.url}`);
-          const domain = url.hostname.replace('www.', '');
-          domains.set(domain, (domains.get(domain) || 0) + 1);
-        } catch {
-          // Fallback for invalid URLs
-          domains.set('unknown', (domains.get('unknown') || 0) + 1);
-        }
-      }
-    });
-
-    // Add media type filters
-    const mediaTypeLabels: Record<string, string> = {
-      link: 'Links',
-      text: 'Text',
-      image: 'Images',
-      video: 'Videos',
-      article: 'Articles'
-    };
-
-    mediaTypes.forEach((count, type) => {
-      if (count > 0) {
-        filterMap.set(`media-${type}`, {
-          label: mediaTypeLabels[type] || type,
-          count,
-          type: 'media'
-        });
-      }
-    });
-
-    // Add domain filters
-    domains.forEach((count, domain) => {
-      filterMap.set(`domain-${domain}`, {
-        label: domain,
-        count,
-        type: 'domain'
-      });
-    });
-
-    return Array.from(filterMap.entries()).map(([id, data]) => ({
-      id,
-      ...data
-    }));
-  };
-
-  // Filter items based on selected filter
-  const filteredItems = selectedSource
-    ? items.filter((item) => {
-        if (selectedSource.startsWith('media-')) {
-          const mediaType = selectedSource.replace('media-', '');
-          return (item.type || 'link') === mediaType;
-        } else if (selectedSource.startsWith('domain-')) {
-          const domain = selectedSource.replace('domain-', '');
-          if (!item.url) return false;
-          try {
-            const url = new URL(item.url.startsWith('http') ? item.url : `https://${item.url}`);
-            const itemDomain = url.hostname.replace('www.', '');
-            return itemDomain === domain;
-          } catch {
-            return domain === 'unknown';
-          }
-        }
-        return false;
-      })
-    : items;
 
   return (
     <div className="dashboard">
@@ -163,42 +73,22 @@ const Dashboard: React.FC = () => {
         onAddList={() => setShowAddList(true)}
       />
 
-      {/* Source Filter */}
-      {items.length > 0 && (
-        <SourceFilter
-          options={getFilterOptions()}
-          selectedFilter={selectedSource}
-          onFilterChange={setSelectedSource}
-        />
-      )}
-
       {/* Main Content */}
       <main className="dashboard-main">
         <div className="container">
-          {filteredItems.length === 0 ? (
+          {items.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">📭</div>
-              <h2>No items found</h2>
+              <h2>No items yet</h2>
               <p>
-                {selectedSource 
-                  ? `No items match the selected filter. Try selecting a different filter.`
-                  : selectedListId 
+                {selectedListId 
                   ? 'This list is empty. Add your first item!' 
                   : 'Start saving content by clicking the + button'}
               </p>
-              {selectedSource && (
-                <button 
-                  className="btn-primary"
-                  onClick={() => setSelectedSource(null)}
-                  style={{ marginTop: 'var(--spacing-md)' }}
-                >
-                  Clear Filter
-                </button>
-              )}
             </div>
           ) : (
             <div className="content-grid">
-              {filteredItems.map((item) => (
+              {items.map((item) => (
                 <ContentCard
                   key={item.id}
                   item={item}

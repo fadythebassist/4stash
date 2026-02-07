@@ -7,6 +7,13 @@ import TikTokEmbed from './TikTokEmbed';
 import TweetEmbed from './TweetEmbed';
 import './ContentCard.css';
 
+// Decode HTML entities for proper display
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 interface ContentCardProps {
   item: Item;
   onDelete: () => void;
@@ -73,6 +80,27 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
     return undefined;
   }, [item.source, item.url]);
 
+  const getSourceBadge = () => {
+    const badges: Record<string, { emoji: string; color: string }> = {
+      youtube: { emoji: '▶️', color: '#ff0000' },
+      twitter: { emoji: '🐦', color: '#1da1f2' },
+      tiktok: { emoji: '🎵', color: '#000000' },
+      instagram: { emoji: '📷', color: '#e4405f' },
+      reddit: { emoji: '👽', color: 'var(--accent-primary)' },
+      facebook: { emoji: '📘', color: 'var(--accent-primary)' }
+    };
+
+    if (derivedSource && badges[derivedSource]) {
+      const badge = badges[derivedSource];
+      return (
+        <span className="source-badge" style={{ background: badge.color }}>
+          {badge.emoji}
+        </span>
+      );
+    }
+    return null;
+  };
+
   const displayThumbnail = resolvedThumbnail ?? item.thumbnail;
   const displayContent = item.content ?? resolvedContent;
 
@@ -90,6 +118,7 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
   const shouldShowRedditEmbed = derivedSource === 'reddit' && !!item.url;
   const shouldShowFacebookPreview = derivedSource === 'facebook' && !!item.url;
 
+  // Suppress top media for embeds that show their own preview
   const suppressTopMedia =
     shouldShowInstagramEmbed ||
     shouldShowTikTokEmbed ||
@@ -121,17 +150,15 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
     };
 
     const unfurl = async () => {
+      // Only attempt unfurl for Instagram and Facebook
       if (derivedSource !== 'instagram' && derivedSource !== 'facebook') return;
       if (!item.url) return;
       const fullUrl = normalizeUrl(item.url);
       if (!fullUrl) return;
 
-      const isFacebookShare = derivedSource === 'facebook' && 
-        (fullUrl.includes('facebook.com/share/') || fullUrl.includes('fb.watch'));
-
-      // Always try to unfurl Facebook share URLs to get resolved URL
-      // For others, only unfurl if missing thumbnail/content
-      if (!isFacebookShare && item.thumbnail && !thumbnailError && item.content) return;
+      // Skip if we already have all needed data (except for Facebook which needs URL resolution)
+      const needsUnfurl = derivedSource === 'facebook' || !item.thumbnail || thumbnailError || !item.content;
+      if (!needsUnfurl) return;
 
       try {
         const res = await fetch(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`);
@@ -139,21 +166,30 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
         const data = await res.json();
         if (cancelled) return;
 
-        // Use resolved URL for Facebook if different from original
+        // For Facebook: update resolved URL if available
         if (derivedSource === 'facebook' && typeof data.url === 'string' && data.url && data.url !== fullUrl) {
-          console.log('[ContentCard] Facebook URL resolved:', fullUrl, '->', data.url);
           setResolvedFacebookUrl(data.url);
         }
 
-        if ((!item.thumbnail || thumbnailError) && typeof data.image === 'string' && data.image) {
-          setResolvedThumbnail(data.image);
+        // Update thumbnail if missing or failed
+        if (typeof data.image === 'string' && data.image) {
+          // Facebook thumbnails frequently come from CORP-protected hosts (e.g. lookaside.fbsbx.com)
+          // and may need to be replaced with our proxied URL even if item.thumbnail exists.
+          if (derivedSource === 'facebook') {
+            if (data.image !== item.thumbnail) {
+              setResolvedThumbnail(data.image);
+            }
+          } else if (!item.thumbnail || thumbnailError) {
+            setResolvedThumbnail(data.image);
+          }
         }
 
+        // Update description if missing
         if (!item.content && typeof data.description === 'string' && data.description) {
           setResolvedContent(data.description);
         }
       } catch {
-        // ignore (endpoint may not exist in static hosting)
+        // Endpoint doesn't exist or CORS blocked - this is expected
       }
     };
 
@@ -198,6 +234,7 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
               <div className="instagram-logo">📷</div>
             </div>
           )}
+          {getSourceBadge()}
         </div>
       ) : !suppressTopMedia && item.type === 'video' ? (
         <div className="card-thumbnail placeholder">
@@ -205,6 +242,7 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
             <span>▶️</span>
             <p>{item.title}</p>
           </div>
+          {getSourceBadge()}
         </div>
       ) : !suppressTopMedia && displayThumbnail && thumbnailError ? (
         <div className="card-thumbnail placeholder">
@@ -212,12 +250,13 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
             <span>🖼️</span>
             <p>{item.title}</p>
           </div>
+          {getSourceBadge()}
         </div>
       ) : null}
       
       <div className="card-content">
         <div className="card-header">
-          <h3 className="card-title">{item.title}</h3>
+          <h3 className="card-title">{decodeHtmlEntities(item.title)}</h3>
           <div className="card-actions">
             <button
               className="card-action-btn"
@@ -232,8 +271,8 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
           </div>
         </div>
         
-        {displayContent && (
-          <p className="card-text">{displayContent}</p>
+        {displayContent && !shouldShowFacebookPreview && (
+          <p className="card-text">{decodeHtmlEntities(displayContent)}</p>
         )}
 
         {shouldShowTikTokEmbed && item.url && (
@@ -291,9 +330,9 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onDelete, onArchive, on
           
           {item.tags && item.tags.length > 0 && (
             <div className="card-tags">
-              {item.tags.slice(0, 3).map((tag, idx) => (
+              {item.tags.slice(0, 2).map((tag, idx) => (
                 <span key={idx} className="card-tag">
-                  #{tag}
+                  {tag}
                 </span>
               ))}
             </div>

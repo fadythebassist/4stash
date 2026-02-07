@@ -2,6 +2,13 @@ import React from 'react';
 import { Item } from '@/types';
 import './Modal.css';
 
+// Decode HTML entities for proper display
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 interface ItemDetailModalProps {
   item: Item;
   onClose: () => void;
@@ -47,7 +54,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose, onDele
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content modal-detail slide-in-bottom" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{item.title}</h2>
+          <h2>{decodeHtmlEntities(item.title)}</h2>
           <button className="modal-close" onClick={onClose}>
             ✕
           </button>
@@ -73,7 +80,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose, onDele
           {item.content && (
             <div className="detail-section">
               <h3>Notes</h3>
-              <p>{item.content}</p>
+              <p>{decodeHtmlEntities(item.content)}</p>
             </div>
           )}
 
