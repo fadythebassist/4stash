@@ -1,21 +1,36 @@
-import { Item, List, User, CreateItemDTO, UpdateItemDTO, CreateListDTO, UpdateListDTO } from '@/types';
+import {
+  Item,
+  List,
+  User,
+  CreateItemDTO,
+  UpdateItemDTO,
+  CreateListDTO,
+  UpdateListDTO,
+} from "@/types";
 
 // Abstract interface that both Mock and Firebase services will implement
 export interface StorageService {
   // Authentication
   signInWithGoogle(): Promise<User>;
+  signInWithFacebook(): Promise<User>;
+  signInWithTwitter(): Promise<User>;
   signInWithEmail(email: string, password: string): Promise<User>;
-  signUpWithEmail(email: string, password: string, displayName?: string): Promise<User>;
+  signUpWithEmail(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<User>;
   signOut(): Promise<void>;
   getCurrentUser(): Promise<User | null>;
-  
+  updateAvatarStyle(userId: string, style: string): Promise<void>;
+
   // Lists
   getLists(userId: string): Promise<List[]>;
   getList(listId: string): Promise<List | null>;
   createList(userId: string, data: CreateListDTO): Promise<List>;
   updateList(data: UpdateListDTO): Promise<void>;
-  deleteList(listId: string): Promise<void>;
-  
+  deleteList(listId: string, userId: string): Promise<void>;
+
   // Items
   getItems(userId: string, listId?: string): Promise<Item[]>;
   getItem(itemId: string): Promise<Item | null>;
@@ -23,7 +38,7 @@ export interface StorageService {
   updateItem(data: UpdateItemDTO): Promise<void>;
   deleteItem(itemId: string): Promise<void>;
   archiveItem(itemId: string): Promise<void>;
-  
+
   // Utility
   detectContentType(url: string): { type: string; source?: string };
 }

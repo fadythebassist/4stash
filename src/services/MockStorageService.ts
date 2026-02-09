@@ -1,5 +1,13 @@
-import { Item, List, User, CreateItemDTO, UpdateItemDTO, CreateListDTO, UpdateListDTO } from '@/types';
-import { StorageService } from './StorageService';
+import {
+  Item,
+  List,
+  User,
+  CreateItemDTO,
+  UpdateItemDTO,
+  CreateListDTO,
+  UpdateListDTO,
+} from "@/types";
+import { StorageService } from "./StorageService";
 
 /**
  * Helper functions for content detection
@@ -7,86 +15,86 @@ import { StorageService } from './StorageService';
 function extractYouTubeThumbnail(url: string): string | undefined {
   try {
     let videoId: string | null = null;
-    
+
     // Add protocol if missing
     let fullUrl = url;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      fullUrl = 'https://' + url;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      fullUrl = "https://" + url;
     }
-    
+
     // Extract video ID from various YouTube URL formats
-    if (fullUrl.includes('youtube.com/watch')) {
+    if (fullUrl.includes("youtube.com/watch")) {
       const urlObj = new URL(fullUrl);
-      videoId = urlObj.searchParams.get('v');
-    } else if (fullUrl.includes('youtu.be/')) {
+      videoId = urlObj.searchParams.get("v");
+    } else if (fullUrl.includes("youtu.be/")) {
       const match = fullUrl.match(/youtu\.be\/([^?&]+)/);
       videoId = match ? match[1] : null;
-    } else if (fullUrl.includes('youtube.com/embed/')) {
+    } else if (fullUrl.includes("youtube.com/embed/")) {
       const match = fullUrl.match(/embed\/([^?&]+)/);
       videoId = match ? match[1] : null;
     }
-    
+
     if (videoId) {
       // Return high-quality thumbnail
       return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
     }
   } catch (err) {
-    console.error('Failed to extract YouTube thumbnail:', err);
+    console.error("Failed to extract YouTube thumbnail:", err);
   }
   return undefined;
 }
 
 function detectContentType(url: string): { type: string; source?: string } {
   const urlLower = url.toLowerCase();
-  
+
   // YouTube
-  if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
-    return { type: 'video', source: 'youtube' };
+  if (urlLower.includes("youtube.com") || urlLower.includes("youtu.be")) {
+    return { type: "video", source: "youtube" };
   }
-  
+
   // Twitter/X
-  if (urlLower.includes('twitter.com') || urlLower.includes('x.com')) {
-    return { type: 'text', source: 'twitter' };
+  if (urlLower.includes("twitter.com") || urlLower.includes("x.com")) {
+    return { type: "text", source: "twitter" };
   }
-  
+
   // TikTok
-  if (urlLower.includes('tiktok.com')) {
-    return { type: 'video', source: 'tiktok' };
+  if (urlLower.includes("tiktok.com")) {
+    return { type: "video", source: "tiktok" };
   }
-  
+
   // Instagram
-  if (urlLower.includes('instagram.com')) {
-    return { type: 'image', source: 'instagram' };
+  if (urlLower.includes("instagram.com")) {
+    return { type: "image", source: "instagram" };
   }
 
   // Reddit
-  if (urlLower.includes('reddit.com') || urlLower.includes('redd.it')) {
-    return { type: 'link', source: 'reddit' };
+  if (urlLower.includes("reddit.com") || urlLower.includes("redd.it")) {
+    return { type: "link", source: "reddit" };
   }
 
   // Facebook
-  if (urlLower.includes('facebook.com') || urlLower.includes('fb.watch')) {
+  if (urlLower.includes("facebook.com") || urlLower.includes("fb.watch")) {
     const isVideo =
-      urlLower.includes('fb.watch') ||
-      urlLower.includes('/watch') ||
-      urlLower.includes('/videos') ||
-      urlLower.includes('/reel') ||
-      urlLower.includes('/share/v/') ||
-      urlLower.includes('/share/r/');
-    return { type: isVideo ? 'video' : 'link', source: 'facebook' };
+      urlLower.includes("fb.watch") ||
+      urlLower.includes("/watch") ||
+      urlLower.includes("/videos") ||
+      urlLower.includes("/reel") ||
+      urlLower.includes("/share/v/") ||
+      urlLower.includes("/share/r/");
+    return { type: isVideo ? "video" : "link", source: "facebook" };
   }
-  
+
   // Image extensions
   if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url)) {
-    return { type: 'image' };
+    return { type: "image" };
   }
-  
+
   // Video extensions
   if (/\.(mp4|webm|ogg|mov)$/i.test(url)) {
-    return { type: 'video' };
+    return { type: "video" };
   }
-  
-  return { type: 'link', source: 'other' };
+
+  return { type: "link", source: "other" };
 }
 
 /**
@@ -94,7 +102,7 @@ function detectContentType(url: string): { type: string; source?: string } {
  * Data persists in localStorage to survive page refreshes
  */
 export class MockStorageService implements StorageService {
-  private readonly STORAGE_KEY = '4later_mock_data';
+  private readonly STORAGE_KEY = "4later_mock_data";
   private data: {
     users: User[];
     lists: List[];
@@ -111,53 +119,61 @@ export class MockStorageService implements StorageService {
     if (stored) {
       const parsed = JSON.parse(stored);
       // Convert date strings back to Date objects
-      parsed.users = parsed.users.map((u: any) => ({ ...u, createdAt: new Date(u.createdAt) }));
-      parsed.lists = parsed.lists.map((l: any) => ({ 
-        ...l, 
-        createdAt: new Date(l.createdAt), 
-        updatedAt: new Date(l.updatedAt) 
+      parsed.users = parsed.users.map((u: any) => ({
+        ...u,
+        createdAt: new Date(u.createdAt),
       }));
-      
+      parsed.lists = parsed.lists.map((l: any) => ({
+        ...l,
+        createdAt: new Date(l.createdAt),
+        updatedAt: new Date(l.updatedAt),
+      }));
+
       // Track if data was enriched
       let dataEnriched = false;
-      
+
       parsed.items = parsed.items.map((i: any) => {
         const item = {
-          ...i, 
-          createdAt: new Date(i.createdAt), 
-          updatedAt: new Date(i.updatedAt) 
+          ...i,
+          createdAt: new Date(i.createdAt),
+          updatedAt: new Date(i.updatedAt),
         };
-        
+
         // Auto-detect and add source/thumbnail for existing items
         if (item.url && !item.source) {
-          console.log('[MockStorage] Enriching item:', item.title, 'URL:', item.url);
+          console.log(
+            "[MockStorage] Enriching item:",
+            item.title,
+            "URL:",
+            item.url,
+          );
           const detected = detectContentType(item.url);
           item.source = detected.source;
-          console.log('[MockStorage] Detected source:', detected.source);
-          
-          if (!item.thumbnail && detected.source === 'youtube') {
+          console.log("[MockStorage] Detected source:", detected.source);
+
+          if (!item.thumbnail && detected.source === "youtube") {
             item.thumbnail = extractYouTubeThumbnail(item.url);
-            console.log('[MockStorage] Generated thumbnail:', item.thumbnail);
+            console.log("[MockStorage] Generated thumbnail:", item.thumbnail);
             dataEnriched = true;
           }
         }
-        
+
         return item;
       });
-      
+
       // Save enriched data back to localStorage
       if (dataEnriched) {
         this.data = parsed;
         this.saveToStorage();
       }
-      
+
       return parsed;
     }
     return {
       users: [],
       lists: [],
       items: [],
-      currentUserId: null
+      currentUserId: null,
     };
   }
 
@@ -170,17 +186,20 @@ export class MockStorageService implements StorageService {
   }
 
   private delay(ms: number = 300): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private normalizeUrl(urlStr: string): string | null {
     const trimmed = urlStr.trim();
     if (!trimmed) return null;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+      return trimmed;
     return `https://${trimmed}`;
   }
 
-  private async unfurl(urlStr: string): Promise<{ description?: string; image?: string } | null> {
+  private async unfurl(
+    urlStr: string,
+  ): Promise<{ description?: string; image?: string } | null> {
     try {
       const fullUrl = this.normalizeUrl(urlStr);
       if (!fullUrl) return null;
@@ -190,8 +209,9 @@ export class MockStorageService implements StorageService {
       const data = await res.json();
 
       return {
-        description: typeof data.description === 'string' ? data.description : undefined,
-        image: typeof data.image === 'string' ? data.image : undefined
+        description:
+          typeof data.description === "string" ? data.description : undefined,
+        image: typeof data.image === "string" ? data.image : undefined,
       };
     } catch {
       // In static hosting, /api/unfurl won't exist; ignore.
@@ -203,7 +223,9 @@ export class MockStorageService implements StorageService {
   async signInWithGoogle(): Promise<User> {
     await this.delay();
     // Mock Google sign-in
-    const existingUser = this.data.users.find(u => u.email === 'demo@4later.app');
+    const existingUser = this.data.users.find(
+      (u) => u.email === "demo@4later.app",
+    );
     if (existingUser) {
       this.data.currentUserId = existingUser.id;
       this.saveToStorage();
@@ -212,56 +234,127 @@ export class MockStorageService implements StorageService {
 
     const user: User = {
       id: this.generateId(),
-      email: 'demo@4later.app',
-      displayName: 'Demo User',
-      photoURL: 'https://ui-avatars.com/api/?name=Demo+User&background=6366f1&color=fff',
+      email: "demo@4later.app",
+      displayName: "Demo User",
+      photoURL:
+        "https://ui-avatars.com/api/?name=Demo+User&background=6366f1&color=fff",
       createdAt: new Date(),
-      provider: 'google'
+      provider: "google",
     };
-    
+
     this.data.users.push(user);
     this.data.currentUserId = user.id;
-    
+
     // Create default list for new user
-    await this.createList(user.id, { name: 'Quick Bin', icon: '📥' });
-    await this.createList(user.id, { name: 'Favorites', icon: '⭐' });
-    
+    await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+    await this.createList(user.id, { name: "Favorites", icon: "⭐" });
+
+    this.saveToStorage();
+    return user;
+  }
+
+  async signInWithFacebook(): Promise<User> {
+    await this.delay();
+    // Mock Facebook sign-in - same as Google for development
+    const existingUser = this.data.users.find(
+      (u) => u.email === "demo@4later.app",
+    );
+    if (existingUser) {
+      this.data.currentUserId = existingUser.id;
+      this.saveToStorage();
+      return existingUser;
+    }
+
+    const user: User = {
+      id: this.generateId(),
+      email: "demo@4later.app",
+      displayName: "Demo User (Facebook)",
+      photoURL:
+        "https://ui-avatars.com/api/?name=Demo+User&background=1877f2&color=fff",
+      createdAt: new Date(),
+      provider: "facebook",
+    };
+
+    this.data.users.push(user);
+    this.data.currentUserId = user.id;
+
+    // Create default list for new user
+    await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+    await this.createList(user.id, { name: "Favorites", icon: "⭐" });
+
+    this.saveToStorage();
+    return user;
+  }
+
+  async signInWithTwitter(): Promise<User> {
+    await this.delay();
+    // Mock Twitter sign-in - same as Google for development
+    const existingUser = this.data.users.find(
+      (u) => u.email === "demo@4later.app",
+    );
+    if (existingUser) {
+      this.data.currentUserId = existingUser.id;
+      this.saveToStorage();
+      return existingUser;
+    }
+
+    const user: User = {
+      id: this.generateId(),
+      email: "demo@4later.app",
+      displayName: "Demo User (Twitter)",
+      photoURL:
+        "https://ui-avatars.com/api/?name=Demo+User&background=1da1f2&color=fff",
+      createdAt: new Date(),
+      provider: "twitter",
+    };
+
+    this.data.users.push(user);
+    this.data.currentUserId = user.id;
+
+    // Create default list for new user
+    await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+    await this.createList(user.id, { name: "Favorites", icon: "⭐" });
+
     this.saveToStorage();
     return user;
   }
 
   async signInWithEmail(email: string, _password: string): Promise<User> {
     await this.delay();
-    const user = this.data.users.find(u => u.email === email);
+    const user = this.data.users.find((u) => u.email === email);
     if (!user) {
-      throw new Error('Invalid email or password');
+      throw new Error("Invalid email or password");
     }
     this.data.currentUserId = user.id;
     this.saveToStorage();
     return user;
   }
 
-  async signUpWithEmail(email: string, _password: string, displayName?: string): Promise<User> {
+  async signUpWithEmail(
+    email: string,
+    _password: string,
+    displayName?: string,
+  ): Promise<User> {
     await this.delay();
-    if (this.data.users.find(u => u.email === email)) {
-      throw new Error('Email already in use');
+    if (this.data.users.find((u) => u.email === email)) {
+      throw new Error("Email already in use");
     }
 
     const user: User = {
       id: this.generateId(),
       email,
-      displayName: displayName || email.split('@')[0],
+      displayName: displayName || email.split("@")[0],
       createdAt: new Date(),
-      provider: 'email'
+      provider: "email",
     };
 
     this.data.users.push(user);
     this.data.currentUserId = user.id;
-    
+
     // Create default lists
-    await this.createList(user.id, { name: 'Quick Bin', icon: '📥' });
-    await this.createList(user.id, { name: 'Favorites', icon: '⭐' });
-    
+    await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+    await this.createList(user.id, { name: "Favorites", icon: "⭐" });
+
     this.saveToStorage();
     return user;
   }
@@ -274,27 +367,43 @@ export class MockStorageService implements StorageService {
 
   async getCurrentUser(): Promise<User | null> {
     if (!this.data.currentUserId) return null;
-    return this.data.users.find(u => u.id === this.data.currentUserId) || null;
+    return (
+      this.data.users.find((u) => u.id === this.data.currentUserId) || null
+    );
+  }
+
+  async updateAvatarStyle(userId: string, style: string): Promise<void> {
+    await this.delay(100);
+    const user = this.data.users.find((u) => u.id === userId);
+    if (user) {
+      user.avatarStyle = style;
+      user.photoURL = `https://api.dicebear.com/7.x/${style}/svg?seed=${userId}`;
+      this.saveToStorage();
+    }
   }
 
   // Lists Methods
   async getLists(userId: string): Promise<List[]> {
     await this.delay(200);
     return this.data.lists
-      .filter(l => l.userId === userId)
-      .map(list => ({
+      .filter((l) => l.userId === userId)
+      .map((list) => ({
         ...list,
-        itemCount: this.data.items.filter(i => i.listId === list.id && !i.archived).length
+        itemCount: this.data.items.filter(
+          (i) => i.listId === list.id && !i.archived,
+        ).length,
       }));
   }
 
   async getList(listId: string): Promise<List | null> {
     await this.delay(100);
-    const list = this.data.lists.find(l => l.id === listId);
+    const list = this.data.lists.find((l) => l.id === listId);
     if (!list) return null;
     return {
       ...list,
-      itemCount: this.data.items.filter(i => i.listId === listId && !i.archived).length
+      itemCount: this.data.items.filter(
+        (i) => i.listId === listId && !i.archived,
+      ).length,
     };
   }
 
@@ -308,7 +417,7 @@ export class MockStorageService implements StorageService {
       updatedAt: new Date(),
       color: data.color,
       icon: data.icon,
-      itemCount: 0
+      itemCount: 0,
     };
     this.data.lists.push(list);
     this.saveToStorage();
@@ -317,30 +426,32 @@ export class MockStorageService implements StorageService {
 
   async updateList(data: UpdateListDTO): Promise<void> {
     await this.delay(200);
-    const list = this.data.lists.find(l => l.id === data.id);
-    if (!list) throw new Error('List not found');
-    
+    const list = this.data.lists.find((l) => l.id === data.id);
+    if (!list) throw new Error("List not found");
+
     Object.assign(list, {
       ...data,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
     this.saveToStorage();
   }
 
-  async deleteList(listId: string): Promise<void> {
+  async deleteList(listId: string, userId: string): Promise<void> {
     await this.delay(200);
-    this.data.lists = this.data.lists.filter(l => l.id !== listId);
+    this.data.lists = this.data.lists.filter((l) => l.id !== listId);
     // Also delete all items in the list
-    this.data.items = this.data.items.filter(i => i.listId !== listId);
+    this.data.items = this.data.items.filter((i) => i.listId !== listId);
     this.saveToStorage();
   }
 
   // Items Methods
   async getItems(userId: string, listId?: string): Promise<Item[]> {
     await this.delay(200);
-    let items = this.data.items.filter(i => i.userId === userId && !i.archived);
+    let items = this.data.items.filter(
+      (i) => i.userId === userId && !i.archived,
+    );
     if (listId) {
-      items = items.filter(i => i.listId === listId);
+      items = items.filter((i) => i.listId === listId);
     }
 
     let dataEnriched = false;
@@ -352,14 +463,16 @@ export class MockStorageService implements StorageService {
         let changed = false;
 
         if (item.url) {
-          const detected = item.source ? { source: item.source } : detectContentType(item.url);
+          const detected = item.source
+            ? { source: item.source }
+            : detectContentType(item.url);
 
           if (!item.source && detected.source) {
-            enrichedItem.source = detected.source as Item['source'];
+            enrichedItem.source = detected.source as Item["source"];
             changed = true;
           }
 
-          if (!item.thumbnail && detected.source === 'youtube') {
+          if (!item.thumbnail && detected.source === "youtube") {
             const thumb = extractYouTubeThumbnail(item.url);
             if (thumb) {
               enrichedItem.thumbnail = thumb;
@@ -368,7 +481,10 @@ export class MockStorageService implements StorageService {
           }
 
           // Instagram: try unfurl (dev/preview) to get og:image and og:description
-          if ((detected.source === 'instagram' || item.source === 'instagram') && (!item.thumbnail || !item.content)) {
+          if (
+            (detected.source === "instagram" || item.source === "instagram") &&
+            (!item.thumbnail || !item.content)
+          ) {
             const meta = await this.unfurl(item.url);
             if (!item.thumbnail && meta?.image) {
               enrichedItem.thumbnail = meta.image;
@@ -390,35 +506,39 @@ export class MockStorageService implements StorageService {
         }
 
         return enrichedItem;
-      })
+      }),
     );
 
     if (dataEnriched) {
       this.saveToStorage();
     }
 
-    return enrichedItems.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return enrichedItems.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 
   async getItem(itemId: string): Promise<Item | null> {
     await this.delay(100);
-    const item = this.data.items.find(i => i.id === itemId);
-    
+    const item = this.data.items.find((i) => i.id === itemId);
+
     if (!item) return null;
-    
+
     // Enrich item with missing thumbnails and source info
     const enrichedItem = { ...item };
     let changed = false;
 
     if (item.url) {
-      const detected = item.source ? { source: item.source } : detectContentType(item.url);
+      const detected = item.source
+        ? { source: item.source }
+        : detectContentType(item.url);
 
       if (!item.source && detected.source) {
-        enrichedItem.source = detected.source as Item['source'];
+        enrichedItem.source = detected.source as Item["source"];
         changed = true;
       }
 
-      if (!item.thumbnail && detected.source === 'youtube') {
+      if (!item.thumbnail && detected.source === "youtube") {
         const thumb = extractYouTubeThumbnail(item.url);
         if (thumb) {
           enrichedItem.thumbnail = thumb;
@@ -426,7 +546,10 @@ export class MockStorageService implements StorageService {
         }
       }
 
-      if ((detected.source === 'instagram' || item.source === 'instagram') && (!item.thumbnail || !item.content)) {
+      if (
+        (detected.source === "instagram" || item.source === "instagram") &&
+        (!item.thumbnail || !item.content)
+      ) {
         const meta = await this.unfurl(item.url);
         if (!item.thumbnail && meta?.image) {
           enrichedItem.thumbnail = meta.image;
@@ -452,23 +575,26 @@ export class MockStorageService implements StorageService {
 
   async createItem(userId: string, data: CreateItemDTO): Promise<Item> {
     await this.delay(200);
-    
+
     // Auto-detect content type and source if URL provided
-    let detectedInfo: { type: Item['type']; source?: Item['source'] } = {
+    let detectedInfo: { type: Item["type"]; source?: Item["source"] } = {
       type: data.type,
-      source: typeof data.source === 'string' ? (data.source as Item['source']) : undefined
+      source:
+        typeof data.source === "string"
+          ? (data.source as Item["source"])
+          : undefined,
     };
     let thumbnail = data.thumbnail;
-    
+
     if (data.url) {
       const detected = detectContentType(data.url);
       detectedInfo = {
-        type: detected.type as Item['type'],
-        source: detected.source as Item['source']
+        type: detected.type as Item["type"],
+        source: detected.source as Item["source"],
       };
-      
+
       // Extract YouTube thumbnail if not provided
-      if (detected.source === 'youtube' && !thumbnail) {
+      if (detected.source === "youtube" && !thumbnail) {
         thumbnail = extractYouTubeThumbnail(data.url);
       }
     }
@@ -486,9 +612,9 @@ export class MockStorageService implements StorageService {
       updatedAt: new Date(),
       tags: data.tags || [],
       source: detectedInfo.source,
-      archived: false
+      archived: false,
     };
-    
+
     this.data.items.push(item);
     this.saveToStorage();
     return item;
@@ -496,25 +622,25 @@ export class MockStorageService implements StorageService {
 
   async updateItem(data: UpdateItemDTO): Promise<void> {
     await this.delay(200);
-    const item = this.data.items.find(i => i.id === data.id);
-    if (!item) throw new Error('Item not found');
-    
+    const item = this.data.items.find((i) => i.id === data.id);
+    if (!item) throw new Error("Item not found");
+
     Object.assign(item, {
       ...data,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
     this.saveToStorage();
   }
 
   async deleteItem(itemId: string): Promise<void> {
     await this.delay(200);
-    this.data.items = this.data.items.filter(i => i.id !== itemId);
+    this.data.items = this.data.items.filter((i) => i.id !== itemId);
     this.saveToStorage();
   }
 
   async archiveItem(itemId: string): Promise<void> {
     await this.delay(200);
-    const item = this.data.items.find(i => i.id === itemId);
+    const item = this.data.items.find((i) => i.id === itemId);
     if (item) {
       item.archived = true;
       item.updatedAt = new Date();

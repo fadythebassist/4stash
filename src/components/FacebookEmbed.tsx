@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import './FacebookEmbed.css';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./FacebookEmbed.css";
 
 // Decode HTML entities for proper display
 function decodeHtmlEntities(text: string): string {
-  const textarea = document.createElement('textarea');
+  const textarea = document.createElement("textarea");
   textarea.innerHTML = text;
   return textarea.value;
 }
@@ -21,12 +21,12 @@ interface FacebookEmbedProps {
 function isFacebookVideoUrl(url: string): boolean {
   const lower = url.toLowerCase();
   return (
-    lower.includes('fb.watch') ||
-    lower.includes('/video') ||
-    lower.includes('/reel') ||
-    lower.includes('/watch') ||
-    lower.includes('/share/v/') ||
-    lower.includes('/share/r/')
+    lower.includes("fb.watch") ||
+    lower.includes("/video") ||
+    lower.includes("/reel") ||
+    lower.includes("/watch") ||
+    lower.includes("/share/v/") ||
+    lower.includes("/share/r/")
   );
 }
 
@@ -35,10 +35,16 @@ function isFacebookVideoUrl(url: string): boolean {
  */
 function getFacebookContentType(url: string): string {
   const lower = url.toLowerCase();
-  if (lower.includes('fb.watch') || lower.includes('/video') || lower.includes('/watch') || lower.includes('/share/v/')) return 'Video';
-  if (lower.includes('/reel') || lower.includes('/share/r/')) return 'Reel';
-  if (lower.includes('/photo') || lower.includes('/share/p/')) return 'Photo';
-  return 'Post';
+  if (
+    lower.includes("fb.watch") ||
+    lower.includes("/video") ||
+    lower.includes("/watch") ||
+    lower.includes("/share/v/")
+  )
+    return "Video";
+  if (lower.includes("/reel") || lower.includes("/share/r/")) return "Reel";
+  if (lower.includes("/photo") || lower.includes("/share/p/")) return "Photo";
+  return "Post";
 }
 
 const FacebookLogo: React.FC = () => (
@@ -52,24 +58,41 @@ const FacebookLogo: React.FC = () => (
  * because Facebook's own plugin server may resolve them internally).
  * Falls back to a static branded card after a timeout if the iframe stays empty.
  */
-const FacebookEmbed: React.FC<FacebookEmbedProps> = ({ url, title, description, thumbnail }) => {
+const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
+  url,
+  title,
+  description,
+  thumbnail,
+}) => {
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const [manualFallback, setManualFallback] = useState(false);
+  const [isPotentiallyBroken, setIsPotentiallyBroken] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const normalizedUrl = useMemo(() => {
     const trimmed = url.trim();
     if (!trimmed) return null;
-    return trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`;
+    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
   }, [url]);
 
-  const isVideo = useMemo(() => (normalizedUrl ? isFacebookVideoUrl(normalizedUrl) : false), [normalizedUrl]);
-  const contentType = useMemo(() => (normalizedUrl ? getFacebookContentType(normalizedUrl) : 'Post'), [normalizedUrl]);
+  const isVideo = useMemo(
+    () => (normalizedUrl ? isFacebookVideoUrl(normalizedUrl) : false),
+    [normalizedUrl],
+  );
+  const contentType = useMemo(
+    () => (normalizedUrl ? getFacebookContentType(normalizedUrl) : "Post"),
+    [normalizedUrl],
+  );
   const isGroupPermalink = useMemo(() => {
     if (!normalizedUrl) return false;
     const lower = normalizedUrl.toLowerCase();
-    return lower.includes('facebook.com/groups/') && lower.includes('/permalink/');
+    return (
+      lower.includes("facebook.com/groups/") && lower.includes("/permalink/")
+    );
   }, [normalizedUrl]);
 
   // For videos/reels: Always try iframe first to enable playback, fallback to thumbnail on error
@@ -95,15 +118,26 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({ url, title, description, 
     const timer = setTimeout(() => {
       const el = iframeRef.current;
       if (el) {
-        // If the iframe rendered but is very short, Facebook couldn't resolve the URL
         const height = el.getBoundingClientRect().height;
-        if (height < 80) {
+        console.log(
+          "[FacebookEmbed] Detected iframe height:",
+          height,
+          "isVideo:",
+          isVideo,
+        );
+        // If very small (< 100px), definitely broken → auto-fallback
+        if (height < 100) {
           setShowFallback(true);
+        }
+        // For videos, show manual button if not clearly working (< 700px)
+        // Working videos are typically 500-800px+, error pages are usually shorter
+        else if (isVideo) {
+          setIsPotentiallyBroken(true);
         }
       }
     }, 3000);
     return () => clearTimeout(timer);
-  }, [iframeLoaded]);
+  }, [iframeLoaded, isVideo]);
 
   // Also set a hard timeout: if iframe hasn't loaded at all after 8s, show fallback
   useEffect(() => {
@@ -118,14 +152,18 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({ url, title, description, 
   if (!normalizedUrl) return null;
 
   // ── Show iframe plugin (always attempted first) ──
-  if (iframeSrc && !showFallback && !isGroupPermalink && !shouldPreferThumbnailCard) {
+  if (
+    iframeSrc &&
+    !showFallback &&
+    !manualFallback &&
+    !isGroupPermalink &&
+    !shouldPreferThumbnailCard
+  ) {
     return (
       <div className="fb-card" onClick={(e) => e.stopPropagation()}>
         <div className="fb-card-header">
           <FacebookLogo />
-          <span className="fb-card-header-text">
-            Facebook {contentType}
-          </span>
+          <span className="fb-card-header-text">Facebook {contentType}</span>
         </div>
 
         <div className="fb-card-iframe-wrap">
@@ -144,13 +182,26 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({ url, title, description, 
             src={iframeSrc}
             title={`Facebook ${contentType}`}
             scrolling="no"
-            allow="encrypted-media; picture-in-picture; web-share"
+            allow="encrypted-media; picture-in-picture; web-share; unload"
             allowFullScreen
             style={{ opacity: iframeLoaded ? 1 : 0 }}
             onLoad={() => setIframeLoaded(true)}
             onError={() => setShowFallback(true)}
           />
         </div>
+
+        {isPotentiallyBroken && thumbnail && (
+          <button
+            className="fb-card-fallback-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setManualFallback(true);
+            }}
+            title="Video not working? Show preview card instead"
+          >
+            🖼️ Show as card
+          </button>
+        )}
 
         <a
           href={normalizedUrl}
@@ -167,12 +218,17 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({ url, title, description, 
 
   // ── Fallback: iframe failed or timed out → static branded card ──
   return (
-    <div className="fb-card" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fb-card fb-card-clickable"
+      onClick={(e) => {
+        e.stopPropagation();
+        window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+      }}
+      style={{ cursor: "pointer" }}
+    >
       <div className="fb-card-header">
         <FacebookLogo />
-        <span className="fb-card-header-text">
-          Facebook {contentType}
-        </span>
+        <span className="fb-card-header-text">Facebook {contentType}</span>
       </div>
 
       {thumbnail && !thumbnailFailed ? (
@@ -185,13 +241,15 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({ url, title, description, 
         </div>
       ) : (
         <div className="fb-card-body">
-          <div className="fb-card-icon">{'\u{1F4F0}'}</div>
-          <p className="fb-card-cta">Tap below to view on Facebook</p>
+          <div className="fb-card-icon">{"\u{1F4F0}"}</div>
+          <p className="fb-card-cta">Tap to view on Facebook</p>
         </div>
       )}
 
       {description && (
-        <div style={{ padding: '8px 14px', fontSize: '0.85rem', color: '#65676b' }}>
+        <div
+          style={{ padding: "8px 14px", fontSize: "0.85rem", color: "#65676b" }}
+        >
           {decodeHtmlEntities(description)}
         </div>
       )}

@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const TWITTER_WIDGETS_SRC = 'https://platform.twitter.com/widgets.js';
+const TWITTER_WIDGETS_SRC = "https://platform.twitter.com/widgets.js";
 
 let twitterWidgetsPromise: Promise<void> | null = null;
 
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+    return trimmed;
   return `https://${trimmed}`;
 }
 
@@ -35,31 +36,37 @@ function extractTweetId(urlStr: string): string | null {
 }
 
 function loadTwitterWidgets(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
+  if (typeof window === "undefined") return Promise.resolve();
 
-  const win = window as unknown as { twttr?: { widgets?: { load?: () => void } } };
+  const win = window as unknown as {
+    twttr?: { widgets?: { load?: () => void } };
+  };
   if (win.twttr?.widgets) return Promise.resolve();
 
   if (twitterWidgetsPromise) return twitterWidgetsPromise;
 
   twitterWidgetsPromise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${TWITTER_WIDGETS_SRC}"]`
+      `script[src="${TWITTER_WIDGETS_SRC}"]`,
     );
 
     if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load Twitter widgets')), {
-        once: true
-      });
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Failed to load Twitter widgets")),
+        {
+          once: true,
+        },
+      );
       return;
     }
 
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = TWITTER_WIDGETS_SRC;
     script.async = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Twitter widgets'));
+    script.onerror = () => reject(new Error("Failed to load Twitter widgets"));
     document.head.appendChild(script);
   });
 
@@ -88,7 +95,7 @@ const TweetEmbed: React.FC<TweetEmbedProps> = ({ url }) => {
         return;
       }
 
-      containerRef.current.innerHTML = '';
+      containerRef.current.innerHTML = "";
 
       try {
         await loadTwitterWidgets();
@@ -100,7 +107,7 @@ const TweetEmbed: React.FC<TweetEmbedProps> = ({ url }) => {
               createTweet?: (
                 id: string,
                 element: HTMLElement,
-                options?: Record<string, unknown>
+                options?: Record<string, unknown>,
               ) => Promise<unknown>;
               load?: () => void;
             };
@@ -114,8 +121,8 @@ const TweetEmbed: React.FC<TweetEmbedProps> = ({ url }) => {
 
         await win.twttr.widgets.createTweet(tweetId, containerRef.current, {
           dnt: true,
-          align: 'center',
-          conversation: 'none'
+          align: "center",
+          conversation: "none",
         });
       } catch {
         if (!cancelled) setFailed(true);

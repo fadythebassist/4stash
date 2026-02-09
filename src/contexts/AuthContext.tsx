@@ -1,22 +1,34 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types';
-import { StorageService } from '@/services/StorageService';
-import { mockStorageService } from '@/services/MockStorageService';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { User } from "@/types";
+import { StorageService } from "@/services/StorageService";
+import { firebaseStorageService } from "@/services/FirebaseStorageService";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
   signInWithGoogle: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
+  signInWithTwitter: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    displayName?: string,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Service instance - can be swapped with Firebase later
-const storageService: StorageService = mockStorageService;
+// Service instance - now using Firebase
+const storageService: StorageService = firebaseStorageService;
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -34,7 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const currentUser = await storageService.getCurrentUser();
         setUser(currentUser);
       } catch (err) {
-        console.error('Auth check failed:', err);
+        console.error("Auth check failed:", err);
       } finally {
         setLoading(false);
       }
@@ -50,7 +62,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const user = await storageService.signInWithGoogle();
       setUser(user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in');
+      setError(err instanceof Error ? err.message : "Failed to sign in");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithFacebook = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const user = await storageService.signInWithFacebook();
+      setUser(user);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to sign in with Facebook",
+      );
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithTwitter = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const user = await storageService.signInWithTwitter();
+      setUser(user);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to sign in with Twitter",
+      );
       throw err;
     } finally {
       setLoading(false);
@@ -64,21 +108,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const user = await storageService.signInWithEmail(email, password);
       setUser(user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in');
+      setError(err instanceof Error ? err.message : "Failed to sign in");
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
+  const signUpWithEmail = async (
+    email: string,
+    password: string,
+    displayName?: string,
+  ) => {
     setLoading(true);
     setError(null);
     try {
-      const user = await storageService.signUpWithEmail(email, password, displayName);
+      const user = await storageService.signUpWithEmail(
+        email,
+        password,
+        displayName,
+      );
       setUser(user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign up');
+      setError(err instanceof Error ? err.message : "Failed to sign up");
       throw err;
     } finally {
       setLoading(false);
@@ -92,7 +144,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await storageService.signOut();
       setUser(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign out');
+      setError(err instanceof Error ? err.message : "Failed to sign out");
       throw err;
     } finally {
       setLoading(false);
@@ -106,9 +158,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         loading,
         error,
         signInWithGoogle,
+        signInWithFacebook,
+        signInWithTwitter,
         signInWithEmail,
         signUpWithEmail,
-        signOut
+        signOut,
       }}
     >
       {children}
@@ -119,7 +173,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

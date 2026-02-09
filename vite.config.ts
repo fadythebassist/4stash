@@ -1,19 +1,23 @@
-import { defineConfig, type Plugin } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
-import path from 'path'
+import { defineConfig, type Plugin } from "vite";
+import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
+import path from "path";
 
 function decodeHtmlEntities(input: string): string {
   return input
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
 }
 
-function extractMetadata(html: string): { title?: string; description?: string; image?: string } {
+function extractMetadata(html: string): {
+  title?: string;
+  description?: string;
+  image?: string;
+} {
   const metas = html.match(/<meta\s+[^>]*>/gi) ?? [];
   const map = new Map<string, string>();
 
@@ -26,13 +30,16 @@ function extractMetadata(html: string): { title?: string; description?: string; 
     if (!map.has(key) && content) map.set(key, content);
   }
 
-  const titleFromOg = map.get('og:title') || map.get('twitter:title');
-  const descriptionFromOg = map.get('og:description') || map.get('twitter:description') || map.get('description');
+  const titleFromOg = map.get("og:title") || map.get("twitter:title");
+  const descriptionFromOg =
+    map.get("og:description") ||
+    map.get("twitter:description") ||
+    map.get("description");
   const imageFromOg =
-    map.get('og:image:secure_url') ||
-    map.get('og:image:url') ||
-    map.get('og:image') ||
-    map.get('twitter:image');
+    map.get("og:image:secure_url") ||
+    map.get("og:image:url") ||
+    map.get("og:image") ||
+    map.get("twitter:image");
 
   let title = titleFromOg;
   if (!title) {
@@ -44,17 +51,23 @@ function extractMetadata(html: string): { title?: string; description?: string; 
   if (!title || !descriptionFromOg || !imageFromOg) {
     const lines = html.split(/\r?\n/);
     for (const line of lines) {
-      const m = line.match(/^\s*(og:title|twitter:title|title)\s*:\s*(.+)\s*$/i);
+      const m = line.match(
+        /^\s*(og:title|twitter:title|title)\s*:\s*(.+)\s*$/i,
+      );
       if (m && !title) {
         title = decodeHtmlEntities(m[2].trim());
         continue;
       }
-      const d = line.match(/^\s*(og:description|twitter:description|description)\s*:\s*(.+)\s*$/i);
+      const d = line.match(
+        /^\s*(og:description|twitter:description|description)\s*:\s*(.+)\s*$/i,
+      );
       if (d && !descriptionFromOg) {
         map.set(d[1].toLowerCase(), decodeHtmlEntities(d[2].trim()));
         continue;
       }
-      const i = line.match(/^\s*(og:image|twitter:image)\s*:\s*(https?:\/\/\S+)/i);
+      const i = line.match(
+        /^\s*(og:image|twitter:image)\s*:\s*(https?:\/\/\S+)/i,
+      );
       if (i && !imageFromOg) {
         map.set(i[1].toLowerCase(), i[2].trim());
       }
@@ -62,97 +75,103 @@ function extractMetadata(html: string): { title?: string; description?: string; 
   }
 
   const description =
-    descriptionFromOg || map.get('og:description') || map.get('twitter:description') || map.get('description');
+    descriptionFromOg ||
+    map.get("og:description") ||
+    map.get("twitter:description") ||
+    map.get("description");
   const image =
     imageFromOg ||
-    map.get('og:image:secure_url') ||
-    map.get('og:image:url') ||
-    map.get('og:image') ||
-    map.get('twitter:image');
+    map.get("og:image:secure_url") ||
+    map.get("og:image:url") ||
+    map.get("og:image") ||
+    map.get("twitter:image");
 
   return {
     title,
     description,
-    image
+    image,
   };
 }
 
 function isGenericInstagramTitle(title?: string): boolean {
   if (!title) return true;
   const t = title.trim().toLowerCase();
-  if (t === 'instagram') return true;
-  if (t.includes('403')) return true;
-  if (t.includes('forbidden')) return true;
-  if (t.includes('access denied')) return true;
-  if (t.includes('not available')) return true;
-  if (t.includes('log in') || t.includes('login') || t.includes('sign up')) return true;
-  if (t === 'instagram • photos and videos') return true;
+  if (t === "instagram") return true;
+  if (t.includes("403")) return true;
+  if (t.includes("forbidden")) return true;
+  if (t.includes("access denied")) return true;
+  if (t.includes("not available")) return true;
+  if (t.includes("log in") || t.includes("login") || t.includes("sign up"))
+    return true;
+  if (t === "instagram • photos and videos") return true;
   return false;
 }
 
 function cleanInstagramText(input?: string): string | undefined {
   if (!input) return undefined;
-  let t = decodeHtmlEntities(input)
-    .replace(/\s+/g, ' ')
-    .trim();
+  let t = decodeHtmlEntities(input).replace(/\s+/g, " ").trim();
   if (!t) return undefined;
 
   // Remove common "Likes/Comments" prefix
-  t = t.replace(/^\d+\s+Likes,\s+\d+\s+Comments\s+-\s+/i, '').trim();
-  t = t.replace(/^\d+\s+likes,\s+\d+\s+comments\s+-\s+/i, '').trim();
+  t = t.replace(/^\d+\s+Likes,\s+\d+\s+Comments\s+-\s+/i, "").trim();
+  t = t.replace(/^\d+\s+likes,\s+\d+\s+comments\s+-\s+/i, "").trim();
   return t || undefined;
 }
 
 function isGenericInstagramDescription(desc?: string): boolean {
-  const d = (desc ?? '').trim().toLowerCase();
+  const d = (desc ?? "").trim().toLowerCase();
   if (!d) return true;
-  if (d.includes('log in') || d.includes('login') || d.includes('sign up')) return true;
-  if (d.includes('instagram')) return false; // captions often mention instagram; don't discard
+  if (d.includes("log in") || d.includes("login") || d.includes("sign up"))
+    return true;
+  if (d.includes("instagram")) return false; // captions often mention instagram; don't discard
   return false;
 }
 
 function isGenericFacebookTitle(title?: string): boolean {
   if (!title) return true;
   const t = title.trim().toLowerCase();
-  if (t === '403') return true;
-  if (t === 'error') return true;
-  if (t === 'error facebook') return true;
-  if (t === 'facebook') return true;
-  if (t.includes('403')) return true;
-  if (t.includes('forbidden')) return true;
-  if (t.includes('access denied')) return true;
-  if (t.includes('log in') || t.includes('login') || t.includes('sign up')) return true;
-  if (t.includes('not available') || t.includes('content not found')) return true;
-  if (t.includes('something went wrong')) return true;
+  if (t === "403") return true;
+  if (t === "error") return true;
+  if (t === "error facebook") return true;
+  if (t === "facebook") return true;
+  if (t.includes("403")) return true;
+  if (t.includes("forbidden")) return true;
+  if (t.includes("access denied")) return true;
+  if (t.includes("log in") || t.includes("login") || t.includes("sign up"))
+    return true;
+  if (t.includes("not available") || t.includes("content not found"))
+    return true;
+  if (t.includes("something went wrong")) return true;
   return false;
 }
 
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
-    h.includes('instagram.com') ||
-    h.endsWith('fbcdn.net') ||
-    h.includes('facebook.com') ||
+    h.includes("instagram.com") ||
+    h.endsWith("fbcdn.net") ||
+    h.includes("facebook.com") ||
     // Facebook crawler thumbnails often come from lookaside.fbsbx.com and are CORP-protected.
     // Proxying them makes them render reliably in our UI.
-    h.endsWith('fbsbx.com')
+    h.endsWith("fbsbx.com")
   );
 }
 
 function isFacebookShareLike(url: URL): boolean {
   const host = url.hostname.toLowerCase();
   const path = url.pathname.toLowerCase();
-  if (!host.includes('facebook.com') && !host.includes('fb.watch')) return false;
-  if (path.startsWith('/sharer/sharer.php')) return true;
-  if (path.startsWith('/share.php')) return true;
-  if (path.includes('/share/')) return true;
-  if (host.includes('fb.watch')) return true;
-  if (path.includes('/permalink.php')) return true;
+  if (!host.includes("facebook.com") && !host.includes("fb.watch"))
+    return false;
+  if (path.startsWith("/sharer/sharer.php")) return true;
+  if (path.startsWith("/share.php")) return true;
+  if (path.includes("/share/")) return true;
+  if (host.includes("fb.watch")) return true;
+  if (path.includes("/permalink.php")) return true;
   return false;
 }
 
 function extractFacebookSharedTarget(url: URL): URL | null {
-  const uParam = url.searchParams.get('u') || url.searchParams.get('url');
+  const uParam = url.searchParams.get("u") || url.searchParams.get("url");
   if (!uParam) return null;
   try {
     return new URL(uParam);
@@ -165,7 +184,7 @@ async function followRedirectsWithHeadThenGet(
   startUrl: string,
   headers: Record<string, string>,
   timeoutMs: number,
-  limit: number = 5
+  limit: number = 5,
 ): Promise<string> {
   let current = startUrl;
   for (let i = 0; i < limit; i++) {
@@ -173,10 +192,10 @@ async function followRedirectsWithHeadThenGet(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const headRes = await fetch(current, {
-        method: 'HEAD',
-        redirect: 'follow',
+        method: "HEAD",
+        redirect: "follow",
         headers,
-        signal: controller.signal
+        signal: controller.signal,
       });
       clearTimeout(timeoutId);
       const finalHeadUrl = headRes.url || current;
@@ -193,10 +212,10 @@ async function followRedirectsWithHeadThenGet(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const getRes = await fetch(current, {
-        method: 'GET',
-        redirect: 'follow',
+        method: "GET",
+        redirect: "follow",
         headers,
-        signal: controller.signal
+        signal: controller.signal,
       });
       clearTimeout(timeoutId);
       const finalGetUrl = getRes.url || current;
@@ -225,13 +244,16 @@ function* walkJson(node: any): Generator<any> {
   yield node;
   if (Array.isArray(node)) {
     for (const v of node) yield* walkJson(v);
-  } else if (typeof node === 'object') {
+  } else if (typeof node === "object") {
     for (const v of Object.values(node)) yield* walkJson(v);
   }
 }
 
 function extractInstagramCaptionFromJsonLd(html: string): string | undefined {
-  const blocks = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [];
+  const blocks =
+    html.match(
+      /<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi,
+    ) ?? [];
   for (const block of blocks) {
     const m = block.match(/>\s*([\s\S]*?)\s*<\/script>/i);
     if (!m?.[1]) continue;
@@ -240,7 +262,7 @@ function extractInstagramCaptionFromJsonLd(html: string): string | undefined {
     if (!parsed) continue;
 
     for (const node of walkJson(parsed)) {
-      if (!node || typeof node !== 'object') continue;
+      if (!node || typeof node !== "object") continue;
 
       const candidates = [
         node.caption,
@@ -248,8 +270,8 @@ function extractInstagramCaptionFromJsonLd(html: string): string | undefined {
         node.description,
         node.text,
         node.headline,
-        node.name
-      ].filter((v) => typeof v === 'string') as string[];
+        node.name,
+      ].filter((v) => typeof v === "string") as string[];
 
       for (const c of candidates) {
         const cleaned = cleanInstagramText(c);
@@ -265,12 +287,15 @@ function extractInstagramCaptionFromHtml(html: string): string | undefined {
   const patterns = [
     /"caption"\s*:\s*\{[^}]*"text"\s*:\s*"([^"]+)"/i,
     /"edge_media_to_caption"\s*:\s*\{[\s\S]*?"text"\s*:\s*"([^"]+)"/i,
-    /"accessibility_caption"\s*:\s*"([^"]+)"/i
+    /"accessibility_caption"\s*:\s*"([^"]+)"/i,
   ];
   for (const re of patterns) {
     const m = html.match(re);
     if (m?.[1]) {
-      const unescaped = m[1].replace(/\\n/g, ' ').replace(/\\u003c/g, '<').replace(/\\u003e/g, '>');
+      const unescaped = m[1]
+        .replace(/\\n/g, " ")
+        .replace(/\\u003c/g, "<")
+        .replace(/\\u003e/g, ">");
       const cleaned = cleanInstagramText(unescaped);
       if (cleaned && cleaned.length >= 5) return cleaned;
     }
@@ -278,22 +303,24 @@ function extractInstagramCaptionFromHtml(html: string): string | undefined {
   return undefined;
 }
 
-async function tryInstagramJson(targetUrl: URL): Promise<{ description?: string; image?: string } | null> {
+async function tryInstagramJson(
+  targetUrl: URL,
+): Promise<{ description?: string; image?: string } | null> {
   try {
-    const base = `${targetUrl.origin}${targetUrl.pathname.replace(/\/?$/, '/')}`;
+    const base = `${targetUrl.origin}${targetUrl.pathname.replace(/\/?$/, "/")}`;
     const jsonUrl = `${base}?__a=1&__d=dis`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const res = await fetch(jsonUrl, {
-      redirect: 'follow',
+      redirect: "follow",
       signal: controller.signal,
       headers: {
-        'user-agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        accept: 'application/json,text/plain,*/*',
-        'accept-language': 'en-US,en;q=0.9'
-      }
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        accept: "application/json,text/plain,*/*",
+        "accept-language": "en-US,en;q=0.9",
+      },
     });
     clearTimeout(timeoutId);
     if (!res.ok) return null;
@@ -310,21 +337,26 @@ async function tryInstagramJson(targetUrl: URL): Promise<{ description?: string;
       media?.caption?.text ??
       undefined;
 
-    const imageUrl = media?.display_url ?? media?.image_versions2?.candidates?.[0]?.url ?? undefined;
+    const imageUrl =
+      media?.display_url ??
+      media?.image_versions2?.candidates?.[0]?.url ??
+      undefined;
 
     return {
-      description: typeof captionText === 'string' ? captionText : undefined,
-      image: typeof imageUrl === 'string' ? imageUrl : undefined
+      description: typeof captionText === "string" ? captionText : undefined,
+      image: typeof imageUrl === "string" ? imageUrl : undefined,
     };
   } catch {
     return null;
   }
 }
 
-function extractInstagramShortcode(u: URL): { kind: 'p' | 'reel' | 'tv'; code: string } | null {
+function extractInstagramShortcode(
+  u: URL,
+): { kind: "p" | "reel" | "tv"; code: string } | null {
   const m = u.pathname.match(/\/(p|reel|tv)\/([^/?#]+)/i);
   if (!m?.[1] || !m?.[2]) return null;
-  const kind = m[1].toLowerCase() as 'p' | 'reel' | 'tv';
+  const kind = m[1].toLowerCase() as "p" | "reel" | "tv";
   const code = m[2];
   return { kind, code };
 }
@@ -340,39 +372,49 @@ function buildInstagramMediaFallbackUrl(u: URL): string | null {
 async function fetchTextWithTimeout(
   url: string,
   headers: Record<string, string>,
-  timeoutMs: number
-): Promise<{ ok: boolean; status: number; finalUrl: string; contentType: string; text: string }> {
+  timeoutMs: number,
+): Promise<{
+  ok: boolean;
+  status: number;
+  finalUrl: string;
+  contentType: string;
+  text: string;
+}> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const res = await fetch(url, { redirect: 'follow', signal: controller.signal, headers });
+  const res = await fetch(url, {
+    redirect: "follow",
+    signal: controller.signal,
+    headers,
+  });
   clearTimeout(timeoutId);
   const text = await res.text();
   return {
     ok: res.ok,
     status: res.status,
     finalUrl: res.url || url,
-    contentType: res.headers.get('content-type') || '',
-    text
+    contentType: res.headers.get("content-type") || "",
+    text,
   };
 }
 
 async function resolveFacebookShareUrlWithTimeout(
   targetUrl: URL,
   headers: Record<string, string>,
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<string | null> {
   const host = targetUrl.hostname.toLowerCase();
   const path = targetUrl.pathname.toLowerCase();
-  
+
   // Handle fb.watch short links
-  if (host.includes('fb.watch')) {
+  if (host.includes("fb.watch")) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const res = await fetch(targetUrl.toString(), {
-        redirect: 'follow',
+        redirect: "follow",
         signal: controller.signal,
-        headers
+        headers,
       });
       clearTimeout(timeoutId);
       // After following redirects, res.url should be the final URL
@@ -384,8 +426,8 @@ async function resolveFacebookShareUrlWithTimeout(
     }
     return null;
   }
-  
-  if (!host.includes('facebook.com') || !path.includes('/share/')) return null;
+
+  if (!host.includes("facebook.com") || !path.includes("/share/")) return null;
 
   try {
     const controller = new AbortController();
@@ -393,33 +435,41 @@ async function resolveFacebookShareUrlWithTimeout(
 
     // First try: follow redirects to get final URL
     const followRes = await fetch(targetUrl.toString(), {
-      redirect: 'follow',
+      redirect: "follow",
       signal: controller.signal,
-      headers
+      headers,
     });
     clearTimeout(timeoutId);
-    
+
     // If we got redirected to a different URL, use that
-    if (followRes.url && followRes.url !== targetUrl.toString() && !followRes.url.includes('/share/')) {
+    if (
+      followRes.url &&
+      followRes.url !== targetUrl.toString() &&
+      !followRes.url.includes("/share/")
+    ) {
       return followRes.url;
     }
 
     // Parse the response for redirect hints
-    const text = await followRes.text().catch(() => '');
-    
+    const text = await followRes.text().catch(() => "");
+
     // Look for og:url which often has the canonical post URL
-    const ogUrl = text.match(/<meta\s+[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i);
-    if (ogUrl?.[1] && !ogUrl[1].includes('/share/')) {
+    const ogUrl = text.match(
+      /<meta\s+[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i,
+    );
+    if (ogUrl?.[1] && !ogUrl[1].includes("/share/")) {
       try {
         return new URL(ogUrl[1], targetUrl.toString()).toString();
       } catch {
         // ignore
       }
     }
-    
+
     // Look for canonical link
-    const canonical = text.match(/<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["']/i);
-    if (canonical?.[1] && !canonical[1].includes('/share/')) {
+    const canonical = text.match(
+      /<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["']/i,
+    );
+    if (canonical?.[1] && !canonical[1].includes("/share/")) {
       try {
         return new URL(canonical[1], targetUrl.toString()).toString();
       } catch {
@@ -428,28 +478,32 @@ async function resolveFacebookShareUrlWithTimeout(
     }
 
     // Look for meta refresh redirect
-    const metaRefresh = text.match(/http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["'][^"']*url=([^"'>\s]+)["']/i);
-    if (metaRefresh?.[1] && !metaRefresh[1].includes('/share/')) {
+    const metaRefresh = text.match(
+      /http-equiv\s*=\s*["']refresh["'][^>]*content\s*=\s*["'][^"']*url=([^"'>\s]+)["']/i,
+    );
+    if (metaRefresh?.[1] && !metaRefresh[1].includes("/share/")) {
       try {
         return new URL(metaRefresh[1], targetUrl.toString()).toString();
       } catch {
         // ignore
       }
     }
-    
+
     // Look for JavaScript redirect patterns in the HTML
-    const jsRedirect = text.match(/window\.location\s*=\s*["']([^"']+)["']/i) ||
-                       text.match(/location\.href\s*=\s*["']([^"']+)["']/i) ||
-                       text.match(/"redirect_url"\s*:\s*"([^"]+)"/i);
-    if (jsRedirect?.[1] && !jsRedirect[1].includes('/share/')) {
+    const jsRedirect =
+      text.match(/window\.location\s*=\s*["']([^"']+)["']/i) ||
+      text.match(/location\.href\s*=\s*["']([^"']+)["']/i) ||
+      text.match(/"redirect_url"\s*:\s*"([^"]+)"/i);
+    if (jsRedirect?.[1] && !jsRedirect[1].includes("/share/")) {
       try {
-        const decoded = jsRedirect[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/');
+        const decoded = jsRedirect[1]
+          .replace(/\\u002F/g, "/")
+          .replace(/\\\//g, "/");
         return new URL(decoded, targetUrl.toString()).toString();
       } catch {
         // ignore
       }
     }
-
   } catch {
     return null;
   }
@@ -460,24 +514,25 @@ async function resolveFacebookShareUrlWithTimeout(
 function unfurlPlugin(): Plugin {
   const handler = async (req: any, res: any) => {
     try {
-      const url = new URL(req.url ?? '', 'http://localhost');
-      if (url.pathname !== '/api/unfurl' && url.pathname !== '/api/proxy-image') return false;
+      const url = new URL(req.url ?? "", "http://localhost");
+      if (url.pathname !== "/api/unfurl" && url.pathname !== "/api/proxy-image")
+        return false;
 
       // Image proxy (helps when third-party cookies prevent Instagram images from loading in <img>)
-      if (url.pathname === '/api/proxy-image') {
-        if ((req.method ?? 'GET').toUpperCase() !== 'GET') {
+      if (url.pathname === "/api/proxy-image") {
+        if ((req.method ?? "GET").toUpperCase() !== "GET") {
           res.statusCode = 405;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Method not allowed" }));
           return true;
         }
 
-        const target = url.searchParams.get('url');
-        const debug = url.searchParams.get('debug') === '1';
+        const target = url.searchParams.get("url");
+        const debug = url.searchParams.get("debug") === "1";
         if (!target) {
           res.statusCode = 400;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Missing url param' }));
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Missing url param" }));
           return true;
         }
 
@@ -486,50 +541,58 @@ function unfurlPlugin(): Plugin {
           targetUrl = new URL(target);
         } catch {
           res.statusCode = 400;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Invalid url param' }));
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Invalid url param" }));
           return true;
         }
 
-        if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+        if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
           res.statusCode = 400;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Only http/https URLs are allowed' }));
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify({ error: "Only http/https URLs are allowed" }),
+          );
           return true;
         }
 
         const isFacebookImageHost = (() => {
           const h = targetUrl.hostname.toLowerCase();
-          return h.endsWith('fbsbx.com') || h.endsWith('fbcdn.net') || h.includes('facebook.com');
+          return (
+            h.endsWith("fbsbx.com") ||
+            h.endsWith("fbcdn.net") ||
+            h.includes("facebook.com")
+          );
         })();
 
         const headers = {
-          'user-agent': isFacebookImageHost
-            ? 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
-            : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-          'accept-language': 'en-US,en;q=0.9',
+          "user-agent": isFacebookImageHost
+            ? "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+            : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          "accept-language": "en-US,en;q=0.9",
           // Some Facebook image endpoints are sensitive to Referer.
-          ...(isFacebookImageHost ? { referer: 'https://www.facebook.com/' } : {})
+          ...(isFacebookImageHost
+            ? { referer: "https://www.facebook.com/" }
+            : {}),
         };
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         const upstream = await fetch(targetUrl.toString(), {
-          redirect: 'follow',
+          redirect: "follow",
           signal: controller.signal,
-          headers
+          headers,
         });
         clearTimeout(timeoutId);
 
-        const contentType = upstream.headers.get('content-type') || '';
-        if (!upstream.ok || !contentType.toLowerCase().startsWith('image/')) {
+        const contentType = upstream.headers.get("content-type") || "";
+        if (!upstream.ok || !contentType.toLowerCase().startsWith("image/")) {
           res.statusCode = 422;
-          res.setHeader('Content-Type', 'application/json');
-          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
           res.end(
             JSON.stringify({
-              error: 'Upstream did not return an image',
+              error: "Upstream did not return an image",
               status: upstream.status,
               contentType,
               url: upstream.url || targetUrl.toString(),
@@ -537,13 +600,13 @@ function unfurlPlugin(): Plugin {
                 ? {
                     debug: {
                       headers: {
-                        'content-type': upstream.headers.get('content-type'),
-                        location: upstream.headers.get('location')
-                      }
-                    }
+                        "content-type": upstream.headers.get("content-type"),
+                        location: upstream.headers.get("location"),
+                      },
+                    },
                   }
-                : {})
-            })
+                : {}),
+            }),
           );
           return true;
         }
@@ -552,31 +615,31 @@ function unfurlPlugin(): Plugin {
         // safety cap ~8MB
         if (buf.byteLength > 8 * 1024 * 1024) {
           res.statusCode = 413;
-          res.setHeader('Content-Type', 'application/json');
-          res.setHeader('Cache-Control', 'no-store');
-          res.end(JSON.stringify({ error: 'Image too large' }));
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
+          res.end(JSON.stringify({ error: "Image too large" }));
           return true;
         }
 
         res.statusCode = 200;
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Cache-Control", "no-store");
         res.end(buf);
         return true;
       }
-      if ((req.method ?? 'GET').toUpperCase() !== 'GET') {
+      if ((req.method ?? "GET").toUpperCase() !== "GET") {
         res.statusCode = 405;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Method not allowed" }));
         return true;
       }
 
-      const target = url.searchParams.get('url');
-      const debug = url.searchParams.get('debug') === '1';
+      const target = url.searchParams.get("url");
+      const debug = url.searchParams.get("debug") === "1";
       if (!target) {
         res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Missing url param' }));
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Missing url param" }));
         return true;
       }
 
@@ -585,34 +648,37 @@ function unfurlPlugin(): Plugin {
         targetUrl = new URL(target);
       } catch {
         res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Invalid url param' }));
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Invalid url param" }));
         return true;
       }
 
-      if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+      if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
         res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Only http/https URLs are allowed' }));
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Only http/https URLs are allowed" }));
         return true;
       }
 
       const headers = {
-        'user-agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'accept-language': 'en-US,en;q=0.9'
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
       };
 
       // Facebook often serves different HTML/redirect behavior depending on the user agent.
       // For /share/* links specifically, a link-preview UA tends to get the canonical target URL.
       const facebookPreviewHeaders = {
         ...headers,
-        'user-agent':
-          'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+        "user-agent":
+          "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
       };
 
-      const isFacebook = targetUrl.hostname.includes('facebook.com') || targetUrl.hostname.includes('fb.watch');
+      const isFacebook =
+        targetUrl.hostname.includes("facebook.com") ||
+        targetUrl.hostname.includes("fb.watch");
       const isFacebookShare = isFacebook && isFacebookShareLike(targetUrl);
 
       // Resolve Facebook share links: extract ?u= target or follow redirects. Do not scrape Facebook pages directly.
@@ -623,7 +689,11 @@ function unfurlPlugin(): Plugin {
           shareResolvedUrl = extracted.toString();
           targetUrl = extracted;
         } else {
-          const resolvedByHelper = await resolveFacebookShareUrlWithTimeout(targetUrl, facebookPreviewHeaders, 10000);
+          const resolvedByHelper = await resolveFacebookShareUrlWithTimeout(
+            targetUrl,
+            facebookPreviewHeaders,
+            10000,
+          );
           if (resolvedByHelper) {
             shareResolvedUrl = resolvedByHelper;
             try {
@@ -636,7 +706,7 @@ function unfurlPlugin(): Plugin {
               targetUrl.toString(),
               facebookPreviewHeaders,
               8000,
-              5
+              5,
             );
             shareResolvedUrl = resolved;
             try {
@@ -651,11 +721,11 @@ function unfurlPlugin(): Plugin {
       const primary = await fetchTextWithTimeout(
         targetUrl.toString(),
         isFacebookShare ? facebookPreviewHeaders : headers,
-        10000
+        10000,
       );
-      let finalUrl = primary.finalUrl;
-      let contentType = primary.contentType;
-      let meta = extractMetadata(primary.text);
+      const finalUrl = primary.finalUrl;
+      const contentType = primary.contentType;
+      const meta = extractMetadata(primary.text);
 
       const attempts: Record<string, any> = {
         primary: { ok: primary.ok, status: primary.status, contentType },
@@ -663,27 +733,45 @@ function unfurlPlugin(): Plugin {
         instagramJson: { attempted: false, ok: false },
         jina: { attempted: false, ok: false },
         fallbackMediaUrl: { attempted: false, used: false },
-        facebookJina: { attempted: false, ok: false }
+        facebookJina: { attempted: false, ok: false },
+        redditJson: { attempted: false, ok: false },
+        redditJina: { attempted: false, ok: false },
+        threadsJina: { attempted: false, ok: false },
       };
 
       // Instagram often returns a login/blocked page with generic metadata.
       // Try JSON endpoint first, then fall back to a text-proxy fetch.
-      const isInstagram = targetUrl.hostname.includes('instagram.com');
-      if (isInstagram && (isGenericInstagramTitle(meta.title) || !meta.image || !meta.description)) {
+      const isInstagram = targetUrl.hostname.includes("instagram.com");
+      if (
+        isInstagram &&
+        (isGenericInstagramTitle(meta.title) ||
+          !meta.image ||
+          !meta.description)
+      ) {
         // Try to extract caption/snippet from HTML if OG tags are missing.
-        if (!meta.description || isGenericInstagramDescription(meta.description)) {
+        if (
+          !meta.description ||
+          isGenericInstagramDescription(meta.description)
+        ) {
           const fromLd = extractInstagramCaptionFromJsonLd(primary.text);
           const fromHtml = extractInstagramCaptionFromHtml(primary.text);
-          meta.description = cleanInstagramText(fromLd || fromHtml || meta.description) || meta.description;
+          meta.description =
+            cleanInstagramText(fromLd || fromHtml || meta.description) ||
+            meta.description;
         } else {
-          meta.description = cleanInstagramText(meta.description) || meta.description;
+          meta.description =
+            cleanInstagramText(meta.description) || meta.description;
         }
 
         attempts.instagramJson.attempted = true;
         const ig = await tryInstagramJson(targetUrl);
         attempts.instagramJson.ok = !!ig;
-        if (ig?.description && (!meta.description || isGenericInstagramDescription(meta.description))) {
-          meta.description = cleanInstagramText(ig.description) || ig.description;
+        if (
+          ig?.description &&
+          (!meta.description || isGenericInstagramDescription(meta.description))
+        ) {
+          meta.description =
+            cleanInstagramText(ig.description) || ig.description;
         }
         if (ig?.image && !meta.image) meta.image = ig.image;
 
@@ -698,14 +786,23 @@ function unfurlPlugin(): Plugin {
           attempts.jina.ok = proxied.ok;
           // keep finalUrl/contentType from original
           const proxyMeta = extractMetadata(proxied.text);
-          if (!meta.title && proxyMeta.title && !isGenericInstagramTitle(proxyMeta.title)) meta.title = proxyMeta.title;
-          if (!meta.description && proxyMeta.description) meta.description = cleanInstagramText(proxyMeta.description) || proxyMeta.description;
+          if (
+            !meta.title &&
+            proxyMeta.title &&
+            !isGenericInstagramTitle(proxyMeta.title)
+          )
+            meta.title = proxyMeta.title;
+          if (!meta.description && proxyMeta.description)
+            meta.description =
+              cleanInstagramText(proxyMeta.description) ||
+              proxyMeta.description;
           if (!meta.image && proxyMeta.image) meta.image = proxyMeta.image;
 
           if (!meta.description) {
             const proxyLd = extractInstagramCaptionFromJsonLd(proxied.text);
             const proxyHtml = extractInstagramCaptionFromHtml(proxied.text);
-            meta.description = cleanInstagramText(proxyLd || proxyHtml) || meta.description;
+            meta.description =
+              cleanInstagramText(proxyLd || proxyHtml) || meta.description;
           }
         }
 
@@ -720,33 +817,35 @@ function unfurlPlugin(): Plugin {
         }
       }
 
-      const isFacebookHost = targetUrl.hostname.includes('facebook.com') || targetUrl.hostname.includes('fb.watch');
+      const isFacebookHost =
+        targetUrl.hostname.includes("facebook.com") ||
+        targetUrl.hostname.includes("fb.watch");
 
       // Try Facebook oEmbed API first for better metadata
       if (isFacebookHost && (!meta.title || !meta.description || !meta.image)) {
         const appId = process.env.VITE_FACEBOOK_APP_ID;
         const appSecret = process.env.VITE_FACEBOOK_APP_SECRET;
-        
+
         if (appId && appSecret) {
           attempts.facebookOembed = { attempted: true, ok: false };
           try {
             const accessToken = `${appId}|${appSecret}`;
             const oembedUrl = `https://graph.facebook.com/v19.0/oembed_post?url=${encodeURIComponent(targetUrl.toString())}&access_token=${encodeURIComponent(accessToken)}&fields=author_name,author_url,provider_name,provider_url,type,width,height,html`;
-            
+
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000);
             const oembedRes = await fetch(oembedUrl, {
               signal: controller.signal,
               headers: {
-                'accept': 'application/json'
-              }
+                accept: "application/json",
+              },
             });
             clearTimeout(timeoutId);
-            
+
             if (oembedRes.ok) {
               const oembedData: any = await oembedRes.json();
               attempts.facebookOembed.ok = true;
-              
+
               // Extract metadata from oEmbed response with proper HTML entity decoding
               // Title: use author_name or extract from HTML
               if (!meta.title && oembedData.author_name) {
@@ -758,21 +857,24 @@ function unfurlPlugin(): Plugin {
                   meta.title = decodeHtmlEntities(textMatch[1].trim());
                 }
               }
-              
+
               // Description: extract from HTML content and decode entities
               if (!meta.description && oembedData.html) {
                 // Remove HTML tags and get text content
-                let descText = oembedData.html
-                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                  .replace(/<[^>]+>/g, ' ')
-                  .replace(/\s+/g, ' ')
+                const descText = oembedData.html
+                  .replace(
+                    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+                    "",
+                  )
+                  .replace(/<[^>]+>/g, " ")
+                  .replace(/\s+/g, " ")
                   .trim();
                 // Decode HTML entities (&#x627; → actual characters)
                 if (descText) {
                   meta.description = decodeHtmlEntities(descText);
                 }
               }
-              
+
               // Image: oEmbed doesn't provide direct image URLs, so we'll rely on OG tags
               // but we can try to extract from the HTML iframe src
               if (!meta.image && oembedData.html) {
@@ -796,8 +898,14 @@ function unfurlPlugin(): Plugin {
             const proxied = await fetchTextWithTimeout(jinaUrl, headers, 10000);
             attempts.facebookJina.ok = proxied.ok;
             const fbMeta = extractMetadata(proxied.text);
-            if (!meta.title && fbMeta.title && !isGenericFacebookTitle(fbMeta.title)) meta.title = fbMeta.title;
-            if (!meta.description && fbMeta.description) meta.description = fbMeta.description;
+            if (
+              !meta.title &&
+              fbMeta.title &&
+              !isGenericFacebookTitle(fbMeta.title)
+            )
+              meta.title = fbMeta.title;
+            if (!meta.description && fbMeta.description)
+              meta.description = fbMeta.description;
             if (!meta.image && fbMeta.image) meta.image = fbMeta.image;
           } catch {
             // ignore
@@ -808,8 +916,8 @@ function unfurlPlugin(): Plugin {
       // If Facebook host is still empty after fallback, return early without thumbnail/description
       if (isFacebookHost && !meta.title && !meta.description && !meta.image) {
         res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
         res.end(
           JSON.stringify({
             url: targetUrl.toString(),
@@ -819,26 +927,186 @@ function unfurlPlugin(): Plugin {
             description: undefined,
             image: undefined,
             shareResolvedUrl,
-            ...(debug ? { debug: { attempts } } : {})
-          })
+            ...(debug ? { debug: { attempts } } : {}),
+          }),
         );
         return true;
       }
 
-      const image = meta.image ? new URL(meta.image, finalUrl).toString() : undefined;
+      // Reddit handling: Use .json API for better metadata
+      const isReddit =
+        targetUrl.hostname.includes("reddit.com") ||
+        targetUrl.hostname.includes("redd.it");
+      if (isReddit) {
+        attempts.redditJson = { attempted: true, ok: false };
+        try {
+          // Reddit JSON API: append .json to the URL
+          let jsonUrl = targetUrl.toString();
+          if (!jsonUrl.endsWith(".json")) {
+            jsonUrl = jsonUrl.replace(/\/$/, "") + ".json";
+          }
+
+          const redditHeaders = {
+            ...headers,
+            "user-agent":
+              "Mozilla/5.0 (compatible; 4Later/1.0; +https://4later.app)",
+          };
+
+          const jsonRes = await fetchTextWithTimeout(
+            jsonUrl,
+            redditHeaders,
+            8000,
+          );
+          attempts.redditJson.ok = jsonRes.ok;
+
+          if (jsonRes.ok) {
+            try {
+              const data = JSON.parse(jsonRes.text);
+              // Reddit returns array with [0] = post data
+              const post = data?.[0]?.data?.children?.[0]?.data;
+
+              if (post) {
+                // Check for NSFW content
+                if (post.over_18 === true || post.over18 === true) {
+                  attempts.redditJson.nsfw = true;
+                  // Return early with NSFW flag
+                  res.statusCode = 200;
+                  res.setHeader("Content-Type", "application/json");
+                  res.setHeader("Cache-Control", "no-store");
+                  res.end(
+                    JSON.stringify({
+                      url: targetUrl.toString(),
+                      contentType,
+                      status: primary.status,
+                      title: "NSFW Content",
+                      description: "This Reddit post is marked as NSFW (18+)",
+                      image: undefined,
+                      nsfw: true,
+                      ...(debug ? { debug: { attempts } } : {}),
+                    }),
+                  );
+                  return true;
+                }
+
+                // Extract title
+                if (!meta.title && post.title) {
+                  meta.title = decodeHtmlEntities(post.title);
+                }
+
+                // Extract description (selftext for text posts)
+                if (!meta.description && post.selftext) {
+                  const cleanText = post.selftext
+                    .replace(/\n+/g, " ")
+                    .trim()
+                    .substring(0, 300);
+                  meta.description = decodeHtmlEntities(cleanText);
+                }
+
+                // Extract image/video thumbnail
+                if (!meta.image) {
+                  // Try preview images first
+                  if (post.preview?.images?.[0]?.source?.url) {
+                    meta.image = decodeHtmlEntities(
+                      post.preview.images[0].source.url,
+                    ).replace(/&amp;/g, "&");
+                  }
+                  // Fallback to thumbnail
+                  else if (
+                    post.thumbnail &&
+                    post.thumbnail.startsWith("http")
+                  ) {
+                    meta.image = post.thumbnail;
+                  }
+                  // For direct image posts
+                  else if (
+                    post.url &&
+                    (post.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
+                      post.post_hint === "image")
+                  ) {
+                    meta.image = post.url;
+                  }
+                }
+              }
+            } catch (parseErr) {
+              // JSON parse failed, continue with OG tags
+            }
+          }
+        } catch {
+          // Reddit JSON API failed, fall back to OG tags
+        }
+
+        // Fallback to Jina if Reddit JSON didn't work
+        if (!meta.title || !meta.description || !meta.image) {
+          attempts.redditJina = { attempted: true, ok: false };
+          try {
+            const jinaUrl = `https://r.jina.ai/${targetUrl.toString()}`;
+            const proxied = await fetchTextWithTimeout(jinaUrl, headers, 10000);
+            attempts.redditJina.ok = proxied.ok;
+            const redditMeta = extractMetadata(proxied.text);
+            if (!meta.title && redditMeta.title) meta.title = redditMeta.title;
+            if (!meta.description && redditMeta.description)
+              meta.description = redditMeta.description;
+            if (!meta.image && redditMeta.image) meta.image = redditMeta.image;
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      // Threads handling: Try direct fetch with mobile user agent
+      const isThreads =
+        targetUrl.hostname.includes("threads.com") ||
+        targetUrl.hostname.includes("threads.net");
+      if (isThreads && (!meta.title || !meta.description || !meta.image)) {
+        attempts.threadsJina = { attempted: true, ok: false };
+        try {
+          // Threads works better with mobile user agent
+          const threadsHeaders = {
+            "user-agent":
+              "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+            accept:
+              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept-language": "en-US,en;q=0.9",
+          };
+
+          const threadsRes = await fetchTextWithTimeout(
+            targetUrl.toString(),
+            threadsHeaders,
+            10000,
+          );
+          attempts.threadsJina.ok = threadsRes.ok;
+
+          if (threadsRes.ok) {
+            const threadsMeta = extractMetadata(threadsRes.text);
+            if (threadsMeta.title && threadsMeta.title !== "403")
+              meta.title = threadsMeta.title;
+            if (threadsMeta.description)
+              meta.description = threadsMeta.description;
+            if (threadsMeta.image) meta.image = threadsMeta.image;
+          }
+        } catch {
+          // Direct fetch failed, metadata will be empty
+        }
+      }
+
+      const image = meta.image
+        ? new URL(meta.image, finalUrl).toString()
+        : undefined;
       const proxiedImage = (() => {
         if (!image) return undefined;
         try {
           const host = new URL(image).hostname;
-          return shouldProxyImageHost(host) ? `/api/proxy-image?url=${encodeURIComponent(image)}` : image;
+          return shouldProxyImageHost(host)
+            ? `/api/proxy-image?url=${encodeURIComponent(image)}`
+            : image;
         } catch {
           return image;
         }
       })();
 
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
       res.end(
         JSON.stringify({
           url: finalUrl,
@@ -855,29 +1123,30 @@ function unfurlPlugin(): Plugin {
                   extracted: {
                     hasTitle: !!meta.title,
                     hasDescription: !!meta.description,
-                    hasImage: !!meta.image
-                  }
-                }
+                    hasImage: !!meta.image,
+                  },
+                },
               }
-            : {})
-        })
+            : {}),
+        }),
       );
       return true;
     } catch (err: any) {
       res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
       res.end(
         JSON.stringify({
-          error: err?.name === 'AbortError' ? 'Upstream timeout' : 'Unfurl failed'
-        })
+          error:
+            err?.name === "AbortError" ? "Upstream timeout" : "Unfurl failed",
+        }),
       );
       return true;
     }
   };
 
   return {
-    name: '4later-unfurl',
+    name: "4later-unfurl",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const handled = await handler(req, res);
@@ -889,7 +1158,7 @@ function unfurlPlugin(): Plugin {
         const handled = await handler(req, res);
         if (!handled) next();
       });
-    }
+    },
   };
 }
 
@@ -899,43 +1168,48 @@ export default defineConfig({
     unfurlPlugin(),
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
       manifest: {
-        name: '4Later',
-        short_name: '4Later',
-        description: 'Save and organize multimedia content for later',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
+        name: "4Later",
+        short_name: "4Later",
+        description: "Save and organize multimedia content for later",
+        theme_color: "#ffffff",
+        background_color: "#ffffff",
+        display: "standalone",
         icons: [
           {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
+            src: "pwa-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
           },
           {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
+            src: "pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
         ],
         share_target: {
-          action: '/share-target',
-          method: 'POST',
-          enctype: 'multipart/form-data',
+          action: "/share-target",
+          method: "POST",
+          enctype: "multipart/form-data",
           params: {
-            title: 'title',
-            text: 'text',
-            url: 'url'
-          }
-        }
-      }
-    })
+            title: "title",
+            text: "text",
+            url: "url",
+          },
+        },
+      },
+    }),
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  }
-})
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  server: {
+    port: 5173,
+    strictPort: true, // Fail if port 5173 is already in use
+    open: true,
+  },
+});

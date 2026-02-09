@@ -1,41 +1,45 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const REDDIT_WIDGETS_SRC = 'https://embed.reddit.com/widgets.js';
+const REDDIT_WIDGETS_SRC = "https://embed.reddit.com/widgets.js";
 
 let redditWidgetsPromise: Promise<void> | null = null;
 
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+    return trimmed;
   return `https://${trimmed}`;
 }
 
 function loadRedditWidgets(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
+  if (typeof window === "undefined") return Promise.resolve();
 
   if (redditWidgetsPromise) return redditWidgetsPromise;
 
   redditWidgetsPromise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${REDDIT_WIDGETS_SRC}"]`
+      `script[src="${REDDIT_WIDGETS_SRC}"]`,
     );
 
     if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load Reddit widgets')),
-      {
-        once: true
-      });
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Failed to load Reddit widgets")),
+        {
+          once: true,
+        },
+      );
       return;
     }
 
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = REDDIT_WIDGETS_SRC;
     script.async = true;
-    script.charset = 'UTF-8';
+    script.charset = "UTF-8";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Reddit widgets'));
+    script.onerror = () => reject(new Error("Failed to load Reddit widgets"));
     document.head.appendChild(script);
   });
 
@@ -61,16 +65,16 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
         return;
       }
 
-      containerRef.current.innerHTML = '';
+      containerRef.current.innerHTML = "";
 
-      const blockquote = document.createElement('blockquote');
-      blockquote.className = 'reddit-card';
+      const blockquote = document.createElement("blockquote");
+      blockquote.className = "reddit-card";
 
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = normalizedUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'View on Reddit';
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "View on Reddit";
 
       blockquote.appendChild(link);
       containerRef.current.appendChild(blockquote);
@@ -107,7 +111,13 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
     );
   }
 
-  return <div className="reddit-embed" ref={containerRef} onClick={(e) => e.stopPropagation()} />;
+  return (
+    <div
+      className="reddit-embed"
+      ref={containerRef}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
 };
 
 export default RedditEmbed;

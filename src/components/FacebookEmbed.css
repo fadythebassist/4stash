@@ -3,7 +3,9 @@
   overflow: hidden;
   margin-bottom: var(--spacing-sm);
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   background: #fff;
   border: 1px solid #dddfe2;
 }
@@ -11,6 +13,20 @@
 .fb-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(24, 119, 242, 0.18);
+}
+
+.fb-card-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.fb-card-clickable:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(24, 119, 242, 0.25);
+}
+
+.fb-card-clickable:active {
+  transform: translateY(-1px);
 }
 
 .fb-card-header {
@@ -115,12 +131,24 @@
   animation: fbDot 1.4s ease-in-out infinite;
 }
 
-.fb-card-dots span:nth-child(2) { animation-delay: 0.2s; }
-.fb-card-dots span:nth-child(3) { animation-delay: 0.4s; }
+.fb-card-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.fb-card-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
 @keyframes fbDot {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .fb-card-button {
@@ -141,6 +169,29 @@
   text-decoration: none;
 }
 
+.fb-card-fallback-button {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 8px 12px;
+  padding: 8px 12px;
+  background: #f0f2f5;
+  color: #65676b;
+  border: 1px solid #dddfe2;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fb-card-fallback-button:hover {
+  background: #e4e6eb;
+  color: #050505;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .fb-card {
@@ -154,5 +205,16 @@
 
   .fb-card-cta {
     color: #b0b3b8;
+  }
+
+  .fb-card-fallback-button {
+    background: #3a3b3c;
+    color: #b0b3b8;
+    border-color: #3e4042;
+  }
+
+  .fb-card-fallback-button:hover {
+    background: #4e4f50;
+    color: #e4e6eb;
   }
 }

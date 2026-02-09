@@ -4,7 +4,9 @@
   overflow: hidden;
   margin-bottom: var(--spacing-sm);
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .facebook-preview-card:focus-visible {
@@ -76,7 +78,7 @@
 
 .facebook-play-icon {
   font-size: 3rem;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .facebook-preview-placeholder {
@@ -85,7 +87,11 @@
   align-items: center;
   justify-content: center;
   padding: var(--spacing-xl);
-  background: linear-gradient(135deg, rgba(24, 119, 242, 0.1), rgba(24, 119, 242, 0.05));
+  background: linear-gradient(
+    135deg,
+    rgba(24, 119, 242, 0.1),
+    rgba(24, 119, 242, 0.05)
+  );
   gap: var(--spacing-sm);
 }
 

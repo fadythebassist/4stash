@@ -1,128 +1,153 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import { 
-  getAuth, 
-  Auth, 
-  signInWithPopup, 
+import { initializeApp, FirebaseApp } from "firebase/app";
+import {
+  getAuth,
+  Auth,
+  signInWithPopup,
   GoogleAuthProvider,
+  FacebookAuthProvider,
+  TwitterAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  updateProfile
-} from 'firebase/auth';
-import { 
-  getFirestore, 
+  updateProfile,
+} from "firebase/auth";
+import {
+  getFirestore,
   Firestore,
   collection,
   doc,
   getDoc,
   getDocs,
+  setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
-  serverTimestamp
-} from 'firebase/firestore';
-import { Item, List, User, CreateItemDTO, UpdateItemDTO, CreateListDTO, UpdateListDTO } from '@/types';
-import { StorageService } from './StorageService';
+  serverTimestamp,
+} from "firebase/firestore";
+import {
+  Item,
+  List,
+  User,
+  CreateItemDTO,
+  UpdateItemDTO,
+  CreateListDTO,
+  UpdateListDTO,
+} from "@/types";
+import { StorageService } from "./StorageService";
 
 // Helper Functions (Module-level for reusability)
 function extractYouTubeThumbnail(url: string): string | undefined {
   try {
     let videoId: string | null = null;
-    
+
     // Add protocol if missing
     let fullUrl = url;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      fullUrl = 'https://' + url;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      fullUrl = "https://" + url;
     }
-    
+
     // Extract video ID from various YouTube URL formats
-    if (fullUrl.includes('youtube.com/watch')) {
+    if (fullUrl.includes("youtube.com/watch")) {
       const urlObj = new URL(fullUrl);
-      videoId = urlObj.searchParams.get('v');
-    } else if (fullUrl.includes('youtu.be/')) {
+      videoId = urlObj.searchParams.get("v");
+    } else if (fullUrl.includes("youtu.be/")) {
       const match = fullUrl.match(/youtu\.be\/([^?&]+)/);
       videoId = match ? match[1] : null;
-    } else if (fullUrl.includes('youtube.com/embed/')) {
+    } else if (fullUrl.includes("youtube.com/embed/")) {
       const match = fullUrl.match(/embed\/([^?&]+)/);
       videoId = match ? match[1] : null;
     }
-    
+
     if (videoId) {
       // Return high-quality thumbnail
       return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
     }
   } catch (err) {
-    console.error('Failed to extract YouTube thumbnail:', err);
+    console.error("Failed to extract YouTube thumbnail:", err);
   }
   return undefined;
 }
 
 function detectContentType(url: string): { type: string; source?: string } {
   const urlLower = url.toLowerCase();
-  
+
   // YouTube
-  if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
-    return { type: 'video', source: 'youtube' };
+  if (urlLower.includes("youtube.com") || urlLower.includes("youtu.be")) {
+    return { type: "video", source: "youtube" };
   }
-  
+
   // Twitter/X
-  if (urlLower.includes('twitter.com') || urlLower.includes('x.com')) {
-    return { type: 'text', source: 'twitter' };
+  if (urlLower.includes("twitter.com") || urlLower.includes("x.com")) {
+    return { type: "text", source: "twitter" };
   }
-  
+
   // TikTok
-  if (urlLower.includes('tiktok.com')) {
-    return { type: 'video', source: 'tiktok' };
+  if (urlLower.includes("tiktok.com")) {
+    return { type: "video", source: "tiktok" };
   }
-  
+
   // Instagram
-  if (urlLower.includes('instagram.com')) {
-    return { type: 'image', source: 'instagram' };
+  if (urlLower.includes("instagram.com")) {
+    return { type: "image", source: "instagram" };
   }
 
   // Reddit
-  if (urlLower.includes('reddit.com') || urlLower.includes('redd.it')) {
-    return { type: 'link', source: 'reddit' };
+  if (urlLower.includes("reddit.com") || urlLower.includes("redd.it")) {
+    return { type: "link", source: "reddit" };
   }
 
   // Facebook
-  if (urlLower.includes('facebook.com') || urlLower.includes('fb.watch')) {
+  if (urlLower.includes("facebook.com") || urlLower.includes("fb.watch")) {
     const isVideo =
-      urlLower.includes('fb.watch') ||
-      urlLower.includes('/watch') ||
-      urlLower.includes('/videos') ||
-      urlLower.includes('/reel') ||
-      urlLower.includes('/share/v/') ||
-      urlLower.includes('/share/r/');
-    return { type: isVideo ? 'video' : 'link', source: 'facebook' };
+      urlLower.includes("fb.watch") ||
+      urlLower.includes("/watch") ||
+      urlLower.includes("/videos") ||
+      urlLower.includes("/reel") ||
+      urlLower.includes("/share/v/") ||
+      urlLower.includes("/share/r/");
+    return { type: isVideo ? "video" : "link", source: "facebook" };
   }
-  
+
   // Image extensions
   if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url)) {
-    return { type: 'image' };
+    return { type: "image" };
   }
-  
+
   // Video extensions
   if (/\.(mp4|webm|ogg|mov)$/i.test(url)) {
-    return { type: 'video' };
+    return { type: "video" };
   }
-  
-  return { type: 'link', source: 'other' };
+
+  return { type: "link", source: "other" };
 }
 
-// Firebase configuration - Replace with your actual config
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
+
+// Validate Firebase configuration
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error(
+    "❌ Firebase configuration is missing! Please add Firebase credentials to your .env file.",
+  );
+  console.error("Required env variables:");
+  console.error("  - VITE_FIREBASE_API_KEY");
+  console.error("  - VITE_FIREBASE_AUTH_DOMAIN");
+  console.error("  - VITE_FIREBASE_PROJECT_ID");
+  console.error("  - VITE_FIREBASE_STORAGE_BUCKET");
+  console.error("  - VITE_FIREBASE_MESSAGING_SENDER_ID");
+  console.error("  - VITE_FIREBASE_APP_ID");
+}
 
 /**
  * FirebaseStorageService - Production storage implementation
@@ -139,36 +164,161 @@ export class FirebaseStorageService implements StorageService {
   private auth: Auth;
   private db: Firestore;
   private googleProvider: GoogleAuthProvider;
+  private facebookProvider: FacebookAuthProvider;
+  private twitterProvider: TwitterAuthProvider;
 
   constructor() {
     this.app = initializeApp(firebaseConfig);
     this.auth = getAuth(this.app);
     this.db = getFirestore(this.app);
     this.googleProvider = new GoogleAuthProvider();
+    this.facebookProvider = new FacebookAuthProvider();
+    this.twitterProvider = new TwitterAuthProvider();
+  }
+
+  // Helper Methods
+  private async getUserPreferences(
+    userId: string,
+  ): Promise<{ avatarStyle?: string }> {
+    try {
+      const userDoc = await getDoc(doc(this.db, "users", userId));
+      if (userDoc.exists()) {
+        return userDoc.data() as { avatarStyle?: string };
+      }
+    } catch (error) {
+      console.error("Failed to get user preferences:", error);
+    }
+    return {};
+  }
+
+  private generateDiceBearUrl(
+    userId: string,
+    style: string = "lorelei",
+  ): string {
+    return `https://api.dicebear.com/7.x/${style}/svg?seed=${userId}`;
   }
 
   // Authentication Methods
   async signInWithGoogle(): Promise<User> {
-    const result = await signInWithPopup(this.auth, this.googleProvider);
+    console.log("🔐 Starting Google sign-in...");
+
+    try {
+      const result = await signInWithPopup(this.auth, this.googleProvider);
+      console.log("✅ Google popup authentication successful");
+
+      const firebaseUser = result.user;
+      console.log("👤 Firebase user:", firebaseUser.email);
+
+      // Get user preferences (avatar style)
+      const prefs = await this.getUserPreferences(firebaseUser.uid);
+
+      // If user has chosen a DiceBear style, use that; otherwise use social photo or default
+      const photoURL = prefs.avatarStyle
+        ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
+        : firebaseUser.photoURL ||
+          this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
+
+      const user: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email!,
+        displayName: firebaseUser.displayName || undefined,
+        photoURL,
+        avatarStyle: prefs.avatarStyle,
+        createdAt: new Date(firebaseUser.metadata.creationTime!),
+        provider: "google",
+      };
+
+      // Create default lists for new users
+      console.log("📋 Checking for existing lists...");
+      const listsSnapshot = await getDocs(
+        query(collection(this.db, "lists"), where("userId", "==", user.id)),
+      );
+
+      if (listsSnapshot.empty) {
+        console.log("📝 Creating default lists...");
+        await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+        console.log("✅ Created Quick Bin list");
+        await this.createList(user.id, { name: "Favorites", icon: "⭐" });
+        console.log("✅ Created Favorites list");
+      } else {
+        console.log(`✅ User already has ${listsSnapshot.size} lists`);
+      }
+
+      console.log("✅ Sign-in complete, returning user");
+      return user;
+    } catch (error) {
+      console.error("❌ Error during Google sign-in:", error);
+      throw error;
+    }
+  }
+
+  async signInWithFacebook(): Promise<User> {
+    const result = await signInWithPopup(this.auth, this.facebookProvider);
     const firebaseUser = result.user;
-    
+
+    // Get user preferences (avatar style)
+    const prefs = await this.getUserPreferences(firebaseUser.uid);
+
+    // If user has chosen a DiceBear style, use that; otherwise use social photo or default
+    const photoURL = prefs.avatarStyle
+      ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
+      : firebaseUser.photoURL ||
+        this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
+
     const user: User = {
       id: firebaseUser.uid,
       email: firebaseUser.email!,
       displayName: firebaseUser.displayName || undefined,
-      photoURL: firebaseUser.photoURL || undefined,
+      photoURL,
+      avatarStyle: prefs.avatarStyle,
       createdAt: new Date(firebaseUser.metadata.creationTime!),
-      provider: 'google'
+      provider: "facebook",
     };
 
     // Create default lists for new users
     const listsSnapshot = await getDocs(
-      query(collection(this.db, 'lists'), where('userId', '==', user.id))
+      query(collection(this.db, "lists"), where("userId", "==", user.id)),
     );
-    
+
     if (listsSnapshot.empty) {
-      await this.createList(user.id, { name: 'Quick Bin', icon: '📥' });
-      await this.createList(user.id, { name: 'Favorites', icon: '⭐' });
+      await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+      await this.createList(user.id, { name: "Favorites", icon: "⭐" });
+    }
+
+    return user;
+  }
+
+  async signInWithTwitter(): Promise<User> {
+    const result = await signInWithPopup(this.auth, this.twitterProvider);
+    const firebaseUser = result.user;
+
+    // Get user preferences (avatar style)
+    const prefs = await this.getUserPreferences(firebaseUser.uid);
+
+    // If user has chosen a DiceBear style, use that; otherwise use social photo or default
+    const photoURL = prefs.avatarStyle
+      ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
+      : firebaseUser.photoURL ||
+        this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
+
+    const user: User = {
+      id: firebaseUser.uid,
+      email: firebaseUser.email || `${firebaseUser.uid}@twitter.placeholder`,
+      displayName: firebaseUser.displayName || undefined,
+      photoURL,
+      avatarStyle: prefs.avatarStyle,
+      createdAt: new Date(firebaseUser.metadata.creationTime!),
+      provider: "twitter",
+    };
+
+    // Create default lists for new users
+    const listsSnapshot = await getDocs(
+      query(collection(this.db, "lists"), where("userId", "==", user.id)),
+    );
+
+    if (listsSnapshot.empty) {
+      await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+      await this.createList(user.id, { name: "Favorites", icon: "⭐" });
     }
 
     return user;
@@ -177,21 +327,39 @@ export class FirebaseStorageService implements StorageService {
   async signInWithEmail(email: string, password: string): Promise<User> {
     const result = await signInWithEmailAndPassword(this.auth, email, password);
     const firebaseUser = result.user;
-    
+
+    // Get user preferences (avatar style)
+    const prefs = await this.getUserPreferences(firebaseUser.uid);
+
+    // If user has chosen a DiceBear style, use that; otherwise use default
+    const photoURL = prefs.avatarStyle
+      ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
+      : firebaseUser.photoURL ||
+        this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
+
     return {
       id: firebaseUser.uid,
       email: firebaseUser.email!,
       displayName: firebaseUser.displayName || undefined,
-      photoURL: firebaseUser.photoURL || undefined,
+      photoURL,
+      avatarStyle: prefs.avatarStyle,
       createdAt: new Date(firebaseUser.metadata.creationTime!),
-      provider: 'email'
+      provider: "email",
     };
   }
 
-  async signUpWithEmail(email: string, password: string, displayName?: string): Promise<User> {
-    const result = await createUserWithEmailAndPassword(this.auth, email, password);
+  async signUpWithEmail(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<User> {
+    const result = await createUserWithEmailAndPassword(
+      this.auth,
+      email,
+      password,
+    );
     const firebaseUser = result.user;
-    
+
     if (displayName) {
       await updateProfile(firebaseUser, { displayName });
     }
@@ -200,13 +368,15 @@ export class FirebaseStorageService implements StorageService {
       id: firebaseUser.uid,
       email: firebaseUser.email!,
       displayName: displayName,
+      photoURL: this.generateDiceBearUrl(firebaseUser.uid, "lorelei"),
+      avatarStyle: "lorelei",
       createdAt: new Date(),
-      provider: 'email'
+      provider: "email",
     };
 
     // Create default lists
-    await this.createList(user.id, { name: 'Quick Bin', icon: '📥' });
-    await this.createList(user.id, { name: 'Favorites', icon: '⭐' });
+    await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
+    await this.createList(user.id, { name: "Favorites", icon: "⭐" });
 
     return user;
   }
@@ -217,194 +387,296 @@ export class FirebaseStorageService implements StorageService {
 
   async getCurrentUser(): Promise<User | null> {
     return new Promise((resolve) => {
-      const unsubscribe = onAuthStateChanged(this.auth, (firebaseUser) => {
-        unsubscribe();
-        if (firebaseUser) {
-          resolve({
-            id: firebaseUser.uid,
-            email: firebaseUser.email!,
-            displayName: firebaseUser.displayName || undefined,
-            photoURL: firebaseUser.photoURL || undefined,
-            createdAt: new Date(firebaseUser.metadata.creationTime!),
-            provider: firebaseUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'email'
-          });
-        } else {
-          resolve(null);
-        }
-      });
+      const unsubscribe = onAuthStateChanged(
+        this.auth,
+        async (firebaseUser) => {
+          unsubscribe();
+          if (firebaseUser) {
+            // Get user preferences (avatar style)
+            const prefs = await this.getUserPreferences(firebaseUser.uid);
+
+            // If user has chosen a DiceBear style, use that; otherwise use social photo or default
+            const photoURL = prefs.avatarStyle
+              ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
+              : firebaseUser.photoURL ||
+                this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
+
+            const user: User = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email!,
+              displayName: firebaseUser.displayName || undefined,
+              photoURL,
+              avatarStyle: prefs.avatarStyle,
+              createdAt: new Date(firebaseUser.metadata.creationTime!),
+              provider:
+                firebaseUser.providerData[0]?.providerId === "google.com"
+                  ? ("google" as const)
+                  : ("email" as const),
+            };
+            console.log("👤 Current user:", user);
+            resolve(user);
+          } else {
+            console.log("👤 No user authenticated");
+            resolve(null);
+          }
+        },
+      );
     });
+  }
+
+  async updateAvatarStyle(userId: string, style: string): Promise<void> {
+    try {
+      await setDoc(
+        doc(this.db, "users", userId),
+        { avatarStyle: style },
+        { merge: true },
+      );
+      console.log(`✅ Avatar style updated to: ${style}`);
+    } catch (error: unknown) {
+      console.error("❌ Failed to update avatar style:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to update avatar style";
+      throw new Error(errorMessage);
+    }
   }
 
   // Lists Methods
   async getLists(userId: string): Promise<List[]> {
-    const q = query(
-      collection(this.db, 'lists'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'asc')
-    );
-    
-    const snapshot = await getDocs(q);
-    const lists = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt.toDate(),
-      updatedAt: doc.data().updatedAt.toDate()
-    })) as List[];
+    console.log("📋 getLists called for userId:", userId);
 
-    // Get item counts
-    for (const list of lists) {
-      const itemsQuery = query(
-        collection(this.db, 'items'),
-        where('listId', '==', list.id),
-        where('archived', '==', false)
+    try {
+      const q = query(
+        collection(this.db, "lists"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "asc"),
       );
-      const itemsSnapshot = await getDocs(itemsQuery);
-      list.itemCount = itemsSnapshot.size;
-    }
 
-    return lists;
+      const snapshot = await getDocs(q);
+      console.log(`📊 Found ${snapshot.size} lists in Firestore`);
+
+      const lists = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate(),
+      })) as List[];
+
+      // Get item counts
+      for (const list of lists) {
+        const itemsQuery = query(
+          collection(this.db, "items"),
+          where("userId", "==", userId),
+          where("listId", "==", list.id),
+          where("archived", "==", false),
+        );
+        const itemsSnapshot = await getDocs(itemsQuery);
+        list.itemCount = itemsSnapshot.size;
+      }
+
+      console.log("✅ Returning lists:", lists);
+      return lists;
+    } catch (error) {
+      console.error("❌ Error in getLists:", error);
+      throw error;
+    }
   }
 
   async getList(listId: string): Promise<List | null> {
-    const docRef = doc(this.db, 'lists', listId);
+    const docRef = doc(this.db, "lists", listId);
     const docSnap = await getDoc(docRef);
-    
+
     if (!docSnap.exists()) return null;
-    
+
     const data = docSnap.data();
     return {
       id: docSnap.id,
       ...data,
       createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate()
+      updatedAt: data.updatedAt.toDate(),
     } as List;
   }
 
   async createList(userId: string, data: CreateListDTO): Promise<List> {
-    const listData = {
-      name: data.name,
-      userId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      color: data.color,
-      icon: data.icon
-    };
+    console.log("📝 Creating list:", { userId, data });
 
-    const docRef = await addDoc(collection(this.db, 'lists'), listData);
-    const docSnap = await getDoc(docRef);
-    const savedData = docSnap.data()!;
+    try {
+      // Build listData, only including defined fields (Firestore doesn't accept undefined)
+      const listData: any = {
+        name: data.name,
+        userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
 
-    return {
-      id: docRef.id,
-      ...savedData,
-      createdAt: savedData.createdAt.toDate(),
-      updatedAt: savedData.updatedAt.toDate()
-    } as List;
+      // Only add optional fields if they're defined
+      if (data.color !== undefined) {
+        listData.color = data.color;
+      }
+      if (data.icon !== undefined) {
+        listData.icon = data.icon;
+      }
+
+      console.log("📤 Sending to Firestore:", listData);
+      const docRef = await addDoc(collection(this.db, "lists"), listData);
+      console.log("✅ Document created with ID:", docRef.id);
+
+      const docSnap = await getDoc(docRef);
+      const savedData = docSnap.data()!;
+
+      const newList = {
+        id: docRef.id,
+        ...savedData,
+        createdAt: savedData.createdAt.toDate(),
+        updatedAt: savedData.updatedAt.toDate(),
+      } as List;
+
+      console.log("✅ List created successfully:", newList);
+      return newList;
+    } catch (error) {
+      console.error("❌ Error creating list:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error code:", (error as any).code);
+      }
+      throw error;
+    }
   }
 
   async updateList(data: UpdateListDTO): Promise<void> {
-    const docRef = doc(this.db, 'lists', data.id);
+    const docRef = doc(this.db, "lists", data.id);
     await updateDoc(docRef, {
       ...data,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   }
 
-  async deleteList(listId: string): Promise<void> {
-    // Delete the list
-    await deleteDoc(doc(this.db, 'lists', listId));
-    
-    // Delete all items in the list
-    const itemsQuery = query(
-      collection(this.db, 'items'),
-      where('listId', '==', listId)
-    );
-    const itemsSnapshot = await getDocs(itemsQuery);
-    
-    const deletePromises = itemsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-    await Promise.all(deletePromises);
+  async deleteList(listId: string, userId: string): Promise<void> {
+    console.log("🗑️ deleteList called:", { listId, userId });
+
+    try {
+      // Delete all items in the list first
+      const itemsQuery = query(
+        collection(this.db, "items"),
+        where("userId", "==", userId),
+        where("listId", "==", listId),
+      );
+      const itemsSnapshot = await getDocs(itemsQuery);
+      console.log(`🗑️ Deleting ${itemsSnapshot.size} items from list...`);
+
+      const deletePromises = itemsSnapshot.docs.map((doc) =>
+        deleteDoc(doc.ref),
+      );
+      await Promise.all(deletePromises);
+      console.log("✅ All items deleted");
+
+      // Then delete the list itself
+      await deleteDoc(doc(this.db, "lists", listId));
+      console.log("✅ List deleted successfully");
+    } catch (error) {
+      console.error("❌ Error in deleteList:", error);
+      throw error;
+    }
   }
 
   // Items Methods
   async getItems(userId: string, listId?: string): Promise<Item[]> {
     let q = query(
-      collection(this.db, 'items'),
-      where('userId', '==', userId),
-      where('archived', '==', false),
-      orderBy('createdAt', 'desc')
+      collection(this.db, "items"),
+      where("userId", "==", userId),
+      where("archived", "==", false),
+      orderBy("createdAt", "desc"),
     );
 
     if (listId) {
       q = query(
-        collection(this.db, 'items'),
-        where('userId', '==', userId),
-        where('listId', '==', listId),
-        where('archived', '==', false),
-        orderBy('createdAt', 'desc')
+        collection(this.db, "items"),
+        where("userId", "==", userId),
+        where("listId", "==", listId),
+        where("archived", "==", false),
+        orderBy("createdAt", "desc"),
       );
     }
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    return snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
       createdAt: doc.data().createdAt.toDate(),
-      updatedAt: doc.data().updatedAt.toDate()
+      updatedAt: doc.data().updatedAt.toDate(),
     })) as Item[];
   }
 
   async getItem(itemId: string): Promise<Item | null> {
-    const docRef = doc(this.db, 'items', itemId);
+    const docRef = doc(this.db, "items", itemId);
     const docSnap = await getDoc(docRef);
-    
+
     if (!docSnap.exists()) return null;
-    
+
     const data = docSnap.data();
     return {
       id: docSnap.id,
       ...data,
       createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate()
+      updatedAt: data.updatedAt.toDate(),
     } as Item;
   }
 
   async createItem(userId: string, data: CreateItemDTO): Promise<Item> {
     // Auto-detect content type and source if URL provided
-    let detectedInfo: { type: Item['type']; source?: Item['source'] } = {
+    let detectedInfo: { type: Item["type"]; source?: Item["source"] } = {
       type: data.type,
-      source: typeof data.source === 'string' ? (data.source as Item['source']) : undefined
+      source:
+        typeof data.source === "string"
+          ? (data.source as Item["source"])
+          : undefined,
     };
     let thumbnail = data.thumbnail;
-    
+
     if (data.url) {
       const detected = detectContentType(data.url);
       detectedInfo = {
-        type: detected.type as Item['type'],
-        source: detected.source as Item['source']
+        type: detected.type as Item["type"],
+        source: detected.source as Item["source"],
       };
-      
+
       // Extract YouTube thumbnail if not provided
-      if (detected.source === 'youtube' && !thumbnail) {
+      if (detected.source === "youtube" && !thumbnail) {
         thumbnail = extractYouTubeThumbnail(data.url);
       }
     }
 
-    const itemData = {
+    // Build itemData, only including defined fields (Firestore doesn't accept undefined)
+    const itemData: any = {
       type: detectedInfo.type,
       title: data.title,
-      url: data.url,
-      content: data.content,
-      thumbnail: thumbnail,
       listId: data.listId,
       userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       tags: data.tags || [],
-      source: detectedInfo.source,
-      archived: false
+      archived: false,
     };
 
-    const docRef = await addDoc(collection(this.db, 'items'), itemData);
+    // Only add optional fields if they're defined
+    if (data.url !== undefined) {
+      itemData.url = data.url;
+    }
+    if (data.content !== undefined) {
+      itemData.content = data.content;
+    }
+    if (thumbnail !== undefined) {
+      itemData.thumbnail = thumbnail;
+    }
+    if (detectedInfo.source !== undefined) {
+      itemData.source = detectedInfo.source;
+    }
+    if (data.notes !== undefined) {
+      itemData.notes = data.notes;
+    }
+
+    const docRef = await addDoc(collection(this.db, "items"), itemData);
     const docSnap = await getDoc(docRef);
     const savedData = docSnap.data()!;
 
@@ -412,27 +684,27 @@ export class FirebaseStorageService implements StorageService {
       id: docRef.id,
       ...savedData,
       createdAt: savedData.createdAt.toDate(),
-      updatedAt: savedData.updatedAt.toDate()
+      updatedAt: savedData.updatedAt.toDate(),
     } as Item;
   }
 
   async updateItem(data: UpdateItemDTO): Promise<void> {
-    const docRef = doc(this.db, 'items', data.id);
+    const docRef = doc(this.db, "items", data.id);
     await updateDoc(docRef, {
       ...data,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   }
 
   async deleteItem(itemId: string): Promise<void> {
-    await deleteDoc(doc(this.db, 'items', itemId));
+    await deleteDoc(doc(this.db, "items", itemId));
   }
 
   async archiveItem(itemId: string): Promise<void> {
-    const docRef = doc(this.db, 'items', itemId);
+    const docRef = doc(this.db, "items", itemId);
     await updateDoc(docRef, {
       archived: true,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
   }
 

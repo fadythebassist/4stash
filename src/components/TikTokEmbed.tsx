@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const TIKTOK_EMBED_SRC = 'https://www.tiktok.com/embed.js';
+const TIKTOK_EMBED_SRC = "https://www.tiktok.com/embed.js";
 
 let tiktokEmbedPromise: Promise<void> | null = null;
 
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+    return trimmed;
   return `https://${trimmed}`;
 }
 
@@ -28,29 +29,32 @@ function extractTikTokVideoId(urlStr: string): string | null {
 }
 
 function loadTikTokEmbed(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
+  if (typeof window === "undefined") return Promise.resolve();
 
   if (tiktokEmbedPromise) return tiktokEmbedPromise;
 
   tiktokEmbedPromise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${TIKTOK_EMBED_SRC}"]`
+      `script[src="${TIKTOK_EMBED_SRC}"]`,
     );
 
     if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load TikTok embed')),
-      {
-        once: true
-      });
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Failed to load TikTok embed")),
+        {
+          once: true,
+        },
+      );
       return;
     }
 
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = TIKTOK_EMBED_SRC;
     script.async = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load TikTok embed'));
+    script.onerror = () => reject(new Error("Failed to load TikTok embed"));
     document.head.appendChild(script);
   });
 
@@ -77,22 +81,22 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
         return;
       }
 
-      containerRef.current.innerHTML = '';
+      containerRef.current.innerHTML = "";
 
       // Create blockquote structure TikTok script expects
-      const blockquote = document.createElement('blockquote');
-      blockquote.className = 'tiktok-embed';
-      blockquote.setAttribute('cite', normalizedUrl);
-      blockquote.setAttribute('data-video-id', videoId);
-      blockquote.style.maxWidth = '100%';
-      blockquote.style.minWidth = '0';
+      const blockquote = document.createElement("blockquote");
+      blockquote.className = "tiktok-embed";
+      blockquote.setAttribute("cite", normalizedUrl);
+      blockquote.setAttribute("data-video-id", videoId);
+      blockquote.style.maxWidth = "100%";
+      blockquote.style.minWidth = "0";
 
-      const section = document.createElement('section');
-      const link = document.createElement('a');
+      const section = document.createElement("section");
+      const link = document.createElement("a");
       link.href = normalizedUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'View on TikTok';
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "View on TikTok";
 
       section.appendChild(link);
       blockquote.appendChild(section);
@@ -118,7 +122,10 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
 
   if (failed && normalizedUrl) {
     return (
-      <div className="tiktok-embed-container" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="tiktok-embed-container"
+        onClick={(e) => e.stopPropagation()}
+      >
         <a
           href={normalizedUrl}
           target="_blank"
@@ -132,7 +139,13 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
     );
   }
 
-  return <div className="tiktok-embed-container" ref={containerRef} onClick={(e) => e.stopPropagation()} />;
+  return (
+    <div
+      className="tiktok-embed-container"
+      ref={containerRef}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
 };
 
 export default TikTokEmbed;

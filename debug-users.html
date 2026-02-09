@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>4Later User Debug Tool</title>
+    <style>
+        body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .user { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .current { background: #e0f2e9; border-color: #10b981; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; border-radius: 4px; border: 1px solid #ddd; }
+        .danger { background: #fee; color: #c00; }
+        .primary { background: #6366f1; color: white; border-color: #6366f1; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        h2 { color: #333; }
+        .stats { background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 4Later User Debug Tool</h1>
+    <div class="stats" id="stats"></div>
+    <div id="users"></div>
+    <div style="margin-top: 20px;">
+        <button class="danger" onclick="clearAllData()">⚠️ Clear All Data</button>
+        <button onclick="exportData()">📥 Export Data</button>
+        <button onclick="location.reload()">🔄 Refresh</button>
+    </div>
+
+    <script>
+        function loadData() {
+            const data = JSON.parse(localStorage.getItem('4later_mock_data') || '{"users":[],"lists":[],"items":[],"currentUserId":null}');
+            return data;
+        }
+
+        function saveData(data) {
+            localStorage.setItem('4later_mock_data', JSON.stringify(data));
+        }
+
+        function displayUsers() {
+            const data = loadData();
+            const statsDiv = document.getElementById('stats');
+            const usersDiv = document.getElementById('users');
+            
+            // Display stats
+            statsDiv.innerHTML = `
+                <h2>📊 Storage Statistics</h2>
+                <p><strong>Total Users:</strong> ${data.users.length}</p>
+                <p><strong>Total Lists:</strong> ${data.lists.length}</p>
+                <p><strong>Total Items:</strong> ${data.items.length}</p>
+                <p><strong>Current User ID:</strong> ${data.currentUserId || 'None (logged out)'}</p>
+            `;
+
+            if (data.users.length === 0) {
+                usersDiv.innerHTML = '<p>No users found in storage.</p>';
+                return;
+            }
+
+            usersDiv.innerHTML = '<h2>👥 All Users</h2>' + data.users.map(user => {
+                const isCurrent = user.id === data.currentUserId;
+                const userLists = data.lists.filter(l => l.userId === user.id);
+                const userItems = data.items.filter(i => i.userId === user.id);
+                
+                return `
+                    <div class="user ${isCurrent ? 'current' : ''}">
+                        <h3>${user.displayName || 'Unnamed'} ${isCurrent ? '(CURRENT)' : ''}</h3>
+                        <p><strong>Email:</strong> ${user.email}</p>
+                        <p><strong>User ID:</strong> ${user.id}</p>
+                        <p><strong>Provider:</strong> ${user.provider}</p>
+                        <p><strong>Created:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
+                        <p><strong>Lists:</strong> ${userLists.length} | <strong>Items:</strong> ${userItems.length}</p>
+                        ${!isCurrent ? `<button class="primary" onclick="switchToUser('${user.id}')">Switch to This User</button>` : ''}
+                        <button class="danger" onclick="deleteUser('${user.id}')">Delete User</button>
+                        <button onclick="showUserData('${user.id}')">View Data</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function switchToUser(userId) {
+            const data = loadData();
+            data.currentUserId = userId;
+            saveData(data);
+            alert('✅ Switched to user! Refresh the 4Later app to see changes.');
+            displayUsers();
+        }
+
+        function deleteUser(userId) {
+            if (!confirm('⚠️ Are you sure? This will delete the user and all their lists and items!')) return;
+            
+            const data = loadData();
+            data.users = data.users.filter(u => u.id !== userId);
+            data.lists = data.lists.filter(l => l.userId !== userId);
+            data.items = data.items.filter(i => i.userId !== userId);
+            if (data.currentUserId === userId) {
+                data.currentUserId = null;
+            }
+            saveData(data);
+            alert('✅ User deleted!');
+            displayUsers();
+        }
+
+        function showUserData(userId) {
+            const data = loadData();
+            const user = data.users.find(u => u.id === userId);
+            const lists = data.lists.filter(l => l.userId === userId);
+            const items = data.items.filter(i => i.userId === userId);
+            
+            const output = {
+                user,
+                lists,
+                items
+            };
+            
+            const popup = window.open('', '_blank', 'width=800,height=600');
+            popup.document.write('<html><head><title>User Data</title></head><body style="font-family:monospace;padding:20px;"><pre>' + 
+                JSON.stringify(output, null, 2) + 
+                '</pre></body></html>');
+        }
+
+        function clearAllData() {
+            if (!confirm('⚠️ This will DELETE ALL DATA including all users, lists, and items. Are you absolutely sure?')) return;
+            if (!confirm('⚠️ FINAL WARNING: This cannot be undone!')) return;
+            
+            localStorage.removeItem('4later_mock_data');
+            alert('✅ All data cleared!');
+            displayUsers();
+        }
+
+        function exportData() {
+            const data = loadData();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `4later-backup-${Date.now()}.json`;
+            a.click();
+            alert('✅ Data exported!');
+        }
+
+        // Initialize
+        displayUsers();
+    </script>
+</body>
+</html>

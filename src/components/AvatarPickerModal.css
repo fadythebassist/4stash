@@ -1,0 +1,119 @@
+.avatar-picker-modal {
+  max-width: 600px;
+}
+
+.avatar-picker-body {
+  padding: 20px 0;
+}
+
+.avatar-style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0 4px;
+}
+
+.avatar-style-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.avatar-style-option:hover:not(:disabled) {
+  border-color: #4caf50;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+}
+
+.avatar-style-option.selected {
+  border-color: #4caf50;
+  background: #f1f8f4;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.2);
+}
+
+.avatar-style-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-style-info {
+  text-align: center;
+}
+
+.avatar-style-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.avatar-style-description {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Scrollbar styling for the grid */
+.avatar-style-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.avatar-style-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.avatar-style-grid::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+.avatar-style-grid::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .avatar-picker-modal {
+    max-width: calc(100% - 32px);
+  }
+
+  .avatar-style-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+
+  .avatar-preview {
+    width: 60px;
+    height: 60px;
+  }
+
+  .avatar-style-option {
+    padding: 12px;
+  }
+}

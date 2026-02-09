@@ -1,5 +1,5 @@
 // Content Types
-export type ContentType = 'text' | 'video' | 'image' | 'link' | 'article';
+export type ContentType = "text" | "video" | "image" | "link" | "article";
 
 // Item represents a saved piece of content
 export interface Item {
@@ -14,7 +14,14 @@ export interface Item {
   createdAt: Date;
   updatedAt: Date;
   tags?: string[];
-  source?: 'youtube' | 'twitter' | 'tiktok' | 'instagram' | 'reddit' | 'facebook' | 'other';
+  source?:
+    | "youtube"
+    | "twitter"
+    | "tiktok"
+    | "instagram"
+    | "reddit"
+    | "facebook"
+    | "other";
   archived?: boolean;
 }
 
@@ -30,21 +37,34 @@ export interface List {
   itemCount?: number;
 }
 
+// DiceBear avatar styles
+export const DICEBEAR_STYLES = [
+  { id: "lorelei", name: "Lorelei", description: "Illustrated characters" },
+  { id: "avataaars", name: "Avataaars", description: "Cartoon characters" },
+  { id: "bottts", name: "Bottts", description: "Cute robots" },
+  { id: "personas", name: "Personas", description: "Simple & professional" },
+  { id: "initials", name: "Initials", description: "Letter-based" },
+  { id: "shapes", name: "Shapes", description: "Geometric patterns" },
+] as const;
+
+export type DiceBearStyle = (typeof DICEBEAR_STYLES)[number]["id"];
+
 // User profile
 export interface User {
   id: string;
   email: string;
   displayName?: string;
   photoURL?: string;
+  avatarStyle?: string;
   createdAt: Date;
-  provider: 'google' | 'email';
+  provider: "google" | "email" | "facebook" | "twitter";
 }
 
 // Social media connection for accessing private posts
 export interface SocialConnection {
   id: string;
   userId: string;
-  platform: 'facebook' | 'instagram' | 'twitter' | 'tiktok' | 'pinterest';
+  platform: "facebook" | "instagram" | "twitter" | "tiktok" | "pinterest";
   accessToken: string;
   refreshToken?: string;
   expiresAt?: Date;

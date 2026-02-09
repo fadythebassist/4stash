@@ -1,18 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 
-const INSTAGRAM_EMBEDS_SRC = 'https://www.instagram.com/embed.js';
+const INSTAGRAM_EMBEDS_SRC = "https://www.instagram.com/embed.js";
 
 let instagramEmbedsPromise: Promise<void> | null = null;
 
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+    return trimmed;
   return `https://${trimmed}`;
 }
 
 function loadInstagramEmbeds(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
+  if (typeof window === "undefined") return Promise.resolve();
 
   const win = window as unknown as {
     instgrm?: { Embeds?: { process?: () => void } };
@@ -23,24 +24,27 @@ function loadInstagramEmbeds(): Promise<void> {
 
   instagramEmbedsPromise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${INSTAGRAM_EMBEDS_SRC}"]`
+      `script[src="${INSTAGRAM_EMBEDS_SRC}"]`,
     );
 
     if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load Instagram embeds')),
-      {
-        once: true
-      });
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Failed to load Instagram embeds")),
+        {
+          once: true,
+        },
+      );
       return;
     }
 
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = INSTAGRAM_EMBEDS_SRC;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Instagram embeds'));
+    script.onerror = () => reject(new Error("Failed to load Instagram embeds"));
     document.head.appendChild(script);
   });
 

@@ -34,6 +34,7 @@
   scroll-snap-align: start;
   transition: all var(--transition-fast);
   flex-shrink: 0;
+  position: relative;
 }
 
 .topbar-chip:hover {
@@ -43,9 +44,39 @@
 }
 
 .topbar-chip.active {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
   border-color: transparent;
   color: white;
+}
+
+.chip-delete {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: currentColor;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0;
+  margin-left: 0.25rem;
+  transition: all var(--transition-fast);
+}
+
+.topbar-chip:hover .chip-delete {
+  display: flex;
+}
+
+.chip-delete:hover {
+  background: rgba(255, 0, 0, 0.8);
+  color: white;
+  transform: scale(1.1);
 }
 
 .chip-icon {
