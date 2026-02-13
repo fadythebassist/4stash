@@ -148,7 +148,10 @@ function isGenericFacebookTitle(title?: string): boolean {
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
-    h.includes("instagram.com") ||
+    // Don't proxy cdninstagram.com - these are CDN URLs with time-sensitive tokens
+    // that work directly in browsers but fail when proxied
+    // h.includes("cdninstagram.com") ||
+    h.includes("instagram.com") && !h.includes("cdninstagram.com") ||
     h.endsWith("fbcdn.net") ||
     h.includes("facebook.com") ||
     // Facebook crawler thumbnails often come from lookaside.fbsbx.com and are CORP-protected.
@@ -564,15 +567,29 @@ function unfurlPlugin(): Plugin {
           );
         })();
 
+        const isInstagramImageHost = (() => {
+          const h = targetUrl.hostname.toLowerCase();
+          return (
+            h.includes("cdninstagram.com") ||
+            h.includes("instagram.com")
+          );
+        })();
+
         const headers = {
           "user-agent": isFacebookImageHost
             ? "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+            : isInstagramImageHost
+            ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
             : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
           "accept-language": "en-US,en;q=0.9",
           // Some Facebook image endpoints are sensitive to Referer.
           ...(isFacebookImageHost
             ? { referer: "https://www.facebook.com/" }
+            : {}),
+          // Instagram/Threads images need Instagram referer
+          ...(isInstagramImageHost
+            ? { referer: "https://www.instagram.com/" }
             : {}),
         };
 

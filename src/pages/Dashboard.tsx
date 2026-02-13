@@ -151,13 +151,21 @@ const Dashboard: React.FC = () => {
         <div className="container">
           {items.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon">📭</div>
+              <div className="empty-icon-wrapper">
+                <div className="empty-icon">📭</div>
+              </div>
               <h2>No items yet</h2>
               <p>
                 {selectedListId
                   ? "This list is empty. Add your first item!"
                   : "Start saving content by clicking the + button"}
               </p>
+              <button
+                className="empty-cta"
+                onClick={() => setShowAddItem(true)}
+              >
+                Save your first item
+              </button>
             </div>
           ) : (
             <div 

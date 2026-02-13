@@ -55,6 +55,7 @@ export interface AppSettings {
   showSourceBadges?: boolean;
   moderationLevel?: 'strict' | 'moderate' | 'relaxed' | 'off';
   autoArchiveDays?: number;
+  autoplayVideos?: boolean;
 }
 
 // User profile

@@ -75,13 +75,33 @@
   margin: 0;
 }
 
+.fb-card-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #050505;
+  margin-bottom: 6px;
+}
+
+.fb-card-description {
+  font-size: 0.85rem;
+  color: #65676b;
+  line-height: 1.4;
+}
+
 .fb-card-thumbnail {
   width: 100%;
   overflow: hidden;
   background: #f0f2f5;
 }
 
-.fb-card-thumbnail img {
+.fb-card-thumb {
+  width: 100%;
+  overflow: hidden;
+  background: #f0f2f5;
+}
+
+.fb-card-thumbnail img,
+.fb-card-thumb img {
   width: 100%;
   height: auto;
   display: block;
@@ -192,29 +212,43 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .fb-card {
-    background: #242526;
-    border-color: #3e4042;
-  }
+/* Dark mode support — use app's data-theme instead of prefers-color-scheme */
+[data-theme="dark"] .fb-card {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
 
-  .fb-card-body {
-    background: linear-gradient(180deg, #263951 0%, #242526 100%);
-  }
+[data-theme="dark"] .fb-card-body {
+  background: linear-gradient(180deg, rgba(38, 57, 81, 0.6) 0%, var(--bg-secondary) 100%);
+}
 
-  .fb-card-cta {
-    color: #b0b3b8;
-  }
+[data-theme="dark"] .fb-card-cta {
+  color: var(--text-tertiary);
+}
 
-  .fb-card-fallback-button {
-    background: #3a3b3c;
-    color: #b0b3b8;
-    border-color: #3e4042;
-  }
+[data-theme="dark"] .fb-card-title {
+  color: var(--text-primary);
+}
 
-  .fb-card-fallback-button:hover {
-    background: #4e4f50;
-    color: #e4e6eb;
-  }
+[data-theme="dark"] .fb-card-description {
+  color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .fb-card-thumbnail {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .fb-card-thumb {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .fb-card-fallback-button {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .fb-card-fallback-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }

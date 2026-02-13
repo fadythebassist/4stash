@@ -13,6 +13,7 @@ interface FacebookEmbedProps {
   title?: string;
   description?: string;
   thumbnail?: string;
+  autoplay?: boolean;
 }
 
 /**
@@ -63,6 +64,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   title,
   description,
   thumbnail,
+  autoplay = true,
 }) => {
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
@@ -105,10 +107,18 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     const href = encodeURIComponent(normalizedUrl);
     if (isVideo) {
       // Request larger dimensions to accommodate vertical videos without cropping
-      return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500&height=800`;
+      const autoplayParam = autoplay ? '1' : '0';
+      return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500&height=800&autoplay=${autoplayParam}&muted=1`;
     }
     return `https://www.facebook.com/plugins/post.php?href=${href}&show_text=true&width=500`;
-  }, [normalizedUrl, isVideo]);
+  }, [normalizedUrl, isVideo, autoplay]);
+
+  // Reset iframe loaded state when src changes (e.g., autoplay toggle)
+  useEffect(() => {
+    setIframeLoaded(false);
+    setShowFallback(false);
+    setIsPotentiallyBroken(false);
+  }, [iframeSrc]);
 
   // After the iframe fires onLoad, check if it rendered real content.
   // Facebook plugin iframes load but render a tiny ~0-height body when the URL is invalid.
@@ -129,23 +139,23 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
         if (height < 100) {
           setShowFallback(true);
         }
-        // For videos, show manual button if not clearly working (< 700px)
-        // Working videos are typically 500-800px+, error pages are usually shorter
-        else if (isVideo) {
+        // For videos, show manual fallback button if we have a thumbnail
+        // Don't auto-fallback - let the user decide
+        else if (isVideo && thumbnail && height < 400) {
           setIsPotentiallyBroken(true);
         }
       }
     }, 3000);
     return () => clearTimeout(timer);
-  }, [iframeLoaded, isVideo]);
+  }, [iframeLoaded, isVideo, thumbnail]);
 
-  // Also set a hard timeout: if iframe hasn't loaded at all after 8s, show fallback
+  // Also set a hard timeout: if iframe hasn't loaded at all after 15s, show fallback
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!iframeLoaded) {
         setShowFallback(true);
       }
-    }, 8000);
+    }, 15000);
     return () => clearTimeout(timer);
   }, [iframeLoaded]);
 
@@ -178,6 +188,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
             </div>
           )}
           <iframe
+            key={iframeSrc}
             ref={iframeRef}
             src={iframeSrc}
             title={`Facebook ${contentType}`}

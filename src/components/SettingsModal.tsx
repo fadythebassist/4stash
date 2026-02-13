@@ -24,18 +24,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     showSourceBadges: user?.settings?.showSourceBadges !== false,
     moderationLevel: user?.settings?.moderationLevel || 'moderate',
     autoArchiveDays: user?.settings?.autoArchiveDays || 0,
+    autoplayVideos: user?.settings?.autoplayVideos !== false,
   });
 
   if (!isOpen) return null;
 
-  const handleSave = async () => {
+  const handleSettingChange = async (newSettings: Partial<typeof settings>) => {
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+
     try {
       if (updateUserSettings) {
-        await updateUserSettings(settings);
+        await updateUserSettings(updated);
       }
-      // Apply theme immediately
-      document.documentElement.setAttribute('data-theme', settings.theme);
-      onClose();
+      // Apply theme immediately if changed
+      if (newSettings.theme) {
+        document.documentElement.setAttribute('data-theme', newSettings.theme);
+      }
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');
@@ -76,13 +81,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         <div className="setting-options">
           <button
             className={`option-btn ${settings.theme === 'light' ? 'active' : ''}`}
-            onClick={() => setSettings({ ...settings, theme: 'light' })}
+            onClick={() => handleSettingChange({ theme: 'light' })}
           >
             ☀️ Light
           </button>
           <button
             className={`option-btn ${settings.theme === 'dark' ? 'active' : ''}`}
-            onClick={() => setSettings({ ...settings, theme: 'dark' })}
+            onClick={() => handleSettingChange({ theme: 'dark' })}
           >
             🌙 Dark
           </button>
@@ -97,13 +102,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         <div className="setting-options">
           <button
             className={`option-btn ${settings.viewDensity === 'compact' ? 'active' : ''}`}
-            onClick={() => setSettings({ ...settings, viewDensity: 'compact' })}
+            onClick={() => handleSettingChange({ viewDensity: 'compact' })}
           >
             Compact
           </button>
           <button
             className={`option-btn ${settings.viewDensity === 'comfortable' ? 'active' : ''}`}
-            onClick={() => setSettings({ ...settings, viewDensity: 'comfortable' })}
+            onClick={() => handleSettingChange({ viewDensity: 'comfortable' })}
           >
             Comfortable
           </button>
@@ -118,13 +123,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         <div className="setting-options">
           <button
             className={`option-btn ${settings.layoutMode === 'grid' ? 'active' : ''}`}
-            onClick={() => setSettings({ ...settings, layoutMode: 'grid' })}
+            onClick={() => handleSettingChange({ layoutMode: 'grid' })}
           >
             🔲 Grid
           </button>
           <button
             className={`option-btn ${settings.layoutMode === 'list' ? 'active' : ''}`}
-            onClick={() => setSettings({ ...settings, layoutMode: 'list' })}
+            onClick={() => handleSettingChange({ layoutMode: 'list' })}
           >
             📋 List
           </button>
@@ -138,7 +143,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         </label>
         <select
           value={settings.thumbnailQuality}
-          onChange={(e) => setSettings({ ...settings, thumbnailQuality: e.target.value as 'low' | 'medium' | 'high' })}
+          onChange={(e) => handleSettingChange({ thumbnailQuality: e.target.value as 'low' | 'medium' | 'high' })}
           className="setting-select"
         >
           <option value="low">Low (faster loading)</option>
@@ -158,7 +163,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         </label>
         <select
           value={settings.defaultListId}
-          onChange={(e) => setSettings({ ...settings, defaultListId: e.target.value })}
+          onChange={(e) => handleSettingChange({ defaultListId: e.target.value })}
           className="setting-select"
         >
           <option value="">Current selected list</option>
@@ -171,7 +176,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           <input
             type="checkbox"
             checked={settings.autoFetchMetadata}
-            onChange={(e) => setSettings({ ...settings, autoFetchMetadata: e.target.checked })}
+            onChange={(e) => handleSettingChange({ autoFetchMetadata: e.target.checked })}
           />
           <div>
             <strong>Auto-fetch metadata</strong>
@@ -185,7 +190,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           <input
             type="checkbox"
             checked={settings.confirmDelete}
-            onChange={(e) => setSettings({ ...settings, confirmDelete: e.target.checked })}
+            onChange={(e) => handleSettingChange({ confirmDelete: e.target.checked })}
           />
           <div>
             <strong>Confirm before deleting</strong>
@@ -199,11 +204,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           <input
             type="checkbox"
             checked={settings.showSourceBadges}
-            onChange={(e) => setSettings({ ...settings, showSourceBadges: e.target.checked })}
+            onChange={(e) => handleSettingChange({ showSourceBadges: e.target.checked })}
           />
           <div>
             <strong>Show source badges</strong>
             <p className="setting-description">Display social media icons on content cards</p>
+          </div>
+        </label>
+      </div>
+
+      <div className="setting-group">
+        <label className="setting-checkbox">
+          <input
+            type="checkbox"
+            checked={settings.autoplayVideos}
+            onChange={(e) => handleSettingChange({ autoplayVideos: e.target.checked })}
+          />
+          <div>
+            <strong>Autoplay videos</strong>
+            <p className="setting-description">Automatically play embedded videos (TikTok, Instagram, etc.)</p>
           </div>
         </label>
       </div>
@@ -215,7 +234,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         </label>
         <select
           value={settings.itemsPerPage}
-          onChange={(e) => setSettings({ ...settings, itemsPerPage: parseInt(e.target.value) })}
+          onChange={(e) => handleSettingChange({ itemsPerPage: parseInt(e.target.value) })}
           className="setting-select"
         >
           <option value="12">12 items</option>
@@ -232,7 +251,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         </label>
         <select
           value={settings.autoArchiveDays}
-          onChange={(e) => setSettings({ ...settings, autoArchiveDays: parseInt(e.target.value) })}
+          onChange={(e) => handleSettingChange({ autoArchiveDays: parseInt(e.target.value) })}
           className="setting-select"
         >
           <option value="0">Never (disabled)</option>
@@ -254,7 +273,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         </label>
         <select
           value={settings.moderationLevel}
-          onChange={(e) => setSettings({ ...settings, moderationLevel: e.target.value as 'strict' | 'moderate' | 'relaxed' | 'off' })}
+          onChange={(e) => handleSettingChange({ moderationLevel: e.target.value as 'strict' | 'moderate' | 'relaxed' | 'off' })}
           className="setting-select"
         >
           <option value="strict">Strict (maximum filtering)</option>
@@ -355,10 +374,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={handleSave}>Save Changes</button>
-        </div>
       </div>
     </div>
   );

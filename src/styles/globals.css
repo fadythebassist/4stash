@@ -1,83 +1,126 @@
 :root {
-  /* Light Theme Colors */
+  /* ── Color Palette ── */
+  --bg-base: #faf9f7;
   --bg-primary: #ffffff;
-  --bg-secondary: #f6f7fb;
-  --bg-tertiary: #e9ecf3;
+  --bg-secondary: #f5f4f1;
+  --bg-tertiary: #eae8e4;
+  --bg-sunken: #f0eeea;
   --bg-glass: rgba(255, 255, 255, 0.7);
-  
-  --text-primary: #0f0f0f;
-  --text-secondary: #374151;
-  --text-tertiary: #6b7280;
-  
-  --accent-primary: #6366f1;
-  --accent-secondary: #818cf8;
-  --accent-hover: #4f46e5;
-  
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a4a4a;
+  --text-tertiary: #8a8a8a;
+
+  --accent-primary: #0d9488;
+  --accent-secondary: #d97706;
+  --accent-hover: #0f766e;
+  --accent-muted: rgba(13, 148, 136, 0.08);
+
   --success: #10b981;
   --error: #ef4444;
   --warning: #f59e0b;
-  
-  --border: rgba(15, 15, 15, 0.12);
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.10);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.12);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.14);
-  
-  /* Glassmorphism */
+
+  /* ── Borders ── */
+  --border: rgba(26, 26, 26, 0.10);
+  --border-strong: rgba(26, 26, 26, 0.18);
+  --border-accent: var(--accent-primary);
+
+  /* ── Shadows / Elevation ── */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --elevation-3: 0 8px 24px rgba(0, 0, 0, 0.10);
+  --elevation-4: 0 16px 48px rgba(0, 0, 0, 0.12);
+
+  /* ── Glassmorphism ── */
   --glass-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(15, 15, 15, 0.10);
-  --glass-blur: 10px;
-  
-  /* Spacing */
+  --glass-border: rgba(26, 26, 26, 0.08);
+  --glass-blur: 12px;
+
+  /* ── Typography Scale (1.2 minor-third) ── */
+  --font-xs: 0.694rem;
+  --font-sm: 0.833rem;
+  --font-base: 1rem;
+  --font-lg: 1.2rem;
+  --font-xl: 1.44rem;
+  --font-2xl: 1.728rem;
+  --font-3xl: 2.074rem;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+
+  /* ── Spacing ── */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
-  
-  /* Border radius */
+
+  /* ── Border radius ── */
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
-  
-  /* Transitions */
+  --radius-2xl: 1.25rem;
+
+  /* ── Transitions ── */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-slow: 350ms ease;
+
+  /* ── Premium Easings ── */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
 }
 
-/* Dark Theme Colors */
+/* ── Dark Theme ── */
 [data-theme="dark"] {
-  --bg-primary: #0f0f0f;
+  --bg-base: #0c0c0c;
+  --bg-primary: #111111;
   --bg-secondary: #1a1a1a;
-  --bg-tertiary: #2a2a2a;
-  --bg-glass: rgba(26, 26, 26, 0.7);
-  
-  --text-primary: #f5f5f5;
-  --text-secondary: #d1d5db;
-  --text-tertiary: #9ca3af;
-  
-  --accent-primary: #818cf8;
-  --accent-secondary: #a5b4fc;
-  --accent-hover: #6366f1;
-  
+  --bg-tertiary: #262626;
+  --bg-sunken: #141414;
+  --bg-glass: rgba(17, 17, 17, 0.85);
+
+  --text-primary: #f0eeea;
+  --text-secondary: #b5b3af;
+  --text-tertiary: #777572;
+
+  --accent-primary: #2dd4bf;
+  --accent-secondary: #fbbf24;
+  --accent-hover: #5eead4;
+  --accent-muted: rgba(45, 212, 191, 0.10);
+
   --success: #34d399;
   --error: #f87171;
   --warning: #fbbf24;
-  
-  --border: rgba(255, 255, 255, 0.12);
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
-  
-  /* Glassmorphism */
-  --glass-bg: rgba(26, 26, 26, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-blur: 10px;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-accent: var(--accent-primary);
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
+
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --elevation-3: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --elevation-4: 0 16px 48px rgba(0, 0, 0, 0.7);
+
+  --glass-bg: rgba(17, 17, 17, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-blur: 12px;
 }
 
+/* ── Reset ── */
 * {
   margin: 0;
   padding: 0;
@@ -94,7 +137,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
-  background: var(--bg-primary);
+  background: var(--bg-base);
   color: var(--text-primary);
   line-height: 1.5;
   overflow-x: hidden;
@@ -106,7 +149,7 @@ body {
   flex-direction: column;
 }
 
-/* Scrollbar styling */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -122,29 +165,29 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333;
+  background: var(--text-tertiary);
 }
 
-/* Input styles */
+/* ── Inputs ── */
 input,
 textarea,
 select {
   font-family: inherit;
-  font-size: 1rem;
+  font-size: var(--font-base);
   color: var(--text-primary);
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   outline: none;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 input::placeholder,
@@ -152,10 +195,10 @@ textarea::placeholder {
   color: var(--text-tertiary);
 }
 
-/* Button styles */
+/* ── Buttons ── */
 button {
   font-family: inherit;
-  font-size: 1rem;
+  font-size: var(--font-base);
   cursor: pointer;
   border: none;
   outline: none;
@@ -167,7 +210,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Link styles */
+/* ── Links ── */
 a {
   color: var(--accent-primary);
   text-decoration: none;
@@ -175,10 +218,10 @@ a {
 }
 
 a:hover {
-  color: var(--accent-secondary);
+  color: var(--accent-hover);
 }
 
-/* Utility classes */
+/* ── Utility ── */
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
@@ -207,7 +250,7 @@ a:hover {
 .mb-3 { margin-bottom: var(--spacing-md); }
 .mb-4 { margin-bottom: var(--spacing-lg); }
 
-/* Mobile-first responsive */
+/* ── Responsive ── */
 @media (min-width: 768px) {
   html {
     font-size: 18px;
@@ -220,7 +263,7 @@ a:hover {
   }
 }
 
-/* Animation keyframes */
+/* ── Keyframes ── */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -229,6 +272,39 @@ a:hover {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -243,6 +319,15 @@ a:hover {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
@@ -252,15 +337,21 @@ a:hover {
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .fade-in {
-  animation: fadeIn var(--transition-normal) ease-out;
+  animation: fadeIn 300ms var(--ease-out-expo);
 }
 
 .slide-in-bottom {
-  animation: slideInFromBottom var(--transition-slow) ease-out;
+  animation: slideInFromBottom var(--transition-slow) var(--ease-out-expo);
 }
 
-/* Loading spinner */
+/* ── Spinner ── */
 .spinner {
   width: 40px;
   height: 40px;
@@ -268,10 +359,4 @@ a:hover {
   border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

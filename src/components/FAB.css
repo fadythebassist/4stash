@@ -2,22 +2,23 @@
   position: fixed;
   bottom: var(--spacing-xl);
   right: var(--spacing-xl);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-xl);
+  background: var(--accent-primary);
   color: white;
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--elevation-3);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 50;
-  transition: all var(--transition-fast);
+  transition: all 200ms var(--ease-out-expo);
 }
 
 .fab:hover {
-  transform: scale(1.1);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  transform: scale(1.08);
+  box-shadow: var(--elevation-4);
+  background: var(--accent-hover);
 }
 
 .fab:active {
@@ -25,7 +26,7 @@
 }
 
 .fab svg {
-  transition: transform var(--transition-fast);
+  transition: transform 200ms var(--ease-out-expo);
 }
 
 .fab:hover svg {

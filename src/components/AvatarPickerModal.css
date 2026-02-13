@@ -20,23 +20,23 @@
   flex-direction: column;
   align-items: center;
   padding: 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  background: white;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 200ms var(--ease-out-expo);
 }
 
 .avatar-style-option:hover:not(:disabled) {
-  border-color: #4caf50;
+  border-color: var(--accent-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+  box-shadow: var(--elevation-2);
 }
 
 .avatar-style-option.selected {
-  border-color: #4caf50;
-  background: #f1f8f4;
-  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.2);
+  border-color: var(--accent-primary);
+  background: var(--accent-muted);
+  box-shadow: var(--elevation-2);
 }
 
 .avatar-style-option:disabled {
@@ -50,7 +50,7 @@
   border-radius: 50%;
   overflow: hidden;
   margin-bottom: 12px;
-  background: #f5f5f5;
+  background: var(--bg-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,13 +69,13 @@
 .avatar-style-name {
   font-weight: 600;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .avatar-style-description {
   font-size: 12px;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 /* Scrollbar styling for the grid */
@@ -84,17 +84,17 @@
 }
 
 .avatar-style-grid::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-secondary);
   border-radius: 4px;
 }
 
 .avatar-style-grid::-webkit-scrollbar-thumb {
-  background: #ccc;
+  background: var(--bg-tertiary);
   border-radius: 4px;
 }
 
 .avatar-style-grid::-webkit-scrollbar-thumb:hover {
-  background: #999;
+  background: var(--text-tertiary);
 }
 
 /* Responsive design */

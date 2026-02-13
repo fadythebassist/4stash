@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Item } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 import FacebookEmbed from "./FacebookEmbed";
 import InstagramEmbed from "./InstagramEmbed";
 import RedditEmbed from "./RedditEmbed";
@@ -23,6 +24,9 @@ interface ContentCardProps {
   layoutMode?: 'grid' | 'list';
 }
 
+const MAX_TEXT_LINES = 2;
+const MAX_TEXT_CHARS = 150; // Approximate chars for 2 lines
+
 const ContentCard: React.FC<ContentCardProps> = ({
   item,
   onDelete,
@@ -30,6 +34,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
   onClick,
   layoutMode = 'grid',
 }) => {
+  const { user } = useAuth();
+  const autoplayVideos = user?.settings?.autoplayVideos !== false;
+
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -43,6 +50,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const [resolvedFacebookUrl, setResolvedFacebookUrl] = useState<
     string | undefined
   >(undefined);
+  const [isTextExpanded, setIsTextExpanded] = useState(false);
 
   const minSwipeDistance = 100;
 
@@ -203,6 +211,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
     }
   }, [item.url]);
 
+  // Check if text content needs truncation
+  const textContent = displayContent ? decodeHtmlEntities(displayContent) : '';
+  const needsTruncation = textContent.length > MAX_TEXT_CHARS;
+  const displayText = needsTruncation && !isTextExpanded
+    ? textContent.slice(0, MAX_TEXT_CHARS).trim() + '...'
+    : textContent;
+
   useEffect(() => {
     setThumbnailError(false);
   }, [displayThumbnail]);
@@ -298,7 +313,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
       onTouchEnd={onTouchEnd}
       onClick={onClick}
     >
-      {layoutMode !== 'list' && !suppressTopMedia && displayThumbnail && !thumbnailError ? (
+      {/* Thumbnail — always rendered; CSS controls sizing per layout mode */}
+      {!suppressTopMedia && displayThumbnail && !thumbnailError ? (
         <div className="card-thumbnail">
           <img
             src={displayThumbnail}
@@ -331,7 +347,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           )}
           {getSourceBadge()}
         </div>
-      ) : layoutMode !== 'list' && !suppressTopMedia && item.type === "video" ? (
+      ) : !suppressTopMedia && item.type === "video" ? (
         <div className="card-thumbnail placeholder">
           <div className="video-placeholder">
             <span>▶️</span>
@@ -339,13 +355,19 @@ const ContentCard: React.FC<ContentCardProps> = ({
           </div>
           {getSourceBadge()}
         </div>
-      ) : layoutMode !== 'list' && !suppressTopMedia && displayThumbnail && thumbnailError ? (
+      ) : !suppressTopMedia && displayThumbnail && thumbnailError ? (
         <div className="card-thumbnail placeholder">
           <div className="image-placeholder">
             <span>🖼️</span>
             <p>{item.title}</p>
           </div>
           {getSourceBadge()}
+        </div>
+      ) : layoutMode === 'list' ? (
+        <div className="card-thumbnail placeholder">
+          <div className="image-placeholder">
+            <span>{derivedSource && sourceBadges[derivedSource] ? sourceBadges[derivedSource].emoji : '🔗'}</span>
+          </div>
         </div>
       ) : null}
 
@@ -384,19 +406,51 @@ const ContentCard: React.FC<ContentCardProps> = ({
         </div>
 
         {displayContent && !shouldShowFacebookPreview && (
-          <p className="card-text">{decodeHtmlEntities(displayContent)}</p>
+          <p className={`card-text ${isTextExpanded ? 'expanded' : ''}`}>
+            {displayText}
+            {needsTruncation && !isTextExpanded && (
+              <button
+                className="card-text-more"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsTextExpanded(true);
+                }}
+              >
+                more
+              </button>
+            )}
+            {needsTruncation && isTextExpanded && (
+              <button
+                className="card-text-less"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsTextExpanded(false);
+                }}
+              >
+                less
+              </button>
+            )}
+          </p>
         )}
 
-        {shouldShowTikTokEmbed && item.url && <TikTokEmbed url={item.url} />}
+        {shouldShowTikTokEmbed && item.url && (
+          <TikTokEmbed
+            key={`tt-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
+            url={item.url}
+            autoplay={autoplayVideos}
+          />
+        )}
 
         {shouldShowRedditEmbed && item.url && <RedditEmbed url={item.url} />}
 
         {shouldShowFacebookPreview && item.url && (
           <FacebookEmbed
+            key={`fb-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
             url={displayUrl || item.url}
             title={item.title}
             description={displayContent}
             thumbnail={displayThumbnail}
+            autoplay={autoplayVideos}
           />
         )}
 
@@ -410,7 +464,11 @@ const ContentCard: React.FC<ContentCardProps> = ({
         )}
 
         {shouldShowInstagramEmbed && item.url && (
-          <InstagramEmbed url={item.url} />
+          <InstagramEmbed
+            key={`ig-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
+            url={item.url}
+            autoplay={autoplayVideos}
+          />
         )}
 
         {item.url && derivedSource === "twitter" && (

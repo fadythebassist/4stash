@@ -63,9 +63,10 @@ function loadTikTokEmbed(): Promise<void> {
 
 export interface TikTokEmbedProps {
   url: string;
+  autoplay?: boolean;
 }
 
-const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
+const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, autoplay = true }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
   const videoId = useMemo(() => extractTikTokVideoId(url), [url]);
@@ -88,6 +89,7 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
       blockquote.className = "tiktok-embed";
       blockquote.setAttribute("cite", normalizedUrl);
       blockquote.setAttribute("data-video-id", videoId);
+      blockquote.setAttribute("data-autoplay", autoplay ? "1" : "0");
       blockquote.style.maxWidth = "100%";
       blockquote.style.minWidth = "0";
 
@@ -118,7 +120,7 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
     return () => {
       cancelled = true;
     };
-  }, [normalizedUrl, videoId]);
+  }, [normalizedUrl, videoId, autoplay]);
 
   if (failed && normalizedUrl) {
     return (

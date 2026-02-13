@@ -40,6 +40,16 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
 
+  const sourceConfig: Record<string, { emoji: string; label: string }> = {
+    facebook: { emoji: "📘", label: "Facebook" },
+    instagram: { emoji: "📷", label: "Instagram" },
+    twitter: { emoji: "🐦", label: "X/Twitter" },
+    youtube: { emoji: "▶️", label: "YouTube" },
+    tiktok: { emoji: "🎵", label: "TikTok" },
+    reddit: { emoji: "👽", label: "Reddit" },
+    threads: { emoji: "🧵", label: "Threads" },
+  };
+
   type UrlMetadata = {
     title?: string;
     description?: string;
@@ -749,13 +759,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                 detectedSource && (
                   <div className="share-preview-placeholder">
                     <span className={`share-preview-icon ${detectedSource}`}>
-                      {detectedSource === "facebook" && "📘"}
-                      {detectedSource === "instagram" && "📷"}
-                      {detectedSource === "twitter" && "🐦"}
-                      {detectedSource === "youtube" && "▶️"}
-                      {detectedSource === "tiktok" && "🎵"}
-                      {detectedSource === "reddit" && "👽"}
-                      {detectedSource === "threads" && "🧵"}
+                      {sourceConfig[detectedSource]?.emoji ?? "🔗"}
                     </span>
                     <span className="share-preview-text">
                       Preview not available
@@ -763,27 +767,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                   </div>
                 )
               )}
-              {detectedSource && (
+              {detectedSource && sourceConfig[detectedSource] && (
                 <div className="share-preview-badge">
                   <span
                     className={`share-preview-badge-icon ${detectedSource}`}
                   >
-                    {detectedSource === "facebook" && "📘"}
-                    {detectedSource === "instagram" && "📷"}
-                    {detectedSource === "twitter" && "🐦"}
-                    {detectedSource === "youtube" && "▶️"}
-                    {detectedSource === "tiktok" && "🎵"}
-                    {detectedSource === "reddit" && "👽"}
-                    {detectedSource === "threads" && "🧵"}
+                    {sourceConfig[detectedSource].emoji}
                   </span>
                   <span className="share-preview-badge-text">
-                    {detectedSource === "facebook" && "Facebook"}
-                    {detectedSource === "instagram" && "Instagram"}
-                    {detectedSource === "twitter" && "X/Twitter"}
-                    {detectedSource === "youtube" && "YouTube"}
-                    {detectedSource === "tiktok" && "TikTok"}
-                    {detectedSource === "reddit" && "Reddit"}
-                    {detectedSource === "threads" && "Threads"}
+                    {sourceConfig[detectedSource].label}
                   </span>
                 </div>
               )}
