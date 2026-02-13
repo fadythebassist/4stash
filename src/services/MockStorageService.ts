@@ -6,6 +6,7 @@ import {
   UpdateItemDTO,
   CreateListDTO,
   UpdateListDTO,
+  AppSettings,
 } from "@/types";
 import { StorageService } from "./StorageService";
 
@@ -240,6 +241,18 @@ export class MockStorageService implements StorageService {
         "https://ui-avatars.com/api/?name=Demo+User&background=6366f1&color=fff",
       createdAt: new Date(),
       provider: "google",
+      settings: {
+        theme: 'light',
+        viewDensity: 'comfortable',
+        layoutMode: 'grid',
+        autoFetchMetadata: true,
+        confirmDelete: true,
+        thumbnailQuality: 'high',
+        itemsPerPage: 24,
+        showSourceBadges: true,
+        moderationLevel: 'moderate',
+        autoArchiveDays: 0,
+      },
     };
 
     this.data.users.push(user);
@@ -346,6 +359,18 @@ export class MockStorageService implements StorageService {
       displayName: displayName || email.split("@")[0],
       createdAt: new Date(),
       provider: "email",
+      settings: {
+        theme: 'light',
+        viewDensity: 'comfortable',
+        layoutMode: 'grid',
+        autoFetchMetadata: true,
+        confirmDelete: true,
+        thumbnailQuality: 'high',
+        itemsPerPage: 24,
+        showSourceBadges: true,
+        moderationLevel: 'moderate',
+        autoArchiveDays: 0,
+      },
     };
 
     this.data.users.push(user);
@@ -378,6 +403,15 @@ export class MockStorageService implements StorageService {
     if (user) {
       user.avatarStyle = style;
       user.photoURL = `https://api.dicebear.com/7.x/${style}/svg?seed=${userId}`;
+      this.saveToStorage();
+    }
+  }
+
+  async updateUserSettings(userId: string, settings: AppSettings): Promise<void> {
+    await this.delay(100);
+    const user = this.data.users.find((u) => u.id === userId);
+    if (user) {
+      user.settings = settings;
       this.saveToStorage();
     }
   }

@@ -14,14 +14,7 @@ export interface Item {
   createdAt: Date;
   updatedAt: Date;
   tags?: string[];
-  source?:
-    | "youtube"
-    | "twitter"
-    | "tiktok"
-    | "instagram"
-    | "reddit"
-    | "facebook"
-    | "other";
+  source?: string;
   archived?: boolean;
 }
 
@@ -49,6 +42,21 @@ export const DICEBEAR_STYLES = [
 
 export type DiceBearStyle = (typeof DICEBEAR_STYLES)[number]["id"];
 
+// User settings/preferences
+export interface AppSettings {
+  theme?: 'light' | 'dark';
+  viewDensity?: 'compact' | 'comfortable';
+  layoutMode?: 'grid' | 'list';
+  defaultListId?: string;
+  autoFetchMetadata?: boolean;
+  confirmDelete?: boolean;
+  thumbnailQuality?: 'low' | 'medium' | 'high';
+  itemsPerPage?: number;
+  showSourceBadges?: boolean;
+  moderationLevel?: 'strict' | 'moderate' | 'relaxed' | 'off';
+  autoArchiveDays?: number;
+}
+
 // User profile
 export interface User {
   id: string;
@@ -58,6 +66,7 @@ export interface User {
   avatarStyle?: string;
   createdAt: Date;
   provider: "google" | "email" | "facebook" | "twitter";
+  settings?: AppSettings;
 }
 
 // Social media connection for accessing private posts

@@ -36,6 +36,7 @@ import {
   UpdateItemDTO,
   CreateListDTO,
   UpdateListDTO,
+  AppSettings,
 } from "@/types";
 import { StorageService } from "./StorageService";
 
@@ -179,11 +180,15 @@ export class FirebaseStorageService implements StorageService {
   // Helper Methods
   private async getUserPreferences(
     userId: string,
-  ): Promise<{ avatarStyle?: string }> {
+  ): Promise<{ avatarStyle?: string; settings?: AppSettings }> {
     try {
       const userDoc = await getDoc(doc(this.db, "users", userId));
       if (userDoc.exists()) {
-        return userDoc.data() as { avatarStyle?: string };
+        const data = userDoc.data();
+        return {
+          avatarStyle: data.avatarStyle,
+          settings: data.settings,
+        };
       }
     } catch (error) {
       console.error("Failed to get user preferences:", error);
@@ -224,6 +229,7 @@ export class FirebaseStorageService implements StorageService {
         displayName: firebaseUser.displayName || undefined,
         photoURL,
         avatarStyle: prefs.avatarStyle,
+        settings: prefs.settings,
         createdAt: new Date(firebaseUser.metadata.creationTime!),
         provider: "google",
       };
@@ -271,6 +277,7 @@ export class FirebaseStorageService implements StorageService {
       displayName: firebaseUser.displayName || undefined,
       photoURL,
       avatarStyle: prefs.avatarStyle,
+      settings: prefs.settings,
       createdAt: new Date(firebaseUser.metadata.creationTime!),
       provider: "facebook",
     };
@@ -306,6 +313,7 @@ export class FirebaseStorageService implements StorageService {
       email: firebaseUser.email || `${firebaseUser.uid}@twitter.placeholder`,
       displayName: firebaseUser.displayName || undefined,
       photoURL,
+      settings: prefs.settings,
       avatarStyle: prefs.avatarStyle,
       createdAt: new Date(firebaseUser.metadata.creationTime!),
       provider: "twitter",
@@ -342,6 +350,7 @@ export class FirebaseStorageService implements StorageService {
       email: firebaseUser.email!,
       displayName: firebaseUser.displayName || undefined,
       photoURL,
+      settings: prefs.settings,
       avatarStyle: prefs.avatarStyle,
       createdAt: new Date(firebaseUser.metadata.creationTime!),
       provider: "email",
@@ -368,6 +377,18 @@ export class FirebaseStorageService implements StorageService {
       id: firebaseUser.uid,
       email: firebaseUser.email!,
       displayName: displayName,
+      settings: {
+        theme: 'light',
+        viewDensity: 'comfortable',
+        layoutMode: 'grid',
+        autoFetchMetadata: true,
+        confirmDelete: true,
+        thumbnailQuality: 'high',
+        itemsPerPage: 24,
+        showSourceBadges: true,
+        moderationLevel: 'moderate',
+        autoArchiveDays: 0,
+      },
       photoURL: this.generateDiceBearUrl(firebaseUser.uid, "lorelei"),
       avatarStyle: "lorelei",
       createdAt: new Date(),
@@ -407,6 +428,7 @@ export class FirebaseStorageService implements StorageService {
               displayName: firebaseUser.displayName || undefined,
               photoURL,
               avatarStyle: prefs.avatarStyle,
+              settings: prefs.settings,
               createdAt: new Date(firebaseUser.metadata.creationTime!),
               provider:
                 firebaseUser.providerData[0]?.providerId === "google.com"
@@ -438,6 +460,24 @@ export class FirebaseStorageService implements StorageService {
         error instanceof Error
           ? error.message
           : "Failed to update avatar style";
+      throw new Error(errorMessage);
+    }
+  }
+
+  async updateUserSettings(userId: string, settings: AppSettings): Promise<void> {
+    try {
+      await setDoc(
+        doc(this.db, "users", userId),
+        { settings },
+        { merge: true },
+      );
+      console.log(`✅ User settings updated:`, settings);
+    } catch (error: unknown) {
+      console.error("❌ Failed to update user settings:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to update user settings";
       throw new Error(errorMessage);
     }
   }
@@ -671,9 +711,6 @@ export class FirebaseStorageService implements StorageService {
     }
     if (detectedInfo.source !== undefined) {
       itemData.source = detectedInfo.source;
-    }
-    if (data.notes !== undefined) {
-      itemData.notes = data.notes;
     }
 
     const docRef = await addDoc(collection(this.db, "items"), itemData);

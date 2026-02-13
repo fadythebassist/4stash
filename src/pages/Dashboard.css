@@ -120,6 +120,26 @@
   gap: var(--spacing-md);
 }
 
+/* View Density Variants */
+.content-grid.compact {
+  gap: var(--spacing-sm);
+}
+
+.content-grid.comfortable {
+  gap: var(--spacing-lg);
+}
+
+/* Layout Mode Variants */
+.content-grid.layout-list {
+  grid-template-columns: 1fr !important;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.content-grid.layout-grid {
+  /* Uses default responsive grid */
+}
+
 .empty-state {
   text-align: center;
   padding: var(--spacing-xl) var(--spacing-md);

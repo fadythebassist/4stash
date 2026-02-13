@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
@@ -10,6 +10,7 @@ import AddListModal from "@/components/AddListModal";
 import ItemDetailModal from "@/components/ItemDetailModal";
 import EditItemModal from "@/components/EditItemModal";
 import AvatarPickerModal from "@/components/AvatarPickerModal";
+import SettingsModal from "@/components/SettingsModal";
 import { Item } from "@/types";
 import "./Dashboard.css";
 
@@ -29,8 +30,15 @@ const Dashboard: React.FC = () => {
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddList, setShowAddList] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+
+  // Apply theme from user settings
+  useEffect(() => {
+    const theme = user?.settings?.theme || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [user?.settings?.theme]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -90,6 +98,24 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
             <button
+              onClick={() => setShowSettings(true)}
+              className="btn-icon"
+              title="Settings"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v6m0 6v6m-9-9h6m6 0h6" />
+                <path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M19.07 4.93l-4.24 4.24M9.17 14.83l-4.24 4.24" />
+              </svg>
+            </button>
+            <button
               onClick={handleSignOut}
               className="btn-icon"
               title="Sign out"
@@ -134,7 +160,9 @@ const Dashboard: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="content-grid">
+            <div 
+              className={`content-grid ${user?.settings?.viewDensity || 'comfortable'} layout-${user?.settings?.layoutMode || 'grid'}`}
+            >
               {items.map((item) => (
                 <ContentCard
                   key={item.id}
@@ -142,6 +170,7 @@ const Dashboard: React.FC = () => {
                   onDelete={() => handleDeleteItem(item.id)}
                   onArchive={() => handleArchiveItem(item.id)}
                   onClick={() => setSelectedItem(item)}
+                  layoutMode={user?.settings?.layoutMode || 'grid'}
                 />
               ))}
             </div>
@@ -190,6 +219,13 @@ const Dashboard: React.FC = () => {
 
       {showAvatarPicker && (
         <AvatarPickerModal onClose={() => setShowAvatarPicker(false)} />
+      )}
+
+      {showSettings && (
+        <SettingsModal 
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)} 
+        />
       )}
     </div>
   );

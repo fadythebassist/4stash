@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { User } from "@/types";
+import { User, AppSettings } from "@/types";
 import { StorageService } from "@/services/StorageService";
 import { firebaseStorageService } from "@/services/FirebaseStorageService";
 
@@ -23,6 +23,7 @@ interface AuthContextType {
     displayName?: string,
   ) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserSettings?: (settings: AppSettings) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,6 +152,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateUserSettings = async (settings: AppSettings) => {
+    if (!user) {
+      throw new Error("No user logged in");
+    }
+    try {
+      await storageService.updateUserSettings(user.id, settings);
+      setUser({ ...user, settings });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update settings");
+      throw err;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -163,6 +177,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         signInWithEmail,
         signUpWithEmail,
         signOut,
+        updateUserSettings,
       }}
     >
       {children}

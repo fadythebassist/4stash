@@ -20,6 +20,7 @@ interface ContentCardProps {
   onDelete: () => void;
   onArchive: () => void;
   onClick: () => void;
+  layoutMode?: 'grid' | 'list';
 }
 
 const ContentCard: React.FC<ContentCardProps> = ({
@@ -27,6 +28,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   onDelete,
   onArchive,
   onClick,
+  layoutMode = 'grid',
 }) => {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -82,41 +84,84 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const derivedSource = useMemo(() => {
     if (item.source) return item.source;
     if (!item.url) return undefined;
-    const lower = item.url.toLowerCase();
-    if (lower.includes("facebook.com") || lower.includes("fb.watch"))
-      return "facebook";
-    if (lower.includes("instagram.com")) return "instagram";
-    if (lower.includes("tiktok.com")) return "tiktok";
-    if (lower.includes("reddit.com") || lower.includes("redd.it"))
-      return "reddit";
-    if (lower.includes("twitter.com") || lower.includes("x.com"))
-      return "twitter";
-    if (lower.includes("youtube.com") || lower.includes("youtu.be"))
-      return "youtube";
-    if (lower.includes("threads.com")) return "threads";
-    return undefined;
+    
+    try {
+      const normalized =
+        item.url.startsWith("http://") || item.url.startsWith("https://")
+          ? item.url
+          : `https://${item.url}`;
+      const url = new URL(normalized);
+      const hostname = url.hostname.toLowerCase();
+      
+      // Map domains to source names
+      if (hostname.includes("facebook.com") || hostname.includes("fb.watch"))
+        return "facebook";
+      if (hostname.includes("instagram.com")) return "instagram";
+      if (hostname.includes("tiktok.com")) return "tiktok";
+      if (hostname.includes("reddit.com") || hostname.includes("redd.it"))
+        return "reddit";
+      if (hostname.includes("twitter.com") || hostname.includes("x.com"))
+        return "twitter";
+      if (hostname.includes("youtube.com") || hostname.includes("youtu.be"))
+        return "youtube";
+      if (hostname.includes("threads.net")) return "threads";
+      
+      // Extract domain name for other sources
+      const parts = hostname.replace("www.", "").split(".");
+      if (parts.length >= 2) {
+        return parts[parts.length - 2]; // e.g., "medium" from "medium.com"
+      }
+      return hostname;
+    } catch {
+      return undefined;
+    }
   }, [item.source, item.url]);
 
-  const getSourceBadge = () => {
-    const badges: Record<string, { emoji: string; color: string }> = {
-      youtube: { emoji: "▶️", color: "#ff0000" },
-      twitter: { emoji: "🐦", color: "#1da1f2" },
-      tiktok: { emoji: "🎵", color: "#000000" },
-      instagram: { emoji: "📷", color: "#e4405f" },
-      reddit: { emoji: "👽", color: "var(--accent-primary)" },
-      facebook: { emoji: "📘", color: "var(--accent-primary)" },
-      threads: { emoji: "🧵", color: "#000000" },
-    };
+  const sourceBadges: Record<string, { emoji: string; color: string; name: string }> = {
+    youtube: { emoji: "▶️", color: "#ff0000", name: "YouTube" },
+    twitter: { emoji: "𝕏", color: "#000000", name: "X" },
+    tiktok: { emoji: "🎵", color: "#000000", name: "TikTok" },
+    instagram: { emoji: "📷", color: "#e4405f", name: "Instagram" },
+    reddit: { emoji: "👽", color: "#ff4500", name: "Reddit" },
+    facebook: { emoji: "📘", color: "#1877f2", name: "Facebook" },
+    threads: { emoji: "🧵", color: "#000000", name: "Threads" },
+    medium: { emoji: "📝", color: "#000000", name: "Medium" },
+    linkedin: { emoji: "💼", color: "#0077b5", name: "LinkedIn" },
+    pinterest: { emoji: "📌", color: "#e60023", name: "Pinterest" },
+    tumblr: { emoji: "📱", color: "#35465c", name: "Tumblr" },
+    github: { emoji: "💻", color: "#181717", name: "GitHub" },
+    vimeo: { emoji: "▶️", color: "#1ab7ea", name: "Vimeo" },
+  };
 
-    if (derivedSource && badges[derivedSource]) {
-      const badge = badges[derivedSource];
+  const getSourceBadge = () => {
+    if (derivedSource && sourceBadges[derivedSource]) {
+      const badge = sourceBadges[derivedSource];
       return (
         <span className="source-badge" style={{ background: badge.color }}>
           {badge.emoji}
         </span>
       );
     }
+    
+    // Generic badge for unknown sources
+    if (derivedSource) {
+      return (
+        <span className="source-badge" style={{ background: "#666" }}>
+          🔗
+        </span>
+      );
+    }
+    
     return null;
+  };
+
+  const getSourceName = () => {
+    if (!derivedSource) return "";
+    if (sourceBadges[derivedSource]) {
+      return sourceBadges[derivedSource].name;
+    }
+    // Capitalize first letter for unknown sources
+    return derivedSource.charAt(0).toUpperCase() + derivedSource.slice(1);
   };
 
   const displayThumbnail = resolvedThumbnail ?? item.thumbnail;
@@ -246,14 +291,14 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
   return (
     <div
-      className={`content-card ${item.type}`}
+      className={`content-card ${item.type} ${layoutMode === 'list' ? 'list-view' : ''}`}
       style={{ transform: `translateX(-${swipeOffset}px)` }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onClick={onClick}
     >
-      {!suppressTopMedia && displayThumbnail && !thumbnailError ? (
+      {layoutMode !== 'list' && !suppressTopMedia && displayThumbnail && !thumbnailError ? (
         <div className="card-thumbnail">
           <img
             src={displayThumbnail}
@@ -286,7 +331,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           )}
           {getSourceBadge()}
         </div>
-      ) : !suppressTopMedia && item.type === "video" ? (
+      ) : layoutMode !== 'list' && !suppressTopMedia && item.type === "video" ? (
         <div className="card-thumbnail placeholder">
           <div className="video-placeholder">
             <span>▶️</span>
@@ -294,7 +339,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           </div>
           {getSourceBadge()}
         </div>
-      ) : !suppressTopMedia && displayThumbnail && thumbnailError ? (
+      ) : layoutMode !== 'list' && !suppressTopMedia && displayThumbnail && thumbnailError ? (
         <div className="card-thumbnail placeholder">
           <div className="image-placeholder">
             <span>🖼️</span>
@@ -305,8 +350,25 @@ const ContentCard: React.FC<ContentCardProps> = ({
       ) : null}
 
       <div className="card-content">
+        {layoutMode === 'list' && derivedSource && (
+          <div className="list-source">
+            {getSourceBadge()}
+            <span className="source-name">{getSourceName()}</span>
+          </div>
+        )}
         <div className="card-header">
           <h3 className="card-title">{decodeHtmlEntities(item.title)}</h3>
+          {layoutMode === 'list' && item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="card-url"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {hostname}
+            </a>
+          )}
           <div className="card-actions">
             <button
               className="card-action-btn"

@@ -6,6 +6,7 @@ import {
   UpdateItemDTO,
   CreateListDTO,
   UpdateListDTO,
+  AppSettings,
 } from "@/types";
 
 // Abstract interface that both Mock and Firebase services will implement
@@ -23,6 +24,7 @@ export interface StorageService {
   signOut(): Promise<void>;
   getCurrentUser(): Promise<User | null>;
   updateAvatarStyle(userId: string, style: string): Promise<void>;
+  updateUserSettings(userId: string, settings: AppSettings): Promise<void>;
 
   // Lists
   getLists(userId: string): Promise<List[]>;

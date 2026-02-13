@@ -9,6 +9,10 @@
   margin-bottom: var(--spacing-md);
 }
 
+.content-card.list-view {
+  overflow: visible;
+}
+
 .content-card:hover {
   border-color: var(--accent-primary);
   box-shadow: var(--shadow-lg);
@@ -387,6 +391,108 @@
   100% {
     background-position: -200% 0;
   }
+}
+
+/* View Density Variants */
+.compact .content-card {
+  margin-bottom: var(--spacing-sm);
+}
+
+.compact .content-card .card-thumbnail {
+  height: 150px;
+}
+
+.compact .content-card.video .card-thumbnail {
+  height: 180px;
+}
+
+.compact .content-card .card-content {
+  padding: var(--spacing-sm);
+}
+
+.compact .content-card .card-title {
+  font-size: 0.9rem;
+}
+
+.compact .content-card .card-description {
+  font-size: 0.8rem;
+}
+
+.comfortable .content-card {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Layout Mode - List View */
+.layout-list .content-card {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--spacing-md);
+}
+
+.layout-list .content-card.list-view {
+  display: block;
+}
+
+.layout-list .content-card .card-thumbnail {
+  display: none;
+}
+
+.list-source {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.list-source .source-badge {
+  position: static;
+  margin: 0;
+}
+
+.source-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.layout-list .content-card .card-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+}
+
+.layout-list .content-card .card-title {
+  font-size: 1rem;
+  line-height: 1.4;
+  margin-bottom: var(--spacing-xs);
+}
+
+.card-url {
+  font-size: 0.875rem;
+  color: var(--accent-primary);
+  text-decoration: none;
+  word-break: break-all;
+  margin-bottom: var(--spacing-sm);
+  display: inline-block;
+}
+
+.card-url:hover {
+  text-decoration: underline;
+  color: var(--accent-hover);
+}
+
+.layout-list .content-card .card-actions {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+}
+
+.layout-list .content-card .card-footer {
+  margin-top: var(--spacing-sm);
 }
 
 @media (min-width: 768px) {

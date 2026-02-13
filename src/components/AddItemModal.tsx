@@ -86,9 +86,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     if (lower.includes("twitter.com") || lower.includes("x.com")) {
       return {
         source: "twitter",
-        icon: "🐦",
-        label: "X/Twitter",
-        contentType: "Tweet",
+        icon: "𝕏",
+        label: "X",
+        contentType: "Post",
       };
     }
     if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
@@ -115,13 +115,66 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         contentType: "Post",
       };
     }
-    if (lower.includes("threads.com")) {
+    if (lower.includes("threads.net")) {
       return {
         source: "threads",
         icon: "🧵",
         label: "Threads",
         contentType: "Post",
       };
+    }
+    if (lower.includes("medium.com")) {
+      return {
+        source: "medium",
+        icon: "📝",
+        label: "Medium",
+        contentType: "Article",
+      };
+    }
+    if (lower.includes("linkedin.com")) {
+      return {
+        source: "linkedin",
+        icon: "💼",
+        label: "LinkedIn",
+        contentType: "Post",
+      };
+    }
+    if (lower.includes("github.com")) {
+      return {
+        source: "github",
+        icon: "💻",
+        label: "GitHub",
+        contentType: "Repository",
+      };
+    }
+    if (lower.includes("vimeo.com")) {
+      return {
+        source: "vimeo",
+        icon: "▶️",
+        label: "Vimeo",
+        contentType: "Video",
+      };
+    }
+    
+    // Generic domain extraction for unknown sources
+    try {
+      const normalized = urlStr.startsWith("http://") || urlStr.startsWith("https://")
+        ? urlStr
+        : `https://${urlStr}`;
+      const url = new URL(normalized);
+      const hostname = url.hostname.toLowerCase();
+      const parts = hostname.replace("www.", "").split(".");
+      if (parts.length >= 2) {
+        const domain = parts[parts.length - 2];
+        return {
+          source: domain,
+          icon: "🔗",
+          label: domain.charAt(0).toUpperCase() + domain.slice(1),
+          contentType: "Link",
+        };
+      }
+    } catch {
+      // If URL parsing fails, fall through
     }
     return null;
   };
