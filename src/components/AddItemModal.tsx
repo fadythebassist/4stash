@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useData } from "@/contexts/DataContext";
-import { useAuth } from "@/contexts/AuthContext";
 import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
 import TweetEmbed from "@/components/TweetEmbed";
@@ -29,7 +28,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   initialContent = "",
 }) => {
   const { lists, createItem } = useData();
-  const { hasThreadsConnection } = useAuth();
   const [title, setTitle] = useState(
     initialTitle ? decodeHtmlEntities(initialTitle) : "",
   );
@@ -347,8 +345,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     // Page not found or unavailable
     if (
       t.includes("not found") ||
-      t.includes("unavailable") ||
-      t.includes("page")
+      t.includes("unavailable")
     )
       return true;
     if (t.includes("content not found") || t.includes("not available"))
@@ -590,15 +587,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
         const fetched = await Promise.race([metaPromise, timeoutPromise]);
 
-        // If an unfurl step resolves a redirect (e.g. Facebook /share/*), prefer saving the resolved URL.
-        if (
-          fetched?.url &&
-          fetched.url !== trimmedUrl &&
-          (newUrl.includes("facebook.com/share/") ||
-            newUrl.includes("fb.watch"))
-        ) {
-          setUrl(fetched.url);
-        }
+        // Note: for Facebook share/short links the server may resolve to a canonical URL.
+        // We intentionally do NOT overwrite the URL field — the user typed the share link
+        // and that is what should be saved. We only use the resolved metadata (title/thumbnail).
 
         const shouldUpdateTitle =
           !existingTitle ||
@@ -640,22 +631,34 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
     if (!finalTitle && hasUrl) {
       const meta = await fetchUrlMetadata(url.trim());
-      const resolvedUrl = meta?.url || url.trim();
+      // For Facebook share/short links, don't overwrite with the resolved canonical URL.
+      const isFacebookShareUrl =
+        url.trim().includes("facebook.com/share/") ||
+        url.trim().includes("fb.watch");
+      const resolvedUrl = isFacebookShareUrl
+        ? url.trim()
+        : (meta?.url || url.trim());
       finalUrl = resolvedUrl;
       finalTitle = meta?.title || "Untitled";
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
-      setUrl(resolvedUrl);
+      if (!isFacebookShareUrl) setUrl(resolvedUrl);
     } else if (hasUrl && (!finalThumbnail || !finalContent)) {
       // Title might already be a fallback (e.g. "Instagram Photo"), but we still want thumbnail/snippet.
       const meta = await fetchUrlMetadata(url.trim());
-      const resolvedUrl = meta?.url || url.trim();
+      // For Facebook share/short links, don't overwrite with the resolved canonical URL.
+      const isFacebookShareUrl =
+        url.trim().includes("facebook.com/share/") ||
+        url.trim().includes("fb.watch");
+      const resolvedUrl = isFacebookShareUrl
+        ? url.trim()
+        : (meta?.url || url.trim());
       finalUrl = resolvedUrl;
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
-      setUrl(resolvedUrl);
+      if (!isFacebookShareUrl) setUrl(resolvedUrl);
     } else if (!finalTitle && !hasUrl) {
       alert("Please enter a title or URL");
       return;
@@ -664,25 +667,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!listIds.length) {
       alert("Please select at least one list");
       return;
-    }
-
-    // Check if URL is from Threads and user is connected
-    if (finalUrl) {
-      const urlLower = finalUrl.toLowerCase();
-      const isThreadsUrl = urlLower.includes('threads.net') || urlLower.includes('threads.com');
-      
-      if (isThreadsUrl && !hasThreadsConnection()) {
-        const shouldConnect = window.confirm(
-          '🧵 Threads Connection Required\n\n' +
-          'To save Threads posts and view rich previews, you need to connect your Threads account.\n\n' +
-          'Would you like to connect your Threads account now?'
-        );
-        
-        if (shouldConnect) {
-          alert('Please go to Settings → Account → Social Connections to connect your Threads account.');
-        }
-        return;
-      }
     }
 
     setLoading(true);
