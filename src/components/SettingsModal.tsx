@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { threadsAuthService } from '@/services/ThreadsAuthService';
 import './SettingsModal.css';
 
 interface SettingsModalProps {
@@ -10,8 +11,9 @@ interface SettingsModalProps {
 type TabType = 'appearance' | 'behavior' | 'privacy' | 'account';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateUserSettings } = useAuth();
+  const { user, updateUserSettings, addSocialConnection, removeSocialConnection, getSocialConnection } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('appearance');
+  const [connectingThreads, setConnectingThreads] = useState(false);
   const [settings, setSettings] = useState({
     theme: (user?.settings?.theme as 'light' | 'dark') || 'light',
     viewDensity: user?.settings?.viewDensity || 'comfortable',
@@ -28,6 +30,101 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   });
 
   if (!isOpen) return null;
+
+  const handleConnectThreads = async () => {
+    try {
+      // Check if Threads API is configured
+      if (!threadsAuthService.isConfigured()) {
+        alert(
+          '⚠️ Threads API Not Configured\n\n' +
+          'To connect your Threads account, you need to:\n\n' +
+          '1. Go to developers.facebook.com/apps\n' +
+          '2. Open your Facebook app (or create one)\n' +
+          '3. Add "Threads" as a product\n' +
+          '4. Configure OAuth redirect URI:\n' +
+          '   http://localhost:5173/threads-oauth-callback.html\n\n' +
+          'Your app can use the same Facebook App ID/Secret.\n' +
+          'Or set specific Threads credentials in .env:\n' +
+          '   VITE_FACEBOOK_APP_ID=your_app_id\n' +
+          '   VITE_FACEBOOK_APP_SECRET=your_app_secret\n\n' +
+          'See docs/authentication/THREADS_AUTH_GUIDE.md for details.'
+        );
+        return;
+      }
+
+      setConnectingThreads(true);
+      const authUrl = threadsAuthService.getAuthorizationUrl();
+      
+      // Open OAuth popup
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      const popup = window.open(
+        authUrl,
+        'threads-oauth',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+
+      // Listen for OAuth callback
+      window.addEventListener('message', async (event) => {
+        if (event.data.type === 'threads-oauth-success') {
+          const { code } = event.data;
+          
+          try {
+            // Exchange code for token
+            const tokenData = await threadsAuthService.exchangeCodeForToken(code);
+            
+            // Get user profile
+            const profile = await threadsAuthService.getUserProfile(tokenData.access_token);
+            
+            // Save connection
+            await addSocialConnection({
+              platform: 'threads',
+              accessToken: tokenData.access_token,
+              expiresAt: tokenData.expires_in 
+                ? new Date(Date.now() + tokenData.expires_in * 1000)
+                : undefined,
+              platformUserId: profile.id,
+              platformUsername: profile.username,
+              connectedAt: new Date(),
+            });
+            
+            alert(`✅ Successfully connected to Threads as @${profile.username}`);
+            popup?.close();
+          } catch (error) {
+            console.error('Failed to complete Threads connection:', error);
+            alert('Failed to connect to Threads. Please try again.');
+          } finally {
+            setConnectingThreads(false);
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Failed to initiate Threads connection:', error);
+      alert('Failed to connect to Threads. Please try again.');
+      setConnectingThreads(false);
+    }
+  };
+
+  const handleDisconnectThreads = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to disconnect your Threads account? You will need to reconnect to save and view Threads posts.'
+    );
+    
+    if (confirmed) {
+      try {
+        await removeSocialConnection('threads');
+        alert('✅ Threads account disconnected');
+      } catch (error) {
+        console.error('Failed to disconnect Threads:', error);
+        alert('Failed to disconnect Threads. Please try again.');
+      }
+    }
+  };
+
+  const threadsConnection = getSocialConnection?.('threads');
 
   const handleSettingChange = async (newSettings: Partial<typeof settings>) => {
     const updated = { ...settings, ...newSettings };
@@ -304,6 +401,49 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           <p><strong>Account Type:</strong> {user?.provider || 'Unknown'}</p>
           <p><strong>Member Since:</strong> {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}</p>
         </div>
+      </div>
+
+      <div className="setting-group">
+        <label className="setting-label">
+          <strong>🔗 Social Connections</strong>
+          <p className="setting-description">Connect your social accounts to save and view private posts</p>
+        </label>
+        
+        <div className="social-connection-item">
+          <div className="connection-info">
+            <span className="connection-icon">🧵</span>
+            <div className="connection-details">
+              <strong>Threads</strong>
+              {threadsConnection ? (
+                <span className="connection-status connected">
+                  Connected as @{threadsConnection.platformUsername}
+                </span>
+              ) : (
+                <span className="connection-status">Not connected</span>
+              )}
+            </div>
+          </div>
+          {threadsConnection ? (
+            <button 
+              className="btn-secondary btn-small" 
+              onClick={handleDisconnectThreads}
+            >
+              Disconnect
+            </button>
+          ) : (
+            <button 
+              className="btn-primary btn-small" 
+              onClick={handleConnectThreads}
+              disabled={connectingThreads}
+            >
+              {connectingThreads ? 'Connecting...' : 'Connect'}
+            </button>
+          )}
+        </div>
+        
+        <p className="setting-description">
+          ℹ️ Connecting your Threads account allows you to save Threads posts and view rich previews using Meta's official API.
+        </p>
       </div>
 
       <div className="setting-group">

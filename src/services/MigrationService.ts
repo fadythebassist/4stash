@@ -106,7 +106,7 @@ export async function migrateLocalStorageToFirebase(): Promise<void> {
           url: oldItem.url,
           content: oldItem.content,
           thumbnail: oldItem.thumbnail,
-          listId: newListId,
+          listIds: [newListId],
           tags: oldItem.tags || [],
           source: oldItem.source,
         });

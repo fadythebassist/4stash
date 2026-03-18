@@ -416,6 +416,16 @@ export class FirebaseStorageService implements StorageService {
             // Get user preferences (avatar style)
             const prefs = await this.getUserPreferences(firebaseUser.uid);
 
+            // Get social connections (with fallback if collection doesn't exist yet)
+            let socialConnections: import("@/types").SocialConnection[] = [];
+            try {
+              socialConnections = await this.getSocialConnections(firebaseUser.uid);
+            } catch (error) {
+              // If socialConnections collection doesn't exist or has permission issues,
+              // just continue with empty array. User can set up connections later.
+              console.warn("⚠️ Could not load social connections (this is normal if not set up yet):", error instanceof Error ? error.message : error);
+            }
+
             // If user has chosen a DiceBear style, use that; otherwise use social photo or default
             const photoURL = prefs.avatarStyle
               ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
@@ -429,6 +439,7 @@ export class FirebaseStorageService implements StorageService {
               photoURL,
               avatarStyle: prefs.avatarStyle,
               settings: prefs.settings,
+              socialConnections,
               createdAt: new Date(firebaseUser.metadata.creationTime!),
               provider:
                 firebaseUser.providerData[0]?.providerId === "google.com"
@@ -482,6 +493,131 @@ export class FirebaseStorageService implements StorageService {
     }
   }
 
+  // Social Connections Methods
+  async getSocialConnections(userId: string): Promise<import("@/types").SocialConnection[]> {
+    try {
+      const q = query(
+        collection(this.db, "socialConnections"),
+        where("userId", "==", userId)
+      );
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          userId: data.userId,
+          platform: data.platform,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          expiresAt: data.expiresAt?.toDate?.(),
+          platformUserId: data.platformUserId,
+          platformUsername: data.platformUsername,
+          connectedAt: data.connectedAt?.toDate?.() || new Date(),
+          lastRefreshed: data.lastRefreshed?.toDate?.(),
+        } as import("@/types").SocialConnection;
+      });
+    } catch (error: unknown) {
+      // If collection doesn't exist or permissions not set up, return empty array
+      console.error("❌ Failed to get social connections:", error);
+      return []; // Don't throw - return empty array to prevent app crash
+    }
+  }
+
+  async getSocialConnection(userId: string, platform: string): Promise<import("@/types").SocialConnection | null> {
+    try {
+      const q = query(
+        collection(this.db, "socialConnections"),
+        where("userId", "==", userId),
+        where("platform", "==", platform)
+      );
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        return null;
+      }
+
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      
+      return {
+        id: doc.id,
+        userId: data.userId,
+        platform: data.platform,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        expiresAt: data.expiresAt?.toDate?.(),
+        platformUserId: data.platformUserId,
+        platformUsername: data.platformUsername,
+        connectedAt: data.connectedAt?.toDate?.() || new Date(),
+        lastRefreshed: data.lastRefreshed?.toDate?.(),
+      } as import("@/types").SocialConnection;
+    } catch (error: unknown) {
+      console.error("❌ Failed to get social connection:", error);
+      throw new Error(error instanceof Error ? error.message : "Failed to get social connection");
+    }
+  }
+
+  async addSocialConnection(userId: string, connection: Omit<import("@/types").SocialConnection, 'id' | 'userId'>): Promise<import("@/types").SocialConnection> {
+    try {
+      const connectionData = {
+        userId,
+        platform: connection.platform,
+        accessToken: connection.accessToken,
+        refreshToken: connection.refreshToken,
+        expiresAt: connection.expiresAt,
+        platformUserId: connection.platformUserId,
+        platformUsername: connection.platformUsername,
+        connectedAt: connection.connectedAt || serverTimestamp(),
+        lastRefreshed: connection.lastRefreshed,
+      };
+
+      const docRef = await addDoc(collection(this.db, "socialConnections"), connectionData);
+      
+      console.log(`✅ Social connection added: ${connection.platform}`);
+      
+      return {
+        id: docRef.id,
+        userId,
+        ...connection,
+        connectedAt: connection.connectedAt || new Date(),
+      } as import("@/types").SocialConnection;
+    } catch (error: unknown) {
+      console.error("❌ Failed to add social connection:", error);
+      throw new Error(error instanceof Error ? error.message : "Failed to add social connection");
+    }
+  }
+
+  async updateSocialConnection(connectionId: string, updates: Partial<import("@/types").SocialConnection>): Promise<void> {
+    try {
+      const updateData: Record<string, unknown> = {};
+      
+      if (updates.accessToken !== undefined) updateData.accessToken = updates.accessToken;
+      if (updates.refreshToken !== undefined) updateData.refreshToken = updates.refreshToken;
+      if (updates.expiresAt !== undefined) updateData.expiresAt = updates.expiresAt;
+      if (updates.platformUserId !== undefined) updateData.platformUserId = updates.platformUserId;
+      if (updates.platformUsername !== undefined) updateData.platformUsername = updates.platformUsername;
+      if (updates.lastRefreshed !== undefined) updateData.lastRefreshed = updates.lastRefreshed;
+
+      await updateDoc(doc(this.db, "socialConnections", connectionId), updateData);
+      
+      console.log(`✅ Social connection updated: ${connectionId}`);
+    } catch (error: unknown) {
+      console.error("❌ Failed to update social connection:", error);
+      throw new Error(error instanceof Error ? error.message : "Failed to update social connection");
+    }
+  }
+
+  async removeSocialConnection(connectionId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(this.db, "socialConnections", connectionId));
+      console.log(`✅ Social connection removed: ${connectionId}`);
+    } catch (error: unknown) {
+      console.error("❌ Failed to remove social connection:", error);
+      throw new Error(error instanceof Error ? error.message : "Failed to remove social connection");
+    }
+  }
+
   // Lists Methods
   async getLists(userId: string): Promise<List[]> {
     console.log("📋 getLists called for userId:", userId);
@@ -508,7 +644,7 @@ export class FirebaseStorageService implements StorageService {
         const itemsQuery = query(
           collection(this.db, "items"),
           where("userId", "==", userId),
-          where("listId", "==", list.id),
+          where("listIds", "array-contains", list.id),
           where("archived", "==", false),
         );
         const itemsSnapshot = await getDocs(itemsQuery);
@@ -596,20 +732,30 @@ export class FirebaseStorageService implements StorageService {
     console.log("🗑️ deleteList called:", { listId, userId });
 
     try {
-      // Delete all items in the list first
+      // Find all items that include this listId
       const itemsQuery = query(
         collection(this.db, "items"),
         where("userId", "==", userId),
-        where("listId", "==", listId),
+        where("listIds", "array-contains", listId),
       );
       const itemsSnapshot = await getDocs(itemsQuery);
-      console.log(`🗑️ Deleting ${itemsSnapshot.size} items from list...`);
+      console.log(`🗑️ Processing ${itemsSnapshot.size} items from list...`);
 
-      const deletePromises = itemsSnapshot.docs.map((doc) =>
-        deleteDoc(doc.ref),
-      );
-      await Promise.all(deletePromises);
-      console.log("✅ All items deleted");
+      const updateOrDeletePromises = itemsSnapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        const remainingListIds = (data.listIds as string[]).filter(
+          (id) => id !== listId,
+        );
+        if (remainingListIds.length === 0) {
+          // Item only belonged to this list — delete it
+          return deleteDoc(docSnap.ref);
+        } else {
+          // Item belongs to other lists too — just remove this listId
+          return updateDoc(docSnap.ref, { listIds: remainingListIds });
+        }
+      });
+      await Promise.all(updateOrDeletePromises);
+      console.log("✅ All items processed");
 
       // Then delete the list itself
       await deleteDoc(doc(this.db, "lists", listId));
@@ -633,7 +779,7 @@ export class FirebaseStorageService implements StorageService {
       q = query(
         collection(this.db, "items"),
         where("userId", "==", userId),
-        where("listId", "==", listId),
+        where("listIds", "array-contains", listId),
         where("archived", "==", false),
         orderBy("createdAt", "desc"),
       );
@@ -691,7 +837,7 @@ export class FirebaseStorageService implements StorageService {
     const itemData: any = {
       type: detectedInfo.type,
       title: data.title,
-      listId: data.listId,
+      listIds: data.listIds,
       userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -711,6 +857,9 @@ export class FirebaseStorageService implements StorageService {
     }
     if (detectedInfo.source !== undefined) {
       itemData.source = detectedInfo.source;
+    }
+    if (data.nsfw === true) {
+      itemData.nsfw = true;
     }
 
     const docRef = await addDoc(collection(this.db, "items"), itemData);

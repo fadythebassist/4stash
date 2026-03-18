@@ -53,10 +53,9 @@ function loadInstagramEmbeds(): Promise<void> {
 
 export interface InstagramEmbedProps {
   url: string;
-  autoplay?: boolean;
 }
 
-const InstagramEmbed: React.FC<InstagramEmbedProps> = ({ url, autoplay = true }) => {
+const InstagramEmbed: React.FC<InstagramEmbedProps> = ({ url }) => {
   const [failed, setFailed] = useState(false);
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
 
@@ -88,7 +87,7 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({ url, autoplay = true })
     return () => {
       cancelled = true;
     };
-  }, [normalizedUrl, autoplay]);
+  }, [normalizedUrl]);
 
   return (
     <div className="instagram-embed" onClick={(e) => e.stopPropagation()}>
@@ -97,7 +96,6 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({ url, autoplay = true })
           className="instagram-media"
           data-instgrm-permalink={normalizedUrl}
           data-instgrm-version="14"
-          data-instgrm-captioned
         >
           <a href={normalizedUrl} target="_blank" rel="noopener noreferrer">
             View this post on Instagram

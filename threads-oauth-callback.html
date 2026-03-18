@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Threads OAuth Callback</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #f9fafb;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      margin: 0 auto 1rem;
+      border: 4px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 {
+      color: #111827;
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      color: #6b7280;
+      font-size: 1rem;
+    }
+    .error {
+      color: #dc2626;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1 id="status">Connecting to Threads...</h1>
+    <p id="message">Please wait while we complete the connection.</p>
+  </div>
+
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+      const errorDescription = urlParams.get('error_description');
+
+      if (error) {
+        document.getElementById('status').textContent = 'Connection Failed';
+        document.getElementById('message').className = 'error';
+        document.getElementById('message').textContent = errorDescription || 'An error occurred during authentication';
+        
+        // Notify parent window of error
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'threads-oauth-error',
+            error: error,
+            errorDescription: errorDescription
+          }, window.location.origin);
+        }
+        
+        setTimeout(() => window.close(), 3000);
+        return;
+      }
+
+      if (code) {
+        document.getElementById('status').textContent = 'Success!';
+        document.getElementById('message').textContent = 'Connection successful. You can close this window.';
+        
+        // Send code to parent window
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'threads-oauth-success',
+            code: code
+          }, window.location.origin);
+        }
+        
+        // Auto-close after a short delay
+        setTimeout(() => window.close(), 2000);
+      } else {
+        document.getElementById('status').textContent = 'Invalid Response';
+        document.getElementById('message').className = 'error';
+        document.getElementById('message').textContent = 'No authorization code received';
+        
+        setTimeout(() => window.close(), 3000);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
+import TweetEmbed from "@/components/TweetEmbed";
 import "./Modal.css";
 
 interface AddItemModalProps {
@@ -27,6 +29,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   initialContent = "",
 }) => {
   const { lists, createItem } = useData();
+  const { hasThreadsConnection } = useAuth();
   const [title, setTitle] = useState(
     initialTitle ? decodeHtmlEntities(initialTitle) : "",
   );
@@ -35,7 +38,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     initialContent ? decodeHtmlEntities(initialContent) : "",
   );
   const [thumbnail, setThumbnail] = useState<string | undefined>(undefined);
-  const [listId, setListId] = useState(lists[0]?.id || "");
+  const [nsfw, setNsfw] = useState(false);
+  const [listIds, setListIds] = useState<string[]>(
+    lists[0]?.id ? [lists[0].id] : [],
+  );
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
@@ -55,6 +61,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     description?: string;
     thumbnail?: string;
     url?: string;
+    nsfw?: boolean;
   };
 
   // Detect source from URL
@@ -438,16 +445,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return { title: "TikTok Video" };
       }
 
-      // For Twitter/X
+      // For Twitter/X — try unfurl first for real metadata, fall back to username
       if (
         url.hostname.includes("twitter.com") ||
         url.hostname.includes("x.com")
       ) {
         const pathParts = url.pathname.split("/").filter((p) => p);
-        if (pathParts.length >= 1) {
-          return { title: `Tweet by @${pathParts[0]}` };
+        const fallbackTitle =
+          pathParts.length >= 1 ? `Tweet by @${pathParts[0]}` : "Tweet";
+        try {
+          const meta = await fetchUnfurl(fullUrl);
+          if (meta?.title || meta?.description || meta?.image) {
+            return {
+              title: meta.title || fallbackTitle,
+              description: meta.description,
+              thumbnail: meta.image,
+              url: meta.url,
+            };
+          }
+        } catch (err) {
+          console.error("[AddItemModal] Twitter metadata fetch failed:", err);
         }
-        return { title: "Tweet" };
+        return { title: fallbackTitle };
       }
 
       // For Facebook - simplified approach
@@ -553,6 +572,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       !!trimmedUrl &&
       (shouldResolveFacebookShare ||
         !existingTitle ||
+        source?.source === "twitter" ||
         (source?.source === "facebook" &&
           isGenericFacebookTitle(existingTitle)) ||
         (source?.source === "instagram" &&
@@ -592,6 +612,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
         if (fetched?.thumbnail) {
           setThumbnail(fetched.thumbnail);
+        }
+        if (fetched?.nsfw) {
+          setNsfw(true);
         }
         if (fetched?.description && !content.trim()) {
           setContent(decodeHtmlEntities(fetched.description));
@@ -638,9 +661,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       return;
     }
 
-    if (!listId) {
-      alert("Please select a list");
+    if (!listIds.length) {
+      alert("Please select at least one list");
       return;
+    }
+
+    // Check if URL is from Threads and user is connected
+    if (finalUrl) {
+      const urlLower = finalUrl.toLowerCase();
+      const isThreadsUrl = urlLower.includes('threads.net') || urlLower.includes('threads.com');
+      
+      if (isThreadsUrl && !hasThreadsConnection()) {
+        const shouldConnect = window.confirm(
+          '🧵 Threads Connection Required\n\n' +
+          'To save Threads posts and view rich previews, you need to connect your Threads account.\n\n' +
+          'Would you like to connect your Threads account now?'
+        );
+        
+        if (shouldConnect) {
+          alert('Please go to Settings → Account → Social Connections to connect your Threads account.');
+        }
+        return;
+      }
     }
 
     setLoading(true);
@@ -668,9 +710,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         url: finalUrl,
         content: finalContent,
         thumbnail: finalThumbnail,
-        listId,
+        listIds,
         type: url ? "link" : "text",
         source: finalSource,
+        nsfw: nsfw || undefined,
       });
 
       onClose();
@@ -749,6 +792,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                     </div>
                   </div>
                 )
+              ) : detectedSource === "twitter" && url.trim() ? (
+                <div className="share-preview-tweet">
+                  <TweetEmbed url={url.trim()} />
+                </div>
               ) : thumbnail ? (
                 <img
                   src={thumbnail}
@@ -825,31 +872,43 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           </div>
 
           <div className="form-group">
-            <label htmlFor="list">List *</label>
-            <select
-              id="list"
-              value={listId}
-              onChange={(e) => {
-                if (e.target.value === "__add_new__") {
-                  onAddList?.();
-                } else {
-                  setListId(e.target.value);
-                }
-              }}
-              required
-              disabled={loading}
-            >
+            <label>Lists *</label>
+            <div className="list-picker">
+              {lists.map((list) => {
+                const checked = listIds.includes(list.id);
+                return (
+                  <label
+                    key={list.id}
+                    className={`list-picker-item${checked ? " selected" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={loading}
+                      onChange={() => {
+                        setListIds((prev) =>
+                          prev.includes(list.id)
+                            ? prev.filter((id) => id !== list.id)
+                            : [...prev, list.id],
+                        );
+                      }}
+                    />
+                    <span className="list-picker-icon">{list.icon}</span>
+                    <span className="list-picker-name">{list.name}</span>
+                  </label>
+                );
+              })}
               {onAddList && (
-                <option value="__add_new__" style={{ fontWeight: "bold" }}>
-                  + Add New List
-                </option>
+                <button
+                  type="button"
+                  className="list-picker-add"
+                  onClick={onAddList}
+                  disabled={loading}
+                >
+                  + New List
+                </button>
               )}
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.icon} {list.name}
-                </option>
-              ))}
-            </select>
+            </div>
           </div>
 
           <div className="modal-actions">

@@ -838,6 +838,57 @@ function unfurlPlugin(): Plugin {
         targetUrl.hostname.includes("facebook.com") ||
         targetUrl.hostname.includes("fb.watch");
 
+      // For Facebook group posts (/groups/<id>/posts/<id>/ or /groups/<id>/permalink/<id>/),
+      // the embed plugin is blocked server-side. Try mbasic.facebook.com which sometimes
+      // returns OG image metadata for public groups without requiring login.
+      const isFacebookGroupPost = isFacebookHost && (() => {
+        const p = targetUrl.pathname.toLowerCase();
+        return (
+          p.includes("/groups/") &&
+          (p.includes("/posts/") || p.includes("/permalink/"))
+        );
+      })();
+
+      if (isFacebookGroupPost && !meta.image) {
+        try {
+          const mbasicUrl = new URL(targetUrl.toString());
+          mbasicUrl.hostname = "mbasic.facebook.com";
+          const mbasicRes = await fetchTextWithTimeout(
+            mbasicUrl.toString(),
+            facebookPreviewHeaders,
+            8000,
+          );
+          if (mbasicRes.ok) {
+            const mbasicMeta = extractMetadata(mbasicRes.text);
+            if (mbasicMeta.image) meta.image = mbasicMeta.image;
+            if (!meta.title && mbasicMeta.title && !isGenericFacebookTitle(mbasicMeta.title))
+              meta.title = mbasicMeta.title;
+            if (!meta.description && mbasicMeta.description)
+              meta.description = mbasicMeta.description;
+
+            // Also look for <img> tags in mbasic HTML as last resort for image
+            if (!meta.image) {
+              // mbasic renders actual <img> tags — grab the first non-icon image
+              const imgMatches = mbasicRes.text.match(/<img\s[^>]*src=["']([^"']+)["'][^>]*>/gi) ?? [];
+              for (const imgTag of imgMatches) {
+                const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
+                if (!srcMatch?.[1]) continue;
+                const src = srcMatch[1];
+                // Skip tiny icons, profile pics, and non-content images
+                if (src.includes("static.xx.fbcdn") || src.includes("emoji") || src.includes("reaction")) continue;
+                if (src.includes("rsrc.php")) continue; // Facebook static resources
+                if (src.startsWith("https://")) {
+                  meta.image = src;
+                  break;
+                }
+              }
+            }
+          }
+        } catch {
+          // mbasic fetch failed — continue to oEmbed fallback
+        }
+      }
+
       // Try Facebook oEmbed API first for better metadata
       if (isFacebookHost && (!meta.title || !meta.description || !meta.image)) {
         const appId = process.env.VITE_FACEBOOK_APP_ID;
@@ -957,11 +1008,18 @@ function unfurlPlugin(): Plugin {
       if (isReddit) {
         attempts.redditJson = { attempted: true, ok: false };
         try {
-          // Reddit JSON API: append .json to the URL
-          let jsonUrl = targetUrl.toString();
-          if (!jsonUrl.endsWith(".json")) {
-            jsonUrl = jsonUrl.replace(/\/$/, "") + ".json";
+          // Reddit JSON API: append .json to the pathname, NOT the full URL.
+          // UTM params and other query strings must be stripped — appending .json to a URL
+          // that still has a query string puts it on the last param value, not the path,
+          // causing Reddit's API to ignore it and return HTML instead of JSON.
+          const redditJsonUrl = new URL(targetUrl.toString());
+          redditJsonUrl.search = ""; // strip all query params
+          redditJsonUrl.hash = "";
+          // Ensure path ends with / before appending .json
+          if (!redditJsonUrl.pathname.endsWith("/")) {
+            redditJsonUrl.pathname += "/";
           }
+          const jsonUrl = redditJsonUrl.toString() + ".json";
 
           const redditHeaders = {
             ...headers,
@@ -986,7 +1044,10 @@ function unfurlPlugin(): Plugin {
                 // Check for NSFW content
                 if (post.over_18 === true || post.over18 === true) {
                   attempts.redditJson.nsfw = true;
-                  // Return early with NSFW flag
+                  // Return the real post title so the user can save it with the correct name
+                  const nsfwTitle = post.title
+                    ? decodeHtmlEntities(post.title)
+                    : "NSFW Reddit Post";
                   res.statusCode = 200;
                   res.setHeader("Content-Type", "application/json");
                   res.setHeader("Cache-Control", "no-store");
@@ -995,7 +1056,7 @@ function unfurlPlugin(): Plugin {
                       url: targetUrl.toString(),
                       contentType,
                       status: primary.status,
-                      title: "NSFW Content",
+                      title: nsfwTitle,
                       description: "This Reddit post is marked as NSFW (18+)",
                       image: undefined,
                       nsfw: true,
@@ -1228,5 +1289,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true, // Fail if port 5173 is already in use
     open: true,
+    host: true, // Allow external access
+    allowedHosts: [
+      'localhost',
+      'gyrational-romana-scaphocephalic.ngrok-free.dev'
+    ],
   },
 });

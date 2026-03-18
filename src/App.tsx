@@ -12,6 +12,7 @@ import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import ShareTarget from "@/pages/ShareTarget";
 import Recovery from "@/pages/Recovery";
+import Privacy from "@/pages/Privacy";
 import "@/styles/globals.css";
 
 // Protected route wrapper
@@ -111,6 +112,7 @@ const App: React.FC = () => {
             />
 
             {/* Default redirect */}
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>

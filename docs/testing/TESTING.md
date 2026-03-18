@@ -74,8 +74,9 @@ The app runs in Mock Mode by default, which simulates Firebase using localStorag
    - Title: "Tutorial Video"
    - URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
    - List: "Favorites"
-3. Should auto-detect as video type
-4. YouTube badge appears
+3. Should auto-detect as YouTube (`▶️` badge)
+4. Responsive 16:9 iframe player renders in card (not just a thumbnail)
+5. `autoplayVideos` setting controls autoplay behaviour
 
 #### View Item Details
 1. Click on any item card
@@ -229,6 +230,144 @@ Once you've set up Firebase (see FIREBASE_SETUP.md):
 - Check network tab for errors
 - Ensure Firestore rules are set
 
+## Social Media Platform Test Plan
+
+### Scope
+
+| Tier | Platforms | Embed behaviour |
+|---|---|---|
+| **Tier 1 — Full embed** | Twitter/X, TikTok, Instagram, Reddit, Facebook, Threads, **YouTube**, **Vimeo** | Interactive player/widget renders inside the card |
+| **Tier 2 — Link + metadata** | Medium, LinkedIn, GitHub | OG title/description/thumbnail fetched; source badge shown; no iframe |
+| **Tier 3 — Generic unfurl** | Any other URL | Best-effort Open Graph scrape; plain link card |
+
+---
+
+### Tier 1 — Full Embed Platforms
+
+#### Twitter / X
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| T1 | `https://x.com/OpenAI/status/1719976815488090213` | Text tweet | `𝕏` badge; Twitter widget renders |
+| T2 | `https://twitter.com/elonmusk/status/1719976815488090213` | Old-style URL | Same widget, old domain resolved |
+| T3 | Any tweet with an image attachment | Photo tweet | Widget renders with image |
+| T4 | Any tweet with a video attachment | Video tweet | Widget renders with inline video |
+| T5 | `https://x.com/i/web/status/{id}` | Anonymous status URL | ID extracted correctly, widget renders |
+
+#### TikTok
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| TK1 | `https://www.tiktok.com/@therock/video/7023733246888706309` | Standard video | `🎵` badge; TikTok embed renders |
+| TK2 | `https://www.tiktok.com/@nasa/video/7195266014028671275` | Second video | Same behaviour |
+| TK3 | oEmbed metadata | Any TikTok video | Title ≤ 80 chars; `author_name` in description; thumbnail loaded |
+
+#### Instagram
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| IG1 | `https://www.instagram.com/p/C0xLgQIsI9T/` | Photo post | `📷` badge; InstagramEmbed widget renders |
+| IG2 | `https://www.instagram.com/reel/C5vHGFVxxx/` | Reel | Source label "Reel"; embed renders |
+| IG3 | `https://www.instagram.com/tv/{shortcode}/` | IGTV video | Detected as video; embed renders |
+| IG4 | Any post with a caption | Caption extraction | Description field populated via JSON-LD / regex |
+| IG5 | Any post where OG image is returned | With thumbnail | Thumbnail shown first; InstagramEmbed only as fallback |
+
+#### Reddit
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| R1 | `https://www.reddit.com/r/programming/comments/za8d77/` | Text post | `👽` badge; RedditEmbed widget; title and description populated |
+| R2 | Any image post | Image post | Thumbnail extracted from `preview.images` |
+| R3 | Any video post (v.redd.it) | Video | Embed renders; video plays |
+| R4 | `https://redd.it/{id}` | Short URL | Detected via `redd.it` hostname |
+| R5 | Any NSFW-flagged post | 18+ content | **Blocked** — `alert()` shown; item NOT saved |
+
+#### Facebook
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| F1 | `https://www.facebook.com/{page}/posts/{id}` | Standard post | `📘` badge; post plugin iframe renders |
+| F2 | `https://www.facebook.com/watch/?v={id}` | Watch video | Video iframe; correct plugin URL built |
+| F3 | `https://www.facebook.com/{page}/videos/{id}` | Video | Video iframe, not post iframe |
+| F4 | `https://www.facebook.com/reel/{id}` | Reel | Detected as "Reel" |
+| F5 | `https://fb.watch/{id}` | Short link | Redirect resolved; canonical URL saved |
+| F6 | `/share/v/`, `/share/r/`, `/share/p/` | Video / Reel / Photo | Redirect resolved; correct content type |
+| F7 | Any private/broken post | Empty iframe | Auto-fallback to static card after 3 s height check |
+| F8 | `facebook.com/groups/*/permalink/*` | Group permalink | Skips iframe; shows static card immediately |
+
+#### Threads
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| TH1 | `https://www.threads.net/@zuck/post/C2ks7lYRxxx` | Post (no auth) | `🧵` badge; static branded card with thumbnail/title/description |
+| TH2 | `https://www.threads.com/@{user}/post/{id}` | threads.com variant | Same — both hostnames detected |
+| TH3 | Any post with Threads account connected | Authenticated | oEmbed HTML rendered |
+| TH4 | Post that returns login-wall title | Generic title | Stripped — fallback hint shown |
+
+#### YouTube *(promoted to Tier 1)*
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| YT1 | `https://www.youtube.com/watch?v=dQw4w9WgXcQ` | Standard video | `▶️` badge; responsive 16:9 iframe player renders inside card |
+| YT2 | `https://youtu.be/dQw4w9WgXcQ` | Short URL | Same ID extracted; same embed |
+| YT3 | `https://www.youtube.com/shorts/5MgBikgcWnY` | YouTube Short | `/shorts/` ID extracted; player renders |
+| YT4 | `https://www.youtube.com/live/{id}` | Live stream URL | `/live/` ID extracted; player renders |
+| YT5 | Autoplay off (Settings → disable autoplay) | Any video | `autoplay=0` passed; player does not autostart |
+| YT6 | Invalid / deleted video ID | Broken embed | Falls back to "View on YouTube" plain link |
+
+#### Vimeo *(promoted to Tier 1)*
+
+| # | URL | Content type | Expected result |
+|---|---|---|---|
+| VM1 | `https://vimeo.com/76979871` | Standard video | `▶️` (Vimeo blue badge); responsive 16:9 iframe player renders |
+| VM2 | `https://vimeo.com/channels/staffpicks/{id}` | Channel video | ID extracted from path; player renders |
+| VM3 | `https://vimeo.com/{id}/{hash}` | Private-but-embeddable | Hash extracted; `?h={hash}` appended; player renders |
+| VM4 | `https://player.vimeo.com/video/{id}` | Embed URL pasted directly | ID extracted; clean embed URL built |
+| VM5 | Autoplay off (Settings → disable autoplay) | Any video | `autoplay=0` passed; player silent on load |
+| VM6 | Non-embeddable private video | Blocked by Vimeo | Falls back to "View on Vimeo" plain link |
+
+---
+
+### Tier 2 — Link + Metadata Platforms
+
+| # | Platform | URL example | Expected result |
+|---|---|---|---|
+| M1 | Medium | `https://medium.com/@user/{slug}` | `📝` badge; OG title, description, image via unfurl |
+| LI1 | LinkedIn | `https://www.linkedin.com/posts/...` | `💼` badge; title/description if OG tags accessible |
+| GH1 | GitHub repo | `https://github.com/facebook/react` | `💻` badge; repo title + description from OG |
+| GH2 | GitHub issue/PR | Any issue URL | Title from OG; description snippet |
+
+---
+
+### Tier 3 — Generic Unfurl
+
+| # | Content | URL | Expected result |
+|---|---|---|---|
+| G1 | News article | BBC, NYT, CNN article URL | OG title, description, thumbnail all populated |
+| G2 | Blog post | Any personal blog | `<title>` / meta description fallback |
+| G3 | No-OG page | Plain HTML, no meta tags | Title from `<title>` only; no description or image |
+| G4 | Direct image URL | `.jpg` / `.png` URL | Image shown as thumbnail; no description |
+| G5 | CORS-blocked URL | Any URL rejecting CORS | Falls back: allorigins.win → corsproxy.io → URL heuristic |
+
+---
+
+### Cross-Cutting Checks
+
+| # | Scenario | Expected result |
+|---|---|---|
+| X1 | Paste any URL into AddItemModal | Unfurl triggers automatically; placeholder title shown immediately |
+| X2 | Dark mode (`Settings → Appearance`) | Card chrome switches; embeds (iframes/SDKs) remain unaffected |
+| X3 | Source badge on every saved item | Correct emoji + platform colour for all Tier 1 + 2 platforms |
+| X4 | List-view layout | All embeds suppressed (CSS `display: none`); small square thumbnail shown instead |
+| X5 | Autoplay setting off | YouTube and Vimeo iframes pass `autoplay=0`; TikTok passes `data-autoplay="0"` |
+| X6 | Tags on any item type | Hashtags persist and render on card |
+| X7 | Swipe-left to archive | Card disappears from main view; `archived: true` set |
+| X8 | NSFW block | Reddit NSFW post or URL with `nsfw` in path → `alert()` + item not saved |
+| X9 | Share Target | Browser Share → 4Later; URL pre-filled in AddItemModal |
+| X10 | Edit & delete | Edit title/description/tags; delete via card action button |
+
+---
+
 ## Automated Testing (Future)
 
 Consider adding:
@@ -236,6 +375,7 @@ Consider adding:
 - Component tests with React Testing Library
 - E2E tests with Playwright
 - Visual regression tests
+
 
 ## Test Checklist
 
@@ -250,3 +390,27 @@ Before deploying:
 - [ ] Performance metrics acceptable
 - [ ] Accessible (keyboard navigation works)
 - [ ] Works on Chrome, Firefox, Safari
+
+### Social Media Embed Checklist
+
+**Tier 1 — Full embed:**
+- [ ] Twitter/X — widget renders for `x.com` and `twitter.com` status URLs
+- [ ] TikTok — embed renders for `/@user/video/{id}` URLs
+- [ ] Instagram — embed renders for `/p/`, `/reel/`, `/tv/` URLs
+- [ ] Reddit — widget renders; NSFW posts are blocked
+- [ ] Facebook — post/video/reel iframe renders; fallback to static card works
+- [ ] Threads — static card (unauthenticated) and oEmbed (authenticated) work
+- [ ] YouTube — responsive 16:9 iframe renders for `watch?v=`, `youtu.be/`, `/shorts/`, `/live/` URLs
+- [ ] Vimeo — responsive 16:9 iframe renders; private video hash passed correctly
+
+**Tier 2 — Link + metadata:**
+- [ ] Medium — `📝` badge; OG metadata fetched
+- [ ] LinkedIn — `💼` badge; metadata fetched where accessible
+- [ ] GitHub — `💻` badge; repo/issue title from OG
+
+**Cross-cutting:**
+- [ ] All embeds suppressed in list-view layout
+- [ ] Autoplay setting respected by YouTube, Vimeo, and TikTok
+- [ ] NSFW block triggers alert and prevents save
+- [ ] Source badge correct for all platforms
+

@@ -92,8 +92,12 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   const isGroupPermalink = useMemo(() => {
     if (!normalizedUrl) return false;
     const lower = normalizedUrl.toLowerCase();
+    if (!lower.includes("facebook.com/groups/")) return false;
+    // Group post URLs: /groups/<id>/permalink/<id>/ or /groups/<id>/posts/<id>/
+    // Facebook's embed plugin does not work for group content — skip iframe entirely.
     return (
-      lower.includes("facebook.com/groups/") && lower.includes("/permalink/")
+      lower.includes("/permalink/") ||
+      lower.includes("/posts/")
     );
   }, [normalizedUrl]);
 
@@ -123,8 +127,40 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   // After the iframe fires onLoad, check if it rendered real content.
   // Facebook plugin iframes load but render a tiny ~0-height body when the URL is invalid.
   // Give it a grace period then measure height; if still tiny → show fallback.
+  //
+  // For videos, the CSS fixes the iframe at 600px, so getBoundingClientRect won't help.
+  // Instead, listen for Facebook's postMessage resize events — a working embed sends them;
+  // a blocked/unavailable one never does. If none arrive within 6s of onLoad, auto-fallback.
   useEffect(() => {
     if (!iframeLoaded) return;
+
+    let receivedFacebookMessage = false;
+
+    const onMessage = (event: MessageEvent) => {
+      // Facebook sends postMessages from www.facebook.com for working embeds.
+      // Messages arrive as JSON strings or objects with a type like "xfbml.size".
+      try {
+        if (!event.origin.includes("facebook.com")) return;
+        const data =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        // Facebook resize/ready events signal the embed rendered real content.
+        if (
+          data &&
+          (data.type === "xfbml.size" ||
+            data.type === "resize" ||
+            data.type === "ready" ||
+            typeof data.height === "number" ||
+            typeof data.width === "number")
+        ) {
+          receivedFacebookMessage = true;
+        }
+      } catch {
+        // Non-JSON messages — ignore
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+
     const timer = setTimeout(() => {
       const el = iframeRef.current;
       if (el) {
@@ -134,28 +170,45 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
           height,
           "isVideo:",
           isVideo,
+          "receivedFacebookMessage:",
+          receivedFacebookMessage,
         );
-        // If very small (< 100px), definitely broken → auto-fallback
-        if (height < 100) {
-          setShowFallback(true);
-        }
-        // For videos, show manual fallback button if we have a thumbnail
-        // Don't auto-fallback - let the user decide
-        else if (isVideo && thumbnail && height < 400) {
-          setIsPotentiallyBroken(true);
+        if (!isVideo) {
+          // For posts/photos: CSS doesn't fix height, so measure it
+          if (height < 100) {
+            setShowFallback(true);
+          }
+        } else {
+          // For videos/reels: iframe is CSS-fixed at 600px so height check is useless.
+          // Rely on postMessage signal instead.
+          // If Facebook sent a resize/ready event, the embed is working — keep it.
+          // If no message arrived, the embed is showing the "Unavailable" error screen.
+          if (!receivedFacebookMessage) {
+            if (thumbnail) {
+              // We have a thumbnail — switch straight to the static card.
+              setShowFallback(true);
+            } else {
+              // No thumbnail but still blocked — show the manual fallback button.
+              setIsPotentiallyBroken(true);
+            }
+          }
         }
       }
-    }, 3000);
-    return () => clearTimeout(timer);
+    }, 6000);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+    };
   }, [iframeLoaded, isVideo, thumbnail]);
 
-  // Also set a hard timeout: if iframe hasn't loaded at all after 15s, show fallback
+  // Hard timeout: if iframe hasn't fired onLoad at all after 8s, show fallback
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!iframeLoaded) {
         setShowFallback(true);
       }
-    }, 15000);
+    }, 8000);
     return () => clearTimeout(timer);
   }, [iframeLoaded]);
 

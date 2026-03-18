@@ -5,9 +5,10 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { User, AppSettings } from "@/types";
+import { User, AppSettings, SocialConnection } from "@/types";
 import { StorageService } from "@/services/StorageService";
 import { firebaseStorageService } from "@/services/FirebaseStorageService";
+import { mockStorageService } from "@/services/MockStorageService";
 
 interface AuthContextType {
   user: User | null;
@@ -24,12 +25,20 @@ interface AuthContextType {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserSettings?: (settings: AppSettings) => Promise<void>;
+  // Social Connections
+  getSocialConnection: (platform: string) => SocialConnection | null;
+  addSocialConnection: (connection: Omit<SocialConnection, 'id' | 'userId'>) => Promise<void>;
+  removeSocialConnection: (platform: string) => Promise<void>;
+  hasThreadsConnection: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Service instance - now using Firebase
-const storageService: StorageService = firebaseStorageService;
+// Service instance — swap to mock when VITE_USE_MOCK is set (e.g. in Playwright tests)
+const storageService: StorageService =
+  import.meta.env.VITE_USE_MOCK === "true"
+    ? mockStorageService
+    : firebaseStorageService;
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -165,6 +174,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Social Connection Methods
+  const getSocialConnection = (platform: string) => {
+    if (!user || !user.socialConnections) return null;
+    return user.socialConnections.find(conn => conn.platform === platform) || null;
+  };
+
+  const addSocialConnection = async (connection: Omit<SocialConnection, 'id' | 'userId'>) => {
+    if (!user) {
+      throw new Error("No user logged in");
+    }
+    try {
+      const newConnection = await storageService.addSocialConnection(user.id, connection);
+      const updatedConnections = [...(user.socialConnections || []), newConnection];
+      setUser({ ...user, socialConnections: updatedConnections });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add social connection");
+      throw err;
+    }
+  };
+
+  const removeSocialConnection = async (platform: string) => {
+    if (!user || !user.socialConnections) {
+      throw new Error("No user logged in or no connections");
+    }
+    try {
+      const connection = user.socialConnections.find(conn => conn.platform === platform);
+      if (!connection) {
+        throw new Error(`No connection found for platform: ${platform}`);
+      }
+      await storageService.removeSocialConnection(connection.id);
+      const updatedConnections = user.socialConnections.filter(conn => conn.platform !== platform);
+      setUser({ ...user, socialConnections: updatedConnections });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove social connection");
+      throw err;
+    }
+  };
+
+  const hasThreadsConnection = () => {
+    return getSocialConnection('threads') !== null;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -178,6 +229,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         signUpWithEmail,
         signOut,
         updateUserSettings,
+        getSocialConnection,
+        addSocialConnection,
+        removeSocialConnection,
+        hasThreadsConnection,
       }}
     >
       {children}

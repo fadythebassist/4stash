@@ -37,3 +37,12 @@ firestore-debug.log
 
 # Social Auth
 SOCIAL_AUTH_PLAN.md
+
+# Temp / scratch files
+nul
+temp_*.txt
+
+# Playwright tests
+playwright.config.ts
+test-results/
+tests/

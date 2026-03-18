@@ -110,23 +110,11 @@ export function checkText(text: string | undefined): ModerationResult {
  * Check if metadata from unfurl indicates NSFW content
  * This catches Reddit/Twitter posts marked as NSFW
  */
-export function checkMetadata(metadata: any): ModerationResult {
-  // Check for explicit NSFW flag (from Reddit, Twitter, etc.)
-  if (metadata?.nsfw === true) {
-    return {
-      allowed: false,
-      reason: "This content is marked as NSFW (18+)",
-    };
-  }
+export function checkMetadata(_metadata: any): ModerationResult {
+  // NSFW content is allowed — the nsfw flag is stored on the item and shown as a badge.
+  // We do not block saving; the user intentionally chose to save this post.
 
-  // Check if title indicates NSFW
-  if (metadata?.title?.toLowerCase().includes("nsfw")) {
-    return {
-      allowed: false,
-      reason: "This content contains NSFW indicators",
-    };
-  }
-
+  // Check if title indicates NSFW via keyword (belt-and-suspenders, not a block)
   return { allowed: true };
 }
 

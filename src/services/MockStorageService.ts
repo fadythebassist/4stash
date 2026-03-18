@@ -140,6 +140,13 @@ export class MockStorageService implements StorageService {
           updatedAt: new Date(i.updatedAt),
         };
 
+        // Migrate old single-listId format to listIds array
+        if (!Array.isArray(item.listIds)) {
+          item.listIds = item.listId ? [item.listId] : [];
+          delete item.listId;
+          dataEnriched = true;
+        }
+
         // Auto-detect and add source/thumbnail for existing items
         if (item.url && !item.source) {
           console.log(
@@ -416,6 +423,75 @@ export class MockStorageService implements StorageService {
     }
   }
 
+  // Social Connections Methods (Stub implementations for Mock Mode)
+  async getSocialConnections(userId: string): Promise<import("@/types").SocialConnection[]> {
+    await this.delay(100);
+    const user = this.data.users.find((u) => u.id === userId);
+    return user?.socialConnections || [];
+  }
+
+  async getSocialConnection(userId: string, platform: string): Promise<import("@/types").SocialConnection | null> {
+    await this.delay(100);
+    const connections = await this.getSocialConnections(userId);
+    return connections.find(conn => conn.platform === platform) || null;
+  }
+
+  async addSocialConnection(userId: string, connection: Omit<import("@/types").SocialConnection, 'id' | 'userId'>): Promise<import("@/types").SocialConnection> {
+    await this.delay(200);
+    const user = this.data.users.find((u) => u.id === userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const newConnection: import("@/types").SocialConnection = {
+      id: this.generateId(),
+      userId,
+      ...connection,
+    };
+
+    if (!user.socialConnections) {
+      user.socialConnections = [];
+    }
+    user.socialConnections.push(newConnection);
+    this.saveToStorage();
+    
+    return newConnection;
+  }
+
+  async updateSocialConnection(connectionId: string, updates: Partial<import("@/types").SocialConnection>): Promise<void> {
+    await this.delay(100);
+    
+    for (const user of this.data.users) {
+      if (user.socialConnections) {
+        const connection = user.socialConnections.find(conn => conn.id === connectionId);
+        if (connection) {
+          Object.assign(connection, updates);
+          this.saveToStorage();
+          return;
+        }
+      }
+    }
+    
+    throw new Error("Social connection not found");
+  }
+
+  async removeSocialConnection(connectionId: string): Promise<void> {
+    await this.delay(100);
+    
+    for (const user of this.data.users) {
+      if (user.socialConnections) {
+        const index = user.socialConnections.findIndex(conn => conn.id === connectionId);
+        if (index !== -1) {
+          user.socialConnections.splice(index, 1);
+          this.saveToStorage();
+          return;
+        }
+      }
+    }
+    
+    throw new Error("Social connection not found");
+  }
+
   // Lists Methods
   async getLists(userId: string): Promise<List[]> {
     await this.delay(200);
@@ -424,7 +500,7 @@ export class MockStorageService implements StorageService {
       .map((list) => ({
         ...list,
         itemCount: this.data.items.filter(
-          (i) => i.listId === list.id && !i.archived,
+          (i) => i.listIds.includes(list.id) && !i.archived,
         ).length,
       }));
   }
@@ -436,7 +512,7 @@ export class MockStorageService implements StorageService {
     return {
       ...list,
       itemCount: this.data.items.filter(
-        (i) => i.listId === listId && !i.archived,
+        (i) => i.listIds.includes(listId) && !i.archived,
       ).length,
     };
   }
@@ -470,11 +546,13 @@ export class MockStorageService implements StorageService {
     this.saveToStorage();
   }
 
-  async deleteList(listId: string, userId: string): Promise<void> {
+  async deleteList(listId: string, _userId: string): Promise<void> {
     await this.delay(200);
     this.data.lists = this.data.lists.filter((l) => l.id !== listId);
-    // Also delete all items in the list
-    this.data.items = this.data.items.filter((i) => i.listId !== listId);
+    // Remove listId from items that belong to this list; delete items with no remaining lists
+    this.data.items = this.data.items
+      .map((i) => ({ ...i, listIds: i.listIds.filter((id) => id !== listId) }))
+      .filter((i) => i.listIds.length > 0);
     this.saveToStorage();
   }
 
@@ -485,7 +563,7 @@ export class MockStorageService implements StorageService {
       (i) => i.userId === userId && !i.archived,
     );
     if (listId) {
-      items = items.filter((i) => i.listId === listId);
+      items = items.filter((i) => i.listIds.includes(listId));
     }
 
     let dataEnriched = false;
@@ -640,13 +718,14 @@ export class MockStorageService implements StorageService {
       url: data.url,
       content: data.content,
       thumbnail: thumbnail,
-      listId: data.listId,
+      listIds: data.listIds,
       userId,
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: data.tags || [],
       source: detectedInfo.source,
       archived: false,
+      nsfw: data.nsfw,
     };
 
     this.data.items.push(item);

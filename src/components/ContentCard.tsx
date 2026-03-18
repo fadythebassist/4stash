@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Item } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useData } from "@/contexts/DataContext";
 import FacebookEmbed from "./FacebookEmbed";
 import InstagramEmbed from "./InstagramEmbed";
 import RedditEmbed from "./RedditEmbed";
 import TikTokEmbed from "./TikTokEmbed";
 import TweetEmbed from "./TweetEmbed";
 import ThreadsEmbed from "./ThreadsEmbed";
+import YouTubeEmbed from "./YouTubeEmbed";
+import VimeoEmbed from "./VimeoEmbed";
 import "./ContentCard.css";
 
 // Decode HTML entities for proper display
@@ -24,7 +27,6 @@ interface ContentCardProps {
   layoutMode?: 'grid' | 'list';
 }
 
-const MAX_TEXT_LINES = 2;
 const MAX_TEXT_CHARS = 150; // Approximate chars for 2 lines
 
 const ContentCard: React.FC<ContentCardProps> = ({
@@ -35,6 +37,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   layoutMode = 'grid',
 }) => {
   const { user } = useAuth();
+  const { updateItem } = useData();
   const autoplayVideos = user?.settings?.autoplayVideos !== false;
 
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -90,39 +93,43 @@ const ContentCard: React.FC<ContentCardProps> = ({
   };
 
   const derivedSource = useMemo(() => {
-    if (item.source) return item.source;
-    if (!item.url) return undefined;
-    
-    try {
-      const normalized =
-        item.url.startsWith("http://") || item.url.startsWith("https://")
-          ? item.url
-          : `https://${item.url}`;
-      const url = new URL(normalized);
-      const hostname = url.hostname.toLowerCase();
-      
-      // Map domains to source names
-      if (hostname.includes("facebook.com") || hostname.includes("fb.watch"))
-        return "facebook";
-      if (hostname.includes("instagram.com")) return "instagram";
-      if (hostname.includes("tiktok.com")) return "tiktok";
-      if (hostname.includes("reddit.com") || hostname.includes("redd.it"))
-        return "reddit";
-      if (hostname.includes("twitter.com") || hostname.includes("x.com"))
-        return "twitter";
-      if (hostname.includes("youtube.com") || hostname.includes("youtu.be"))
-        return "youtube";
-      if (hostname.includes("threads.net")) return "threads";
-      
-      // Extract domain name for other sources
-      const parts = hostname.replace("www.", "").split(".");
-      if (parts.length >= 2) {
-        return parts[parts.length - 2]; // e.g., "medium" from "medium.com"
+    // Try URL detection first for better accuracy
+    if (item.url) {
+      try {
+        const normalized =
+          item.url.startsWith("http://") || item.url.startsWith("https://")
+            ? item.url
+            : `https://${item.url}`;
+        const url = new URL(normalized);
+        const hostname = url.hostname.toLowerCase();
+        
+        // Map domains to source names
+        if (hostname.includes("facebook.com") || hostname.includes("fb.watch"))
+          return "facebook";
+        if (hostname.includes("instagram.com")) return "instagram";
+        if (hostname.includes("tiktok.com")) return "tiktok";
+        if (hostname.includes("reddit.com") || hostname.includes("redd.it"))
+          return "reddit";
+        if (hostname.includes("twitter.com") || hostname.includes("x.com"))
+          return "twitter";
+        if (hostname.includes("youtube.com") || hostname.includes("youtu.be"))
+          return "youtube";
+        if (hostname.includes("vimeo.com")) return "vimeo";
+        if (hostname.includes("threads.net") || hostname.includes("threads.com")) return "threads";
+        
+        // Extract domain name for other sources
+        const parts = hostname.replace("www.", "").split(".");
+        if (parts.length >= 2) {
+          return parts[parts.length - 2]; // e.g., "medium" from "medium.com"
+        }
+        return hostname;
+      } catch {
+        // If URL parsing fails, fall back to item.source
       }
-      return hostname;
-    } catch {
-      return undefined;
     }
+    
+    // Fall back to stored source if URL detection failed
+    return item.source;
   }, [item.source, item.url]);
 
   const sourceBadges: Record<string, { emoji: string; color: string; name: string }> = {
@@ -189,6 +196,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const shouldShowRedditEmbed = derivedSource === "reddit" && !!item.url;
   const shouldShowFacebookPreview = derivedSource === "facebook" && !!item.url;
   const shouldShowThreadsPreview = derivedSource === "threads" && !!item.url;
+  const shouldShowYouTubeEmbed = derivedSource === "youtube" && !!item.url;
+  const shouldShowVimeoEmbed = derivedSource === "vimeo" && !!item.url;
 
   // Suppress top media for embeds that show their own preview
   const suppressTopMedia =
@@ -196,7 +205,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
     shouldShowTikTokEmbed ||
     shouldShowRedditEmbed ||
     shouldShowFacebookPreview ||
-    shouldShowThreadsPreview;
+    shouldShowThreadsPreview ||
+    shouldShowYouTubeEmbed ||
+    shouldShowVimeoEmbed;
 
   const hostname = useMemo(() => {
     if (!item.url) return "";
@@ -279,9 +290,20 @@ const ContentCard: React.FC<ContentCardProps> = ({
           if (derivedSource === "facebook") {
             if (data.image !== item.thumbnail) {
               setResolvedThumbnail(data.image);
+              // Persist the resolved thumbnail so it survives page refreshes
+              try {
+                await updateItem({ id: item.id, thumbnail: data.image });
+              } catch {
+                // Non-critical — display still works via local state
+              }
             }
           } else if (!item.thumbnail || thumbnailError) {
             setResolvedThumbnail(data.image);
+            try {
+              await updateItem({ id: item.id, thumbnail: data.image });
+            } catch {
+              // Non-critical
+            }
           }
         }
 
@@ -292,6 +314,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
           data.description
         ) {
           setResolvedContent(data.description);
+          // Persist the resolved description
+          try {
+            await updateItem({ id: item.id, content: data.description });
+          } catch {
+            // Non-critical
+          }
         }
       } catch {
         // Endpoint doesn't exist or CORS blocked - this is expected
@@ -302,7 +330,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [derivedSource, item.url, item.thumbnail, item.content, thumbnailError]);
+  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError, updateItem]);
 
   return (
     <div
@@ -380,6 +408,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         )}
         <div className="card-header">
           <h3 className="card-title">{decodeHtmlEntities(item.title)}</h3>
+          {item.nsfw && <span className="nsfw-badge">NSFW</span>}
           {layoutMode === 'list' && item.url && (
             <a
               href={item.url}
@@ -464,8 +493,20 @@ const ContentCard: React.FC<ContentCardProps> = ({
         )}
 
         {shouldShowInstagramEmbed && item.url && (
-          <InstagramEmbed
-            key={`ig-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
+          <InstagramEmbed url={item.url} />
+        )}
+
+        {shouldShowYouTubeEmbed && item.url && (
+          <YouTubeEmbed
+            key={`yt-${item.id}-${autoplayVideos ? "on" : "off"}`}
+            url={item.url}
+            autoplay={autoplayVideos}
+          />
+        )}
+
+        {shouldShowVimeoEmbed && item.url && (
+          <VimeoEmbed
+            key={`vm-${item.id}-${autoplayVideos ? "on" : "off"}`}
             url={item.url}
             autoplay={autoplayVideos}
           />
@@ -482,6 +523,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
           derivedSource !== "reddit" &&
           derivedSource !== "facebook" &&
           derivedSource !== "threads" &&
+          derivedSource !== "youtube" &&
+          derivedSource !== "vimeo" &&
           !displayThumbnail && (
             <a
               href={item.url}

@@ -9,13 +9,14 @@ export interface Item {
   url?: string;
   content?: string;
   thumbnail?: string;
-  listId: string;
+  listIds: string[];
   userId: string;
   createdAt: Date;
   updatedAt: Date;
   tags?: string[];
   source?: string;
   archived?: boolean;
+  nsfw?: boolean;
 }
 
 // List represents a collection/category
@@ -68,13 +69,14 @@ export interface User {
   createdAt: Date;
   provider: "google" | "email" | "facebook" | "twitter";
   settings?: AppSettings;
+  socialConnections?: SocialConnection[];
 }
 
 // Social media connection for accessing private posts
 export interface SocialConnection {
   id: string;
   userId: string;
-  platform: "facebook" | "instagram" | "twitter" | "tiktok" | "pinterest";
+  platform: "facebook" | "instagram" | "twitter" | "threads" | "tiktok" | "pinterest";
   accessToken: string;
   refreshToken?: string;
   expiresAt?: Date;
@@ -116,9 +118,10 @@ export interface CreateItemDTO {
   url?: string;
   content?: string;
   thumbnail?: string;
-  listId: string;
+  listIds: string[];
   tags?: string[];
   source?: string;
+  nsfw?: boolean;
 }
 
 export interface UpdateItemDTO extends Partial<CreateItemDTO> {

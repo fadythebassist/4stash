@@ -15,6 +15,7 @@ import {
 } from "@/types";
 import { StorageService } from "@/services/StorageService";
 import { firebaseStorageService } from "@/services/FirebaseStorageService";
+import { mockStorageService } from "@/services/MockStorageService";
 import { useAuth } from "./AuthContext";
 
 interface DataContextType {
@@ -45,8 +46,11 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Service instance - now using Firebase
-const storageService: StorageService = firebaseStorageService;
+// Service instance — swap to mock when VITE_USE_MOCK is set (e.g. in Playwright tests)
+const storageService: StorageService =
+  import.meta.env.VITE_USE_MOCK === "true"
+    ? mockStorageService
+    : firebaseStorageService;
 
 interface DataProviderProps {
   children: ReactNode;

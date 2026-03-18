@@ -19,13 +19,17 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
   const { updateItem } = useData();
   const [title, setTitle] = useState(item.title);
   const [content, setContent] = useState(item.content || "");
-  const [listId, setListId] = useState(item.listId);
+  const [listIds, setListIds] = useState<string[]>(item.listIds);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentList = lists.find((l) => l.id === item.listId);
-  const newList = lists.find((l) => l.id === listId);
-  const isMoving = listId !== item.listId;
+  const addedToLists = lists.filter(
+    (l) => listIds.includes(l.id) && !item.listIds.includes(l.id),
+  );
+  const removedFromLists = lists.filter(
+    (l) => !listIds.includes(l.id) && item.listIds.includes(l.id),
+  );
+  const isChangingLists = addedToLists.length > 0 || removedFromLists.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +41,7 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
         id: item.id,
         title: title.trim() || item.title,
         content: content.trim() || undefined,
-        listId,
+        listIds,
       });
       onSave();
       onClose();
@@ -88,9 +92,9 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
           </div>
 
           <div className="form-group">
-            <label htmlFor="list">
-              List
-              {isMoving && (
+            <label>
+              Lists
+              {isChangingLists && (
                 <span
                   style={{
                     color: "var(--accent-primary)",
@@ -98,23 +102,37 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
                     fontSize: "0.85rem",
                   }}
                 >
-                  (Moving from {currentList?.name || "Unknown"})
+                  (modified)
                 </span>
               )}
             </label>
-            <select
-              id="list"
-              value={listId}
-              onChange={(e) => setListId(e.target.value)}
-              disabled={loading}
-            >
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.icon} {list.name}
-                </option>
-              ))}
-            </select>
-            {isMoving && (
+            <div className="list-picker">
+              {lists.map((list) => {
+                const checked = listIds.includes(list.id);
+                return (
+                  <label
+                    key={list.id}
+                    className={`list-picker-item${checked ? " selected" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={loading}
+                      onChange={() => {
+                        setListIds((prev) =>
+                          prev.includes(list.id)
+                            ? prev.filter((id) => id !== list.id)
+                            : [...prev, list.id],
+                        );
+                      }}
+                    />
+                    <span className="list-picker-icon">{list.icon}</span>
+                    <span className="list-picker-name">{list.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {isChangingLists && (
               <div
                 style={{
                   marginTop: "0.5rem",
@@ -125,7 +143,23 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
                   color: "var(--text-secondary)",
                 }}
               >
-                This item will be moved to <strong>{newList?.name}</strong>
+                {addedToLists.length > 0 && (
+                  <span>
+                    Adding to:{" "}
+                    <strong>{addedToLists.map((l) => l.name).join(", ")}</strong>
+                  </span>
+                )}
+                {addedToLists.length > 0 && removedFromLists.length > 0 && (
+                  <span> &middot; </span>
+                )}
+                {removedFromLists.length > 0 && (
+                  <span>
+                    Removing from:{" "}
+                    <strong>
+                      {removedFromLists.map((l) => l.name).join(", ")}
+                    </strong>
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -158,7 +192,7 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
               className="btn btn-primary"
               disabled={loading}
             >
-              {loading ? "Saving..." : isMoving ? "Move Item" : "Save Changes"}
+              {loading ? "Saving..." : isChangingLists ? "Update Lists" : "Save Changes"}
             </button>
           </div>
         </form>
