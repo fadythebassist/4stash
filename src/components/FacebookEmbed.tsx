@@ -32,6 +32,19 @@ function isFacebookVideoUrl(url: string): boolean {
 }
 
 /**
+ * Detect whether the URL is a Facebook short-share link (share/p/, share/v/, share/r/).
+ * Facebook's own plugin cannot render these — they require login to resolve.
+ */
+function isFacebookShortShareUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("facebook.com/share/p/") ||
+    lower.includes("facebook.com/share/v/") ||
+    lower.includes("facebook.com/share/r/")
+  );
+}
+
+/**
  * Determine the Facebook content type label from the URL.
  */
 function getFacebookContentType(url: string): string {
@@ -55,9 +68,10 @@ const FacebookLogo: React.FC = () => (
 );
 
 /**
- * FacebookEmbed – always tries the iframe plugin first (even for /share/ URLs,
- * because Facebook's own plugin server may resolve them internally).
- * Falls back to a static branded card after a timeout if the iframe stays empty.
+ * FacebookEmbed – tries the iframe plugin first for regular public post URLs.
+ * Short-share URLs (share/p/, share/v/, share/r/) and group permalinks are known to
+ * be unrenderable by the plugin — these skip the iframe and show the branded fallback card.
+ * For videos/reels, falls back to a thumbnail card if the plugin doesn't send postMessage events.
  */
 const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   url,
@@ -101,11 +115,19 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     );
   }, [normalizedUrl]);
 
+  // Facebook short-share URLs (share/p/, share/r/, share/v/) cannot be rendered by
+  // Facebook's own plugin server — they always return "post no longer available".
+  // Skip the iframe entirely and go straight to the branded fallback card.
+  const isShortShareUrl = useMemo(
+    () => (normalizedUrl ? isFacebookShortShareUrl(normalizedUrl) : false),
+    [normalizedUrl],
+  );
+
   // For videos/reels: Always try iframe first to enable playback, fallback to thumbnail on error
   // For posts/photos: If we have a thumbnail, show it immediately (skip iframe loading state)
   const shouldPreferThumbnailCard = !!thumbnail && !isVideo;
 
-  // Always try the iframe plugin — Facebook's plugin server may resolve /share/ URLs internally
+  // Build the iframe src for public posts/videos that the plugin can render
   const iframeSrc = useMemo(() => {
     if (!normalizedUrl) return null;
     const href = encodeURIComponent(normalizedUrl);
@@ -174,7 +196,8 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
           receivedFacebookMessage,
         );
         if (!isVideo) {
-          // For posts/photos: CSS doesn't fix height, so measure it
+          // For posts/photos: CSS doesn't fix height, so measure it.
+          // A working embed renders at >100px; an error/unavailable post renders very small.
           if (height < 100) {
             setShowFallback(true);
           }
@@ -194,7 +217,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
           }
         }
       }
-    }, 6000);
+    }, isVideo ? 6000 : 3000); // Posts render fast; videos need more time for postMessage
 
     return () => {
       clearTimeout(timer);
@@ -202,15 +225,15 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     };
   }, [iframeLoaded, isVideo, thumbnail]);
 
-  // Hard timeout: if iframe hasn't fired onLoad at all after 8s, show fallback
+  // Hard timeout: if iframe hasn't fired onLoad at all after 6s (posts) or 10s (videos), show fallback
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!iframeLoaded) {
         setShowFallback(true);
       }
-    }, 8000);
+    }, isVideo ? 10000 : 6000);
     return () => clearTimeout(timer);
-  }, [iframeLoaded]);
+  }, [iframeLoaded, isVideo]);
 
   if (!normalizedUrl) return null;
 
@@ -220,6 +243,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     !showFallback &&
     !manualFallback &&
     !isGroupPermalink &&
+    !isShortShareUrl &&
     !shouldPreferThumbnailCard
   ) {
     return (
