@@ -145,6 +145,21 @@ function isGenericFacebookTitle(title?: string): boolean {
   return false;
 }
 
+function isGenericRedditTitle(title?: string): boolean {
+  if (!title) return true;
+  const t = title.trim().toLowerCase();
+  if (t === "reddit") return true;
+  if (t === "reddit - the heart of the internet") return true;
+  if (t === "reddit \u2013 the heart of the internet") return true;
+  if (t === "403" || t === "error" || t === "forbidden") return true;
+  if (t.includes("403") || t.includes("forbidden") || t.includes("access denied")) return true;
+  if (t.includes("log in") || t.includes("login") || t.includes("sign up")) return true;
+  if (t.includes("not found") || t.includes("unavailable") || t.includes("not available")) return true;
+  if (t.includes("something went wrong")) return true;
+  if (t.includes("whoa there")) return true;
+  return false;
+}
+
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
@@ -1174,6 +1189,10 @@ function unfurlPlugin(): Plugin {
             // ignore
           }
         }
+
+        // Clear generic error titles (e.g. "Reddit - The heart of the internet",
+        // "403") so the client falls back to its own "Reddit Post in r/..." label.
+        if (isGenericRedditTitle(meta.title)) meta.title = undefined;
       }
 
       // Threads handling: Try direct fetch with mobile user agent

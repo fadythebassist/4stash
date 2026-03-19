@@ -104,10 +104,13 @@ function isGenericRedditTitle(title?: string): boolean {
   if (!title) return true;
   const t = title.trim().toLowerCase();
   if (t === "403" || t === "error" || t === "forbidden" || t === "reddit") return true;
+  if (t === "reddit - the heart of the internet") return true;
+  if (t === "reddit \u2013 the heart of the internet") return true;
   if (t.includes("403") || t.includes("forbidden") || t.includes("access denied")) return true;
   if (t.includes("log in") || t.includes("login") || t.includes("sign up")) return true;
   if (t.includes("not found") || t.includes("unavailable") || t.includes("not available")) return true;
   if (t.includes("something went wrong")) return true;
+  if (t.includes("whoa there")) return true;
   return false;
 }
 

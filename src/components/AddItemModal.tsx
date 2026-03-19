@@ -314,6 +314,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!value) return true;
     const t = value.trim().toLowerCase();
     if (t === "reddit") return true;
+    if (t === "reddit - the heart of the internet") return true;
+    if (t === "reddit – the heart of the internet") return true;
     if (t === "403" || t === "error" || t === "forbidden") return true;
     if (t.includes("403") || t.includes("forbidden") || t.includes("access denied"))
       return true;
@@ -322,6 +324,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     if (t.includes("not found") || t.includes("unavailable") || t.includes("not available"))
       return true;
     if (t.includes("something went wrong")) return true;
+    if (t.includes("whoa there")) return true;
     return false;
   };
 
@@ -536,15 +539,68 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
       }
 
-      // For Reddit — unfurl often returns 403 from GCP IPs; fall back to "Reddit Post"
+      // For Reddit — GCP IPs are blocked by Reddit, so try the .json API directly
+      // from the browser first (user's IP is not blocked). Only fall back to the
+      // Cloud Function if the client-side fetch fails.
       if (url.hostname.includes("reddit.com") || url.hostname.includes("redd.it")) {
-        let fallbackTitle = "Reddit Post";
         const pathParts = url.pathname.split("/").filter((p) => p);
-        // /r/<subreddit>/comments/<id>/<slug> — derive a nicer fallback
+        let fallbackTitle = "Reddit Post";
         const subredditIdx = pathParts.indexOf("r");
         if (subredditIdx !== -1 && pathParts[subredditIdx + 1]) {
           fallbackTitle = `Reddit Post in r/${pathParts[subredditIdx + 1]}`;
         }
+
+        // Build a clean canonical URL (strip UTM params) for the .json API call
+        const cleanUrl = new URL(url.toString());
+        const TRACKING_PARAMS = [
+          "utm_source", "utm_medium", "utm_name", "utm_term", "utm_content",
+          "utm_campaign", "ref", "ref_source", "context", "sh",
+        ];
+        for (const p of TRACKING_PARAMS) cleanUrl.searchParams.delete(p);
+        cleanUrl.hash = "";
+        // Ensure path ends with / before appending .json
+        if (!cleanUrl.pathname.endsWith("/")) cleanUrl.pathname += "/";
+        const jsonUrl = cleanUrl.toString() + ".json";
+
+        try {
+          const jsonRes = await fetch(jsonUrl, {
+            headers: {
+              "Accept": "application/json",
+            },
+          });
+          if (jsonRes.ok) {
+            const data = await jsonRes.json();
+            const post = data?.[0]?.data?.children?.[0]?.data;
+            if (post && post.title && !isGenericRedditTitle(post.title)) {
+              let thumbnail: string | undefined;
+              // Try preview images first (highest quality)
+              if (post.preview?.images?.[0]?.source?.url) {
+                thumbnail = (post.preview.images[0].source.url as string)
+                  .replace(/&amp;/g, "&");
+              } else if (post.thumbnail && (post.thumbnail as string).startsWith("http")) {
+                thumbnail = post.thumbnail as string;
+              } else if (
+                post.url &&
+                (post.url as string).match(/\.(jpg|jpeg|png|gif|webp)$/i)
+              ) {
+                thumbnail = post.url as string;
+              }
+              const selftext = post.selftext
+                ? (post.selftext as string).replace(/\n+/g, " ").trim().substring(0, 300)
+                : undefined;
+              return {
+                url: cleanUrl.toString().replace(/\/$/, ""),
+                title: post.title as string,
+                description: selftext || undefined,
+                thumbnail,
+              };
+            }
+          }
+        } catch {
+          // Client-side fetch failed — fall through to Cloud Function
+        }
+
+        // Cloud Function fallback (often 403 from GCP, but worth trying)
         try {
           const meta = await fetchUnfurl(fullUrl);
           const hasValidTitle = meta?.title && !isGenericRedditTitle(meta.title);
