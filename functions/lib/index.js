@@ -140,6 +140,22 @@ function isGenericInstagramDescription(desc) {
         return false;
     return false;
 }
+function isGenericRedditTitle(title) {
+    if (!title)
+        return true;
+    const t = title.trim().toLowerCase();
+    if (t === "403" || t === "error" || t === "forbidden" || t === "reddit")
+        return true;
+    if (t.includes("403") || t.includes("forbidden") || t.includes("access denied"))
+        return true;
+    if (t.includes("log in") || t.includes("login") || t.includes("sign up"))
+        return true;
+    if (t.includes("not found") || t.includes("unavailable") || t.includes("not available"))
+        return true;
+    if (t.includes("something went wrong"))
+        return true;
+    return false;
+}
 function isGenericFacebookTitle(title) {
     if (!title)
         return true;
@@ -858,6 +874,10 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
             }
             catch ( /* ignore */_j) { /* ignore */ }
         }
+        // If title is still a generic error string (e.g. "403" from the error page HTML),
+        // clear it so the client falls back to its own "Reddit Post in r/..." label.
+        if (isGenericRedditTitle(meta.title))
+            meta.title = undefined;
     }
     // Threads
     const isThreads = targetUrl.hostname.includes("threads.com") || targetUrl.hostname.includes("threads.net");
