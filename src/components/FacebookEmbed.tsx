@@ -57,6 +57,42 @@ function isFacebookLoginUrl(url: string): boolean {
 }
 
 /**
+ * Returns true only for URL patterns that Facebook's embed plugin can actually render:
+ * - /<username>/posts/<id>/
+ * - /<numeric_id>/posts/<id>/
+ * - /permalink.php?story_fbid=...
+ * - /photo?fbid=... or /photo.php?fbid=...
+ * - /video.php?v=... or /watch/?v=...
+ * - /<username>/videos/<id>/
+ * - /<username>/reels/<id>/
+ * - fb.watch/...
+ *
+ * Profile pages, page indexes, events, groups index, marketplace etc. are NOT embeddable.
+ */
+function isFacebookEmbeddableUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("facebook.com") && !u.hostname.includes("fb.watch")) return false;
+    if (u.hostname.includes("fb.watch")) return true;
+    const path = u.pathname.toLowerCase().replace(/\/$/, "");
+    // Posts
+    if (/\/posts\//.test(path)) return true;
+    // Permalinks
+    if (path.includes("/permalink.php") || (path === "/permalink.php")) return true;
+    if (u.searchParams.has("story_fbid")) return true;
+    // Photos
+    if (path.includes("/photo") || u.searchParams.has("fbid")) return true;
+    // Videos
+    if (path.includes("/videos/") || path === "/video.php" || u.searchParams.has("v")) return true;
+    // Watch
+    if (path === "/watch" || path.startsWith("/watch/")) return true;
+    // Reels
+    if (path.includes("/reel") || path.includes("/reels/")) return true;
+  } catch { /* ignore */ }
+  return false;
+}
+
+/**
  * Determine the Facebook content type label from the URL.
  */
 function getFacebookContentType(url: string): string {
@@ -70,6 +106,10 @@ function getFacebookContentType(url: string): string {
     return "Video";
   if (lower.includes("/reel") || lower.includes("/share/r/")) return "Reel";
   if (lower.includes("/photo") || lower.includes("/share/p/")) return "Photo";
+  if (lower.includes("profile.php") || lower.includes("/people/")) return "Profile";
+  if (lower.includes("/events/")) return "Event";
+  if (lower.includes("/groups/")) return "Group";
+  if (lower.includes("/pages/")) return "Page";
   return "Post";
 }
 
@@ -135,6 +175,13 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     () => normalizedUrl
       ? isFacebookShortShareUrl(normalizedUrl) || isFacebookLoginUrl(normalizedUrl)
       : false,
+    [normalizedUrl],
+  );
+
+  // Profile pages, page indexes, events, groups index, marketplace etc. cannot be
+  // embedded by Facebook's plugin — skip straight to the branded fallback card.
+  const isNotEmbeddable = useMemo(
+    () => normalizedUrl ? !isFacebookEmbeddableUrl(normalizedUrl) : false,
     [normalizedUrl],
   );
 
@@ -259,6 +306,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     !manualFallback &&
     !isGroupPermalink &&
     !isShortShareUrl &&
+    !isNotEmbeddable &&
     !shouldPreferThumbnailCard
   ) {
     return (
