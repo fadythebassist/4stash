@@ -262,7 +262,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
       const needsUnfurl =
-        (derivedSource === "facebook" && (!item.thumbnail || !item.content || !resolvedFacebookUrl)) ||
+        (derivedSource === "facebook" && ((!resolvedThumbnail && !item.thumbnail) || !item.content || !resolvedFacebookUrl)) ||
         derivedSource === "threads" ||
         !item.thumbnail ||
         thumbnailError ||
@@ -291,18 +291,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
         // Update thumbnail if missing or failed
         if (typeof data.image === "string" && data.image) {
-          // Facebook thumbnails frequently come from CORP-protected hosts (e.g. lookaside.fbsbx.com)
-          // and may need to be replaced with our proxied URL even if item.thumbnail exists.
           if (derivedSource === "facebook") {
-            if (data.image !== item.thumbnail) {
-              setResolvedThumbnail(data.image);
-              // Persist the resolved thumbnail so it survives page refreshes
-              try {
-                await updateItemRef.current({ id: item.id, thumbnail: data.image });
-              } catch {
-                // Non-critical — display still works via local state
-              }
-            }
+            // Facebook CDN URLs contain signed tokens (oh=, oe=) that change on every
+            // server request — storing them would cause an infinite update loop because
+            // the next unfurl call always returns a different token. Display via local
+            // state only; do NOT persist to storage.
+            setResolvedThumbnail(data.image);
           } else if (!item.thumbnail || thumbnailError) {
             setResolvedThumbnail(data.image);
             try {
@@ -336,7 +330,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError, resolvedFacebookUrl]);
+  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError, resolvedFacebookUrl, resolvedThumbnail]);
 
   return (
     <div
