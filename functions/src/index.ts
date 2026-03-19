@@ -758,6 +758,30 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
       }
     } catch { /* Reddit JSON failed */ }
 
+    // Reddit oEmbed — works server-side and returns the real post title.
+    // Try this before Jina since it's more reliable.
+    if (!meta.title) {
+      attempts["redditOembed"] = { attempted: true, ok: false };
+      try {
+        const oembedUrl = `https://www.reddit.com/oembed?url=${encodeURIComponent(targetUrl.toString())}`;
+        const oembedRes = await fetchTextWithTimeout(oembedUrl, {
+          ...headers,
+          accept: "application/json",
+        }, 8000);
+        (attempts["redditOembed"] as Record<string, unknown>)["ok"] = oembedRes.ok;
+        if (oembedRes.ok) {
+          const oembedData = tryParseJson(oembedRes.text) as Record<string, unknown> | null;
+          if (oembedData?.["title"] && typeof oembedData["title"] === "string") {
+            const t = decodeHtmlEntities(oembedData["title"]);
+            if (!isGenericRedditTitle(t)) meta.title = t;
+          }
+          if (!meta.title && oembedData?.["author_name"] && typeof oembedData["author_name"] === "string") {
+            meta.title = `Post by u/${oembedData["author_name"]}`;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     if (!meta.title || !meta.description || !meta.image) {
       attempts["redditJina"] = { attempted: true, ok: false };
       try {

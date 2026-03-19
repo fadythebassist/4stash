@@ -864,6 +864,28 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
             }
         }
         catch ( /* Reddit JSON failed */_h) { /* Reddit JSON failed */ }
+        // Reddit oEmbed — works server-side and returns the real post title.
+        // Try this before Jina since it's more reliable.
+        if (!meta.title) {
+            attempts["redditOembed"] = { attempted: true, ok: false };
+            try {
+                const oembedUrl = `https://www.reddit.com/oembed?url=${encodeURIComponent(targetUrl.toString())}`;
+                const oembedRes = await fetchTextWithTimeout(oembedUrl, Object.assign(Object.assign({}, headers), { accept: "application/json" }), 8000);
+                attempts["redditOembed"]["ok"] = oembedRes.ok;
+                if (oembedRes.ok) {
+                    const oembedData = tryParseJson(oembedRes.text);
+                    if ((oembedData === null || oembedData === void 0 ? void 0 : oembedData["title"]) && typeof oembedData["title"] === "string") {
+                        const t = decodeHtmlEntities(oembedData["title"]);
+                        if (!isGenericRedditTitle(t))
+                            meta.title = t;
+                    }
+                    if (!meta.title && (oembedData === null || oembedData === void 0 ? void 0 : oembedData["author_name"]) && typeof oembedData["author_name"] === "string") {
+                        meta.title = `Post by u/${oembedData["author_name"]}`;
+                    }
+                }
+            }
+            catch ( /* ignore */_j) { /* ignore */ }
+        }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["redditJina"] = { attempted: true, ok: false };
             try {
@@ -878,7 +900,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 if (!meta.image && redditMeta.image)
                     meta.image = redditMeta.image;
             }
-            catch ( /* ignore */_j) { /* ignore */ }
+            catch ( /* ignore */_k) { /* ignore */ }
         }
         // If title is still a generic error string (e.g. "403" from the error page HTML),
         // clear it so the client falls back to its own "Reddit Post in r/..." label.
@@ -907,7 +929,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                     meta.image = threadsMeta.image;
             }
         }
-        catch ( /* ignore */_k) { /* ignore */ }
+        catch ( /* ignore */_l) { /* ignore */ }
     }
     const image = meta.image ? new url_1.URL(meta.image, finalUrl).toString() : undefined;
     const proxiedImage = (() => {
