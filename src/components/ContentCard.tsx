@@ -59,6 +59,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
   >(undefined);
   const [isTextExpanded, setIsTextExpanded] = useState(false);
 
+  // Refs so the unfurl effect can read the latest resolved values
+  // without listing them as dependencies (they are outputs of the effect,
+  // not inputs that should re-trigger it).
+  const resolvedThumbnailRef = useRef<string | undefined>(undefined);
+  const resolvedFacebookUrlRef = useRef<string | undefined>(undefined);
+
   const minSwipeDistance = 100;
 
   const onTouchStart = (e: React.TouchEvent) => {
@@ -186,6 +192,11 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const displayThumbnail = resolvedThumbnail ?? item.thumbnail;
   const displayContent = item.content ?? resolvedContent;
 
+  // Keep refs in sync so the unfurl effect can read the latest values
+  // without them being listed as effect dependencies.
+  useEffect(() => { resolvedThumbnailRef.current = resolvedThumbnail; }, [resolvedThumbnail]);
+  useEffect(() => { resolvedFacebookUrlRef.current = resolvedFacebookUrl; }, [resolvedFacebookUrl]);
+
   const displayUrl = useMemo(() => {
     if (derivedSource !== "facebook") return item.url;
     return resolvedFacebookUrl ?? item.url;
@@ -262,7 +273,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
       const needsUnfurl =
-        (derivedSource === "facebook" && ((!resolvedThumbnail && !item.thumbnail) || !item.content || !resolvedFacebookUrl)) ||
+        (derivedSource === "facebook" && ((!resolvedThumbnailRef.current && !item.thumbnail) || !item.content || !resolvedFacebookUrlRef.current)) ||
         derivedSource === "threads" ||
         !item.thumbnail ||
         thumbnailError ||
@@ -330,7 +341,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError, resolvedFacebookUrl, resolvedThumbnail]);
+  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError]);
 
   return (
     <div
