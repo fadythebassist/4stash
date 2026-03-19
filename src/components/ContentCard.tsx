@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Item } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
@@ -38,6 +38,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
 }) => {
   const { user } = useAuth();
   const { updateItem } = useData();
+  // Keep updateItem in a ref so the unfurl effect never needs it as a dependency.
+  // This prevents the effect from re-running every time the context re-renders.
+  const updateItemRef = useRef(updateItem);
+  useEffect(() => { updateItemRef.current = updateItem; }, [updateItem]);
   const autoplayVideos = user?.settings?.autoplayVideos !== false;
 
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -258,7 +262,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
       const needsUnfurl =
-        derivedSource === "facebook" ||
+        (derivedSource === "facebook" && (!item.thumbnail || !item.content || !resolvedFacebookUrl)) ||
         derivedSource === "threads" ||
         !item.thumbnail ||
         thumbnailError ||
@@ -294,7 +298,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
               setResolvedThumbnail(data.image);
               // Persist the resolved thumbnail so it survives page refreshes
               try {
-                await updateItem({ id: item.id, thumbnail: data.image });
+                await updateItemRef.current({ id: item.id, thumbnail: data.image });
               } catch {
                 // Non-critical — display still works via local state
               }
@@ -302,7 +306,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           } else if (!item.thumbnail || thumbnailError) {
             setResolvedThumbnail(data.image);
             try {
-              await updateItem({ id: item.id, thumbnail: data.image });
+              await updateItemRef.current({ id: item.id, thumbnail: data.image });
             } catch {
               // Non-critical
             }
@@ -318,7 +322,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           setResolvedContent(data.description);
           // Persist the resolved description
           try {
-            await updateItem({ id: item.id, content: data.description });
+            await updateItemRef.current({ id: item.id, content: data.description });
           } catch {
             // Non-critical
           }
@@ -332,7 +336,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError, updateItem]);
+  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError, resolvedFacebookUrl]);
 
   return (
     <div

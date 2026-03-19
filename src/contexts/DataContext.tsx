@@ -3,6 +3,9 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useCallback,
+  useMemo,
+  useRef,
   ReactNode,
 } from "react";
 import {
@@ -64,10 +67,23 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshData = async () => {
-    console.log("🔄 refreshData called, user:", user);
+  // Use a ref so refreshData always reads the latest selectedListId
+  // without needing to be re-created when it changes.
+  const selectedListIdRef = useRef(selectedListId);
+  useEffect(() => {
+    selectedListIdRef.current = selectedListId;
+  }, [selectedListId]);
 
-    if (!user) {
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const refreshData = useCallback(async () => {
+    const currentUser = userRef.current;
+    console.log("🔄 refreshData called, user:", currentUser);
+
+    if (!currentUser) {
       console.log("⚠️ No user, clearing lists and items");
       setLists([]);
       setItems([]);
@@ -77,10 +93,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      console.log("📡 Fetching lists and items for user:", user.id);
+      console.log("📡 Fetching lists and items for user:", currentUser.id);
       const [fetchedLists, fetchedItems] = await Promise.all([
-        storageService.getLists(user.id),
-        storageService.getItems(user.id, selectedListId || undefined),
+        storageService.getLists(currentUser.id),
+        storageService.getItems(currentUser.id, selectedListIdRef.current || undefined),
       ]);
       console.log("✅ Fetched lists:", fetchedLists);
       console.log("✅ Fetched items:", fetchedItems);
@@ -92,28 +108,29 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // stable — reads user and selectedListId via refs
 
   useEffect(() => {
     refreshData();
-  }, [user, selectedListId]);
+  }, [user, selectedListId, refreshData]);
 
-  const selectList = (listId: string | null) => {
+  const selectList = useCallback((listId: string | null) => {
     setSelectedListId(listId);
-  };
+  }, []);
 
-  const createList = async (data: CreateListDTO): Promise<List> => {
-    console.log("📋 DataContext.createList called", { data, user });
+  const createList = useCallback(async (data: CreateListDTO): Promise<List> => {
+    const currentUser = userRef.current;
+    console.log("📋 DataContext.createList called", { data, user: currentUser });
 
-    if (!user) {
+    if (!currentUser) {
       console.error("❌ No user logged in");
       throw new Error("No user logged in");
     }
 
     setError(null);
     try {
-      console.log("📤 Calling storageService.createList with userId:", user.id);
-      const newList = await storageService.createList(user.id, data);
+      console.log("📤 Calling storageService.createList with userId:", currentUser.id);
+      const newList = await storageService.createList(currentUser.id, data);
       console.log("✅ List created, refreshing data...");
       await refreshData();
       return newList;
@@ -124,9 +141,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const updateList = async (data: UpdateListDTO): Promise<void> => {
+  const updateList = useCallback(async (data: UpdateListDTO): Promise<void> => {
     setError(null);
     try {
       await storageService.updateList(data);
@@ -137,14 +154,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const createItem = async (data: CreateItemDTO): Promise<Item> => {
-    if (!user) throw new Error("No user logged in");
+  const createItem = useCallback(async (data: CreateItemDTO): Promise<Item> => {
+    const currentUser = userRef.current;
+    if (!currentUser) throw new Error("No user logged in");
 
     setError(null);
     try {
-      const newItem = await storageService.createItem(user.id, data);
+      const newItem = await storageService.createItem(currentUser.id, data);
       await refreshData();
       return newItem;
     } catch (err) {
@@ -153,9 +171,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const updateItem = async (data: UpdateItemDTO): Promise<void> => {
+  const updateItem = useCallback(async (data: UpdateItemDTO): Promise<void> => {
     setError(null);
     try {
       await storageService.updateItem(data);
@@ -166,9 +184,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const deleteItem = async (itemId: string): Promise<void> => {
+  const deleteItem = useCallback(async (itemId: string): Promise<void> => {
     setError(null);
     try {
       await storageService.deleteItem(itemId);
@@ -179,20 +197,21 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const deleteList = async (listId: string): Promise<void> => {
-    console.log("🗑️ DataContext.deleteList called", { listId, user });
+  const deleteList = useCallback(async (listId: string): Promise<void> => {
+    const currentUser = userRef.current;
+    console.log("🗑️ DataContext.deleteList called", { listId, user: currentUser });
 
-    if (!user) {
+    if (!currentUser) {
       console.error("❌ No user logged in");
       throw new Error("No user logged in");
     }
 
     setError(null);
     try {
-      console.log("📤 Calling storageService.deleteList with userId:", user.id);
-      await storageService.deleteList(listId, user.id);
+      console.log("📤 Calling storageService.deleteList with userId:", currentUser.id);
+      await storageService.deleteList(listId, currentUser.id);
       console.log("✅ List deleted, refreshing data...");
       await refreshData();
     } catch (err) {
@@ -202,9 +221,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const archiveItem = async (itemId: string): Promise<void> => {
+  const archiveItem = useCallback(async (itemId: string): Promise<void> => {
     setError(null);
     try {
       await storageService.archiveItem(itemId);
@@ -221,16 +240,17 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, [refreshData]);
 
-  const updateAvatarStyle = async (style: string): Promise<void> => {
+  const updateAvatarStyle = useCallback(async (style: string): Promise<void> => {
+    const currentUser = userRef.current;
     setError(null);
-    if (!user) {
+    if (!currentUser) {
       throw new Error("No user logged in");
     }
     try {
       console.log(`🎨 Updating avatar style to: ${style}`);
-      await storageService.updateAvatarStyle(user.id, style);
+      await storageService.updateAvatarStyle(currentUser.id, style);
       console.log("✅ Avatar style updated successfully");
 
       // Refresh auth context to get updated user
@@ -242,28 +262,44 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    lists,
+    items,
+    selectedListId,
+    loading,
+    error,
+    selectList,
+    createList,
+    updateList,
+    deleteList,
+    createItem,
+    updateItem,
+    deleteItem,
+    archiveItem,
+    updateAvatarStyle,
+    refreshData,
+  }), [
+    lists,
+    items,
+    selectedListId,
+    loading,
+    error,
+    selectList,
+    createList,
+    updateList,
+    deleteList,
+    createItem,
+    updateItem,
+    deleteItem,
+    archiveItem,
+    updateAvatarStyle,
+    refreshData,
+  ]);
 
   return (
-    <DataContext.Provider
-      value={{
-        lists,
-        items,
-        selectedListId,
-        loading,
-        error,
-        selectList,
-        createList,
-        updateList,
-        deleteList,
-        createItem,
-        updateItem,
-        deleteItem,
-        archiveItem,
-        updateAvatarStyle,
-        refreshData,
-      }}
-    >
+    <DataContext.Provider value={contextValue}>
       {children}
     </DataContext.Provider>
   );
