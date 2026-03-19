@@ -6,6 +6,7 @@ import { URL } from "url";
 
 const FB_APP_ID = defineSecret("FB_APP_ID");
 const FB_APP_SECRET = defineSecret("FB_APP_SECRET");
+const THREADS_APP_SECRET = defineSecret("THREADS_APP_SECRET");
 
 // ---------------------------------------------------------------------------
 // Helpers (ported from vite.config.ts unfurl middleware)
@@ -445,7 +446,7 @@ function buildInstagramMediaFallbackUrl(u: URL): string | null {
 // Main handler (shared between /api/unfurl and /api/proxy-image)
 // ---------------------------------------------------------------------------
 
-async function handleRequest(req: functions.https.Request, res: functions.Response<unknown>, fbAppId: string, fbAppSecret: string): Promise<void> {
+async function handleRequest(req: functions.https.Request, res: functions.Response<unknown>, fbAppId: string, fbAppSecret: string, threadsAppSecret: string): Promise<void> {
   // CORS — allow 4later.xyz and localhost dev
   const origin = req.headers["origin"] as string | undefined;
   const allowedOrigins = ["https://4later.xyz", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173"];
@@ -454,12 +455,55 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   } else {
     res.setHeader("Access-Control-Allow-Origin", "https://4later.xyz");
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
-  if (req.method !== "GET") { res.status(405).json({ error: "Method not allowed" }); return; }
 
   const path = req.path;
+
+  // POST routes
+  if (req.method === "POST") {
+    // -------------------------------------------------------------------------
+    // /api/threads-token  — server-side Threads OAuth code exchange
+    // Keeps the app secret out of the client bundle.
+    // -------------------------------------------------------------------------
+    if (path === "/threads-token" || path === "/api/threads-token") {
+      const { code, redirectUri, appId } = req.body as { code?: string; redirectUri?: string; appId?: string };
+      if (!code || !redirectUri || !appId) {
+        res.status(400).json({ error: "Missing required fields: code, redirectUri, appId" }); return;
+      }
+      if (!threadsAppSecret) {
+        res.status(500).json({ error: "Threads app secret not configured" }); return;
+      }
+      try {
+        const params = new URLSearchParams({
+          client_id: appId,
+          client_secret: threadsAppSecret,
+          grant_type: "authorization_code",
+          redirect_uri: redirectUri,
+          code,
+        });
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 10000);
+        const response = await (globalThis.fetch as typeof fetch)("https://graph.threads.net/oauth/access_token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
+          body: params.toString(),
+          signal: controller.signal,
+        });
+        clearTimeout(tid);
+        const data = await response.json() as Record<string, unknown>;
+        if (!response.ok) {
+          res.status(400).json({ error: data["error_message"] ?? data["error"] ?? "Token exchange failed" }); return;
+        }
+        res.status(200).json(data);
+      } catch (e) {
+        res.status(500).json({ error: e instanceof Error ? e.message : "Token exchange failed" });
+      }
+      return;
+    }
+    res.status(404).json({ error: "Not found" }); return;
+  }
 
   // -------------------------------------------------------------------------
   // /api/proxy-image
@@ -500,6 +544,55 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
       res.status(200).setHeader("Content-Type", contentType).setHeader("Cache-Control", "no-store").end(buf);
     } catch (e: unknown) {
       res.status(500).json({ error: e instanceof Error && e.message === "Timeout" ? "Upstream timeout" : "Proxy failed" });
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // /api/threads-token  — server-side Threads OAuth code exchange
+  // Keeps the app secret out of the client bundle.
+  // -------------------------------------------------------------------------
+  if (path === "/threads-token" || path === "/api/threads-token") {
+    if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
+    const { code, redirectUri, appId } = req.body as { code?: string; redirectUri?: string; appId?: string };
+    if (!code || !redirectUri || !appId) {
+      res.status(400).json({ error: "Missing required fields: code, redirectUri, appId" }); return;
+    }
+    if (!threadsAppSecret) {
+      res.status(500).json({ error: "Threads app secret not configured" }); return;
+    }
+    try {
+      const params = new URLSearchParams({
+        client_id: appId,
+        client_secret: threadsAppSecret,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+        code,
+      });
+      const tokenRes = await nodeFetch("https://graph.threads.net/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
+        timeoutMs: 10000,
+      });
+      // nodeFetch doesn't support body for POST yet — use globalThis.fetch directly
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 10000);
+      const response = await (globalThis.fetch as typeof fetch)("https://graph.threads.net/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
+        body: params.toString(),
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      // suppress unused variable — nodeFetch call above was replaced
+      void tokenRes;
+      const data = await response.json() as Record<string, unknown>;
+      if (!response.ok) {
+        res.status(400).json({ error: data["error_message"] ?? data["error"] ?? "Token exchange failed" }); return;
+      }
+      res.status(200).json(data);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Token exchange failed" });
     }
     return;
   }
@@ -842,7 +935,7 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
 // ---------------------------------------------------------------------------
 
 export const api = functions
-  .runWith({ timeoutSeconds: 30, memory: "256MB", secrets: ["FB_APP_ID", "FB_APP_SECRET"] })
+  .runWith({ timeoutSeconds: 30, memory: "256MB", secrets: ["FB_APP_ID", "FB_APP_SECRET", "THREADS_APP_SECRET"] })
   .https.onRequest(async (req, res) => {
-    await handleRequest(req, res, FB_APP_ID.value(), FB_APP_SECRET.value());
+    await handleRequest(req, res, FB_APP_ID.value(), FB_APP_SECRET.value(), THREADS_APP_SECRET.value());
   });

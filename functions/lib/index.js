@@ -41,6 +41,7 @@ const http = __importStar(require("http"));
 const url_1 = require("url");
 const FB_APP_ID = (0, params_1.defineSecret)("FB_APP_ID");
 const FB_APP_SECRET = (0, params_1.defineSecret)("FB_APP_SECRET");
+const THREADS_APP_SECRET = (0, params_1.defineSecret)("THREADS_APP_SECRET");
 // ---------------------------------------------------------------------------
 // Helpers (ported from vite.config.ts unfurl middleware)
 // ---------------------------------------------------------------------------
@@ -531,8 +532,8 @@ function buildInstagramMediaFallbackUrl(u) {
 // ---------------------------------------------------------------------------
 // Main handler (shared between /api/unfurl and /api/proxy-image)
 // ---------------------------------------------------------------------------
-async function handleRequest(req, res, fbAppId, fbAppSecret) {
-    var _a;
+async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
+    var _a, _b, _c, _d, _e;
     // CORS — allow 4later.xyz and localhost dev
     const origin = req.headers["origin"];
     const allowedOrigins = ["https://4later.xyz", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173"];
@@ -542,17 +543,61 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
     else {
         res.setHeader("Access-Control-Allow-Origin", "https://4later.xyz");
     }
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") {
         res.status(204).send("");
         return;
     }
-    if (req.method !== "GET") {
-        res.status(405).json({ error: "Method not allowed" });
+    const path = req.path;
+    // POST routes
+    if (req.method === "POST") {
+        // -------------------------------------------------------------------------
+        // /api/threads-token  — server-side Threads OAuth code exchange
+        // Keeps the app secret out of the client bundle.
+        // -------------------------------------------------------------------------
+        if (path === "/threads-token" || path === "/api/threads-token") {
+            const { code, redirectUri, appId } = req.body;
+            if (!code || !redirectUri || !appId) {
+                res.status(400).json({ error: "Missing required fields: code, redirectUri, appId" });
+                return;
+            }
+            if (!threadsAppSecret) {
+                res.status(500).json({ error: "Threads app secret not configured" });
+                return;
+            }
+            try {
+                const params = new URLSearchParams({
+                    client_id: appId,
+                    client_secret: threadsAppSecret,
+                    grant_type: "authorization_code",
+                    redirect_uri: redirectUri,
+                    code,
+                });
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 10000);
+                const response = await globalThis.fetch("https://graph.threads.net/oauth/access_token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
+                    body: params.toString(),
+                    signal: controller.signal,
+                });
+                clearTimeout(tid);
+                const data = await response.json();
+                if (!response.ok) {
+                    res.status(400).json({ error: (_b = (_a = data["error_message"]) !== null && _a !== void 0 ? _a : data["error"]) !== null && _b !== void 0 ? _b : "Token exchange failed" });
+                    return;
+                }
+                res.status(200).json(data);
+            }
+            catch (e) {
+                res.status(500).json({ error: e instanceof Error ? e.message : "Token exchange failed" });
+            }
+            return;
+        }
+        res.status(404).json({ error: "Not found" });
         return;
     }
-    const path = req.path;
     // -------------------------------------------------------------------------
     // /api/proxy-image
     // -------------------------------------------------------------------------
@@ -566,7 +611,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
         try {
             targetUrl = new url_1.URL(target);
         }
-        catch (_b) {
+        catch (_f) {
             res.status(400).json({ error: "Invalid url param" });
             return;
         }
@@ -602,6 +647,61 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
         return;
     }
     // -------------------------------------------------------------------------
+    // /api/threads-token  — server-side Threads OAuth code exchange
+    // Keeps the app secret out of the client bundle.
+    // -------------------------------------------------------------------------
+    if (path === "/threads-token" || path === "/api/threads-token") {
+        if (req.method !== "POST") {
+            res.status(405).json({ error: "Method not allowed" });
+            return;
+        }
+        const { code, redirectUri, appId } = req.body;
+        if (!code || !redirectUri || !appId) {
+            res.status(400).json({ error: "Missing required fields: code, redirectUri, appId" });
+            return;
+        }
+        if (!threadsAppSecret) {
+            res.status(500).json({ error: "Threads app secret not configured" });
+            return;
+        }
+        try {
+            const params = new URLSearchParams({
+                client_id: appId,
+                client_secret: threadsAppSecret,
+                grant_type: "authorization_code",
+                redirect_uri: redirectUri,
+                code,
+            });
+            const tokenRes = await nodeFetch("https://graph.threads.net/oauth/access_token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
+                timeoutMs: 10000,
+            });
+            // nodeFetch doesn't support body for POST yet — use globalThis.fetch directly
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 10000);
+            const response = await globalThis.fetch("https://graph.threads.net/oauth/access_token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
+                body: params.toString(),
+                signal: controller.signal,
+            });
+            clearTimeout(tid);
+            // suppress unused variable — nodeFetch call above was replaced
+            void tokenRes;
+            const data = await response.json();
+            if (!response.ok) {
+                res.status(400).json({ error: (_d = (_c = data["error_message"]) !== null && _c !== void 0 ? _c : data["error"]) !== null && _d !== void 0 ? _d : "Token exchange failed" });
+                return;
+            }
+            res.status(200).json(data);
+        }
+        catch (e) {
+            res.status(500).json({ error: e instanceof Error ? e.message : "Token exchange failed" });
+        }
+        return;
+    }
+    // -------------------------------------------------------------------------
     // /api/unfurl
     // -------------------------------------------------------------------------
     if (path !== "/unfurl" && path !== "/api/unfurl") {
@@ -618,7 +718,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
     try {
         targetUrl = new url_1.URL(target);
     }
-    catch (_c) {
+    catch (_g) {
         res.status(400).json({ error: "Invalid url param" });
         return;
     }
@@ -650,7 +750,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 try {
                     targetUrl = new url_1.URL(resolved);
                 }
-                catch ( /* keep original */_d) { /* keep original */ }
+                catch ( /* keep original */_h) { /* keep original */ }
             }
         }
     }
@@ -743,7 +843,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 if (!meta.description && mbasicMeta.description)
                     meta.description = mbasicMeta.description;
                 if (!meta.image) {
-                    const imgMatches = (_a = mbasicRes.text.match(/<img\s[^>]*src=["']([^"']+)["'][^>]*>/gi)) !== null && _a !== void 0 ? _a : [];
+                    const imgMatches = (_e = mbasicRes.text.match(/<img\s[^>]*src=["']([^"']+)["'][^>]*>/gi)) !== null && _e !== void 0 ? _e : [];
                     for (const imgTag of imgMatches) {
                         const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
                         if (!(srcMatch === null || srcMatch === void 0 ? void 0 : srcMatch[1]))
@@ -759,7 +859,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 }
             }
         }
-        catch ( /* mbasic failed */_e) { /* mbasic failed */ }
+        catch ( /* mbasic failed */_j) { /* mbasic failed */ }
     }
     // Facebook oEmbed + Jina fallback
     if (isFacebookHost && (!meta.title || !meta.description || !meta.image)) {
@@ -793,7 +893,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                     }
                 }
             }
-            catch ( /* ignore oEmbed errors */_f) { /* ignore oEmbed errors */ }
+            catch ( /* ignore oEmbed errors */_k) { /* ignore oEmbed errors */ }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["facebookJina"] = { attempted: true, ok: false };
@@ -809,7 +909,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 if (!meta.image && fbMeta.image)
                     meta.image = fbMeta.image;
             }
-            catch ( /* ignore */_g) { /* ignore */ }
+            catch ( /* ignore */_l) { /* ignore */ }
         }
     }
     // Early return if Facebook still has nothing
@@ -863,7 +963,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 }
             }
         }
-        catch ( /* Reddit JSON failed */_h) { /* Reddit JSON failed */ }
+        catch ( /* Reddit JSON failed */_m) { /* Reddit JSON failed */ }
         // Reddit oEmbed — works server-side and returns the real post title.
         // Try this before Jina since it's more reliable.
         if (!meta.title) {
@@ -884,7 +984,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                     }
                 }
             }
-            catch ( /* ignore */_j) { /* ignore */ }
+            catch ( /* ignore */_o) { /* ignore */ }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["redditJina"] = { attempted: true, ok: false };
@@ -900,7 +1000,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 if (!meta.image && redditMeta.image)
                     meta.image = redditMeta.image;
             }
-            catch ( /* ignore */_k) { /* ignore */ }
+            catch ( /* ignore */_p) { /* ignore */ }
         }
         // If title is still a generic error string (e.g. "403" from the error page HTML),
         // clear it so the client falls back to its own "Reddit Post in r/..." label.
@@ -929,7 +1029,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                     meta.image = threadsMeta.image;
             }
         }
-        catch ( /* ignore */_l) { /* ignore */ }
+        catch ( /* ignore */_q) { /* ignore */ }
     }
     const image = meta.image ? new url_1.URL(meta.image, finalUrl).toString() : undefined;
     const proxiedImage = (() => {
@@ -949,8 +1049,8 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
 // Exported Cloud Function
 // ---------------------------------------------------------------------------
 exports.api = functions
-    .runWith({ timeoutSeconds: 30, memory: "256MB", secrets: ["FB_APP_ID", "FB_APP_SECRET"] })
+    .runWith({ timeoutSeconds: 30, memory: "256MB", secrets: ["FB_APP_ID", "FB_APP_SECRET", "THREADS_APP_SECRET"] })
     .https.onRequest(async (req, res) => {
-    await handleRequest(req, res, FB_APP_ID.value(), FB_APP_SECRET.value());
+    await handleRequest(req, res, FB_APP_ID.value(), FB_APP_SECRET.value(), THREADS_APP_SECRET.value());
 });
 //# sourceMappingURL=index.js.map

@@ -33,77 +33,80 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
   const handleConnectThreads = async () => {
     try {
-      // Check if Threads API is configured
       if (!threadsAuthService.isConfigured()) {
         alert(
           '⚠️ Threads API Not Configured\n\n' +
-          'To connect your Threads account, you need to:\n\n' +
-          '1. Go to developers.facebook.com/apps\n' +
-          '2. Open your Facebook app (or create one)\n' +
-          '3. Add "Threads" as a product\n' +
-          '4. Configure OAuth redirect URI:\n' +
-          '   http://localhost:5173/threads-oauth-callback.html\n\n' +
-          'Your app can use the same Facebook App ID/Secret.\n' +
-          'Or set specific Threads credentials in .env:\n' +
-          '   VITE_FACEBOOK_APP_ID=your_app_id\n' +
-          '   VITE_FACEBOOK_APP_SECRET=your_app_secret\n\n' +
-          'See docs/authentication/THREADS_AUTH_GUIDE.md for details.'
+          'To connect your Threads account, set VITE_FACEBOOK_APP_ID (or VITE_THREADS_APP_ID) in your .env file.\n\n' +
+          'The app uses the same Meta/Facebook app for Threads OAuth.\n' +
+          'Make sure the redirect URI https://4later.xyz/threads-oauth-callback.html is added in the Facebook Developer Portal.'
         );
         return;
       }
 
       setConnectingThreads(true);
       const authUrl = threadsAuthService.getAuthorizationUrl();
-      
-      // Open OAuth popup
+
       const width = 600;
       const height = 700;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      
+      const left = Math.round(window.screen.width / 2 - width / 2);
+      const top = Math.round(window.screen.height / 2 - height / 2);
+
       const popup = window.open(
         authUrl,
         'threads-oauth',
         `width=${width},height=${height},left=${left},top=${top}`
       );
 
-      // Listen for OAuth callback
-      window.addEventListener('message', async (event) => {
-        if (event.data.type === 'threads-oauth-success') {
-          const { code } = event.data;
-          
+      // Listen for OAuth callback — use once:true so the listener auto-removes itself
+      const handleMessage = async (event: MessageEvent) => {
+        // Ignore messages from other origins
+        if (event.origin !== window.location.origin) return;
+
+        if (event.data?.type === 'threads-oauth-success') {
+          window.removeEventListener('message', handleMessage);
+          const { code } = event.data as { code: string };
           try {
-            // Exchange code for token
             const tokenData = await threadsAuthService.exchangeCodeForToken(code);
-            
-            // Get user profile
             const profile = await threadsAuthService.getUserProfile(tokenData.access_token);
-            
-            // Save connection
             await addSocialConnection({
               platform: 'threads',
               accessToken: tokenData.access_token,
-              expiresAt: tokenData.expires_in 
-                ? new Date(Date.now() + tokenData.expires_in * 1000)
+              expiresAt: tokenData.expires_in
+                ? new Date(Date.now() + (tokenData.expires_in as number) * 1000)
                 : undefined,
               platformUserId: profile.id,
               platformUsername: profile.username,
               connectedAt: new Date(),
             });
-            
-            alert(`✅ Successfully connected to Threads as @${profile.username}`);
+            alert(`Successfully connected to Threads as @${profile.username}`);
             popup?.close();
-          } catch (error) {
-            console.error('Failed to complete Threads connection:', error);
+          } catch (err) {
+            console.error('[SettingsModal] Threads token exchange failed:', err);
             alert('Failed to connect to Threads. Please try again.');
           } finally {
             setConnectingThreads(false);
           }
+        } else if (event.data?.type === 'threads-oauth-error') {
+          window.removeEventListener('message', handleMessage);
+          const { errorDescription } = event.data as { errorDescription?: string };
+          alert(`Threads connection failed: ${errorDescription ?? 'Unknown error'}`);
+          setConnectingThreads(false);
         }
-      });
-    } catch (error) {
-      console.error('Failed to initiate Threads connection:', error);
-      alert('Failed to connect to Threads. Please try again.');
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // If the user closes the popup without completing the flow, clean up
+      const pollClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(pollClosed);
+          window.removeEventListener('message', handleMessage);
+          setConnectingThreads(false);
+        }
+      }, 500);
+    } catch (err) {
+      console.error('[SettingsModal] Failed to initiate Threads connection:', err);
+      alert('Failed to open Threads login. Please try again.');
       setConnectingThreads(false);
     }
   };

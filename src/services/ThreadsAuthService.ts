@@ -15,7 +15,6 @@ import { SocialConnection } from "@/types";
 
 interface ThreadsOAuthConfig {
   appId: string;
-  appSecret: string;
   redirectUri: string;
 }
 
@@ -49,8 +48,8 @@ export class ThreadsAuthService {
    * Check if Threads API credentials are configured
    */
   isConfigured(): boolean {
-    return !!(this.config.appId && this.config.appSecret && this.config.redirectUri &&
-              this.config.appId !== '' && this.config.appSecret !== '');
+    return !!(this.config.appId && this.config.redirectUri &&
+              this.config.appId !== '');
   }
 
   /**
@@ -72,23 +71,17 @@ export class ThreadsAuthService {
   }
 
   /**
-   * Exchange authorization code for access token
+   * Exchange authorization code for access token.
+   * Proxied through our Cloud Function so the app secret never touches the client.
    */
   async exchangeCodeForToken(code: string): Promise<ThreadsTokenResponse> {
-    const params = new URLSearchParams({
-      client_id: this.config.appId,
-      client_secret: this.config.appSecret,
-      grant_type: 'authorization_code',
-      redirect_uri: this.config.redirectUri,
-      code,
-    });
+    const redirectUri = this.config.redirectUri;
+    const appId = this.config.appId;
 
-    const response = await fetch('https://graph.threads.net/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
+    const response = await fetch("/api/threads-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, redirectUri, appId }),
     });
 
     if (!response.ok) {
@@ -190,9 +183,9 @@ export class ThreadsAuthService {
 }
 
 // Create singleton instance with env vars
-// Note: Threads uses the same Meta/Facebook app, so we can fall back to Facebook credentials
+// Note: Threads uses the same Meta/Facebook app, so we can fall back to Facebook credentials.
+// The app secret is NOT needed client-side — token exchange is proxied through the Cloud Function.
 export const threadsAuthService = new ThreadsAuthService({
   appId: import.meta.env.VITE_THREADS_APP_ID || import.meta.env.VITE_FACEBOOK_APP_ID || '',
-  appSecret: import.meta.env.VITE_THREADS_APP_SECRET || import.meta.env.VITE_FACEBOOK_APP_SECRET || '',
   redirectUri: import.meta.env.VITE_THREADS_REDIRECT_URI || `${window.location.origin}/threads-oauth-callback.html`,
 });
