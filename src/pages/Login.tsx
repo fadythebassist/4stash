@@ -104,6 +104,11 @@ const Login: React.FC = () => {
           <div className="auth-header">
             <h1 className="auth-logo">4Later</h1>
             <p className="auth-subtitle">Save content for later</p>
+            <p className="auth-description">
+              4Later is a multimedia content organizer. Save tweets, TikToks,
+              Instagram posts, Reddit threads, and more — all in one place,
+              ready to revisit whenever you want.
+            </p>
           </div>
 
           {error && <div className="auth-error">{error}</div>}
@@ -204,6 +209,18 @@ const Login: React.FC = () => {
               }}
             >
               Sign up
+            </a>
+          </p>
+
+          <p className="auth-footer auth-footer-legal">
+            <a
+              href="/privacy"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/privacy");
+              }}
+            >
+              Privacy Policy
             </a>
           </p>
         </div>

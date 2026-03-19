@@ -106,6 +106,13 @@
   font-size: var(--font-base);
 }
 
+.auth-description {
+  margin-top: var(--spacing-sm);
+  color: var(--text-tertiary);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
 .auth-error {
   background: rgba(239, 68, 68, 0.06);
   border-left: 3px solid var(--error);
@@ -234,6 +241,12 @@
 
 .auth-footer a:hover {
   color: var(--accent-hover);
+}
+
+.auth-footer-legal {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-xs, 0.75rem);
+  opacity: 0.7;
 }
 
 /* ── Tablet+ : two-column split ── */

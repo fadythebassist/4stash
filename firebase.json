@@ -15,6 +15,10 @@
         "function": "api"
       },
       {
+        "source": "/",
+        "destination": "/landing.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -31,6 +35,15 @@
       },
       {
         "source": "index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "landing.html",
         "headers": [
           {
             "key": "Cache-Control",
