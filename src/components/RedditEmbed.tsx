@@ -73,6 +73,7 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const render = async () => {
       setFailed(false);
@@ -98,7 +99,20 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
       try {
         await loadRedditWidgets();
         if (cancelled) return;
-        // The script auto-processes inserted cards.
+
+        // The Reddit widget script processes blockquote.reddit-card elements and
+        // replaces them with an iframe. If it fails silently (e.g. GCP IP blocked
+        // by Reddit's embed CDN), the blockquote stays unprocessed and the card
+        // appears blank. We detect this with a timeout: if after 4 s the blockquote
+        // is still there (i.e. not replaced with an iframe), fall back to the link.
+        timeoutId = setTimeout(() => {
+          if (cancelled) return;
+          const stillHasBlockquote =
+            containerRef.current?.querySelector("blockquote.reddit-card");
+          if (stillHasBlockquote) {
+            setFailed(true);
+          }
+        }, 4000);
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -108,6 +122,7 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
 
     return () => {
       cancelled = true;
+      if (timeoutId !== null) clearTimeout(timeoutId);
     };
   }, [normalizedUrl]);
 

@@ -208,7 +208,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       !!source &&
       ((source.source === "facebook" && isGenericFacebookTitle(initialTitle)) ||
         (source.source === "instagram" &&
-          isGenericInstagramTitle(initialTitle)));
+          isGenericInstagramTitle(initialTitle)) ||
+        (source.source === "reddit" && isGenericRedditTitle(initialTitle)));
 
     const shouldFetchInitialMetadata = !initialTitle || hasGenericInitialTitle;
     if (!shouldFetchInitialMetadata) {
@@ -307,6 +308,21 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       console.error("[AddItemModal] Failed to fetch metadata:", error);
       return null;
     }
+  };
+
+  const isGenericRedditTitle = (value?: string) => {
+    if (!value) return true;
+    const t = value.trim().toLowerCase();
+    if (t === "reddit") return true;
+    if (t === "403" || t === "error" || t === "forbidden") return true;
+    if (t.includes("403") || t.includes("forbidden") || t.includes("access denied"))
+      return true;
+    if (t.includes("log in") || t.includes("login") || t.includes("sign up"))
+      return true;
+    if (t.includes("not found") || t.includes("unavailable") || t.includes("not available"))
+      return true;
+    if (t.includes("something went wrong")) return true;
+    return false;
   };
 
   const isGenericInstagramTitle = (value?: string) => {
@@ -520,6 +536,29 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
       }
 
+      // For Reddit — unfurl often returns 403 from GCP IPs; fall back to "Reddit Post"
+      if (url.hostname.includes("reddit.com") || url.hostname.includes("redd.it")) {
+        let fallbackTitle = "Reddit Post";
+        const pathParts = url.pathname.split("/").filter((p) => p);
+        // /r/<subreddit>/comments/<id>/<slug> — derive a nicer fallback
+        const subredditIdx = pathParts.indexOf("r");
+        if (subredditIdx !== -1 && pathParts[subredditIdx + 1]) {
+          fallbackTitle = `Reddit Post in r/${pathParts[subredditIdx + 1]}`;
+        }
+        try {
+          const meta = await fetchUnfurl(fullUrl);
+          const hasValidTitle = meta?.title && !isGenericRedditTitle(meta.title);
+          return {
+            url: meta?.url || fullUrl,
+            title: hasValidTitle ? meta.title : fallbackTitle,
+            description: meta?.description,
+            thumbnail: meta?.image,
+          };
+        } catch {
+          return { url: fullUrl, title: fallbackTitle };
+        }
+      }
+
       // For other URLs, try unfurl then fall back to domain
       const meta = await fetchUnfurl(fullUrl);
       if (meta?.title || meta?.description || meta?.image) {
@@ -552,6 +591,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return !existingTitle || isGenericFacebookTitle(existingTitle);
       if (src === "instagram")
         return !existingTitle || isGenericInstagramTitle(existingTitle);
+      if (src === "reddit")
+        return !existingTitle || isGenericRedditTitle(existingTitle);
       return !existingTitle;
     };
 
@@ -570,10 +611,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       (shouldResolveFacebookShare ||
         !existingTitle ||
         source?.source === "twitter" ||
+        source?.source === "reddit" ||
         (source?.source === "facebook" &&
           isGenericFacebookTitle(existingTitle)) ||
         (source?.source === "instagram" &&
-          isGenericInstagramTitle(existingTitle)));
+          isGenericInstagramTitle(existingTitle)) ||
+        (source?.source === "reddit" &&
+          isGenericRedditTitle(existingTitle)));
 
     // Auto-fetch metadata if URL is provided and title is missing or generic
     if (shouldFetchMetadata) {
@@ -596,7 +640,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           (source?.source === "facebook" &&
             isGenericFacebookTitle(existingTitle)) ||
           (source?.source === "instagram" &&
-            isGenericInstagramTitle(existingTitle));
+            isGenericInstagramTitle(existingTitle)) ||
+          (source?.source === "reddit" &&
+            isGenericRedditTitle(existingTitle));
 
         if (shouldUpdateTitle && fetched?.title) {
           setTitle(decodeHtmlEntities(fetched.title));
