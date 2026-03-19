@@ -84,14 +84,18 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
 
       containerRef.current.innerHTML = "";
 
+      // Reddit's current embed widget (embed.reddit.com/widgets.js) looks for
+      // blockquote elements with class "reddit-embed-bq". The older "reddit-card"
+      // class is no longer processed by the widget script.
       const blockquote = document.createElement("blockquote");
-      blockquote.className = "reddit-card";
+      blockquote.className = "reddit-embed-bq";
+      blockquote.style.height = "500px";
 
       const link = document.createElement("a");
       link.href = normalizedUrl;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.textContent = "View on Reddit";
+      link.textContent = normalizedUrl;
 
       blockquote.appendChild(link);
       containerRef.current.appendChild(blockquote);
@@ -100,19 +104,16 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url }) => {
         await loadRedditWidgets();
         if (cancelled) return;
 
-        // The Reddit widget script processes blockquote.reddit-card elements and
-        // replaces them with an iframe. If it fails silently (e.g. GCP IP blocked
-        // by Reddit's embed CDN), the blockquote stays unprocessed and the card
-        // appears blank. We detect this with a timeout: if after 4 s the blockquote
-        // is still there (i.e. not replaced with an iframe), fall back to the link.
+        // Give the widget up to 15 s to replace the blockquote with an iframe.
+        // If it never does (e.g. network error or CDN blocked), fall back to a link.
         timeoutId = setTimeout(() => {
           if (cancelled) return;
           const stillHasBlockquote =
-            containerRef.current?.querySelector("blockquote.reddit-card");
+            containerRef.current?.querySelector("blockquote.reddit-embed-bq");
           if (stillHasBlockquote) {
             setFailed(true);
           }
-        }, 4000);
+        }, 15000);
       } catch {
         if (!cancelled) setFailed(true);
       }
