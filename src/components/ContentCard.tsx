@@ -273,12 +273,14 @@ const ContentCard: React.FC<ContentCardProps> = ({
         const data = await res.json();
         if (cancelled) return;
 
-        // For Facebook: update resolved URL if available
+        // For Facebook: update resolved URL if available and it's not a login redirect
         if (
           derivedSource === "facebook" &&
           typeof data.url === "string" &&
           data.url &&
-          data.url !== fullUrl
+          data.url !== fullUrl &&
+          !data.url.includes("/login") &&
+          !data.url.includes("/checkpoint")
         ) {
           setResolvedFacebookUrl(data.url);
         }

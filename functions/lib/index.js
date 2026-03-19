@@ -281,14 +281,65 @@ async function fetchTextWithTimeout(url, headers, timeoutMs) {
         text,
     };
 }
+function isFacebookLoginUrl(url) {
+    try {
+        const u = new url_1.URL(url);
+        return u.hostname.includes("facebook.com") && (u.pathname.startsWith("/login") ||
+            u.pathname.startsWith("/checkpoint") ||
+            u.pathname.startsWith("/recover"));
+    }
+    catch (_a) {
+        return false;
+    }
+}
+/**
+ * When Facebook redirects us to a login wall, the real destination post URL is
+ * encoded in the `next` query parameter of the login URL.
+ * Extract it and convert it to a usable embed permalink:
+ *   /permalink.php?story_fbid=<fbid>&id=<page_id>  →  /<page_id>/posts/<fbid>/
+ */
+function extractPermalinkFromLoginRedirect(loginUrl) {
+    try {
+        const u = new url_1.URL(loginUrl);
+        if (!isFacebookLoginUrl(loginUrl))
+            return null;
+        const next = u.searchParams.get("next");
+        if (!next)
+            return null;
+        const nextUrl = new url_1.URL(next);
+        if (!nextUrl.hostname.includes("facebook.com"))
+            return null;
+        // Case 1: /permalink.php?story_fbid=X&id=Y  →  /Y/posts/X/
+        if (nextUrl.pathname.toLowerCase().includes("/permalink.php")) {
+            const storyFbid = nextUrl.searchParams.get("story_fbid");
+            const id = nextUrl.searchParams.get("id");
+            if (storyFbid && id) {
+                return `https://www.facebook.com/${id}/posts/${storyFbid}/`;
+            }
+        }
+        // Case 2: the next URL itself is already a usable permalink (not a /share/ or /login/)
+        if (!nextUrl.pathname.includes("/share/") && !isFacebookLoginUrl(next)) {
+            // Strip tracking params before returning
+            nextUrl.searchParams.delete("rdid");
+            nextUrl.searchParams.delete("share_url");
+            return nextUrl.toString();
+        }
+    }
+    catch ( /* ignore */_a) { /* ignore */ }
+    return null;
+}
 async function resolveFacebookShareUrl(targetUrl, headers, timeoutMs) {
     const host = targetUrl.hostname.toLowerCase();
     const path = targetUrl.pathname.toLowerCase();
     if (host.includes("fb.watch")) {
         try {
             const res = await nodeFetch(targetUrl.toString(), { headers, timeoutMs, redirect: "follow" });
-            if (res.finalUrl && res.finalUrl !== targetUrl.toString())
-                return res.finalUrl;
+            const finalUrl = res.finalUrl && res.finalUrl !== targetUrl.toString() ? res.finalUrl : null;
+            if (finalUrl && !isFacebookLoginUrl(finalUrl))
+                return finalUrl;
+            if (finalUrl && isFacebookLoginUrl(finalUrl)) {
+                return extractPermalinkFromLoginRedirect(finalUrl);
+            }
         }
         catch ( /* ignore */_a) { /* ignore */ }
         return null;
@@ -297,20 +348,38 @@ async function resolveFacebookShareUrl(targetUrl, headers, timeoutMs) {
         return null;
     try {
         const res = await nodeFetch(targetUrl.toString(), { headers, timeoutMs, redirect: "follow" });
-        if (res.finalUrl && res.finalUrl !== targetUrl.toString() && !res.finalUrl.includes("/share/"))
-            return res.finalUrl;
+        const finalUrl = res.finalUrl && res.finalUrl !== targetUrl.toString() ? res.finalUrl : null;
+        // Happy path: resolved to a non-share, non-login URL
+        if (finalUrl && !finalUrl.includes("/share/") && !isFacebookLoginUrl(finalUrl))
+            return finalUrl;
+        // Login wall: extract the real destination from the `next` param
+        if (finalUrl && isFacebookLoginUrl(finalUrl)) {
+            const extracted = extractPermalinkFromLoginRedirect(finalUrl);
+            if (extracted)
+                return extracted;
+            // Don't fall through to HTML parsing — we're on a login page, not the target
+            return null;
+        }
+        // Still on a share URL or no redirect — try HTML parsing
         const text = await res.text();
         const ogUrl = text.match(/<meta\s+[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i);
         if ((ogUrl === null || ogUrl === void 0 ? void 0 : ogUrl[1]) && !ogUrl[1].includes("/share/")) {
             try {
-                return new url_1.URL(ogUrl[1], targetUrl.toString()).toString();
+                const resolved = new url_1.URL(ogUrl[1], targetUrl.toString()).toString();
+                if (!isFacebookLoginUrl(resolved))
+                    return resolved;
+                const extracted = extractPermalinkFromLoginRedirect(resolved);
+                if (extracted)
+                    return extracted;
             }
             catch ( /* ignore */_b) { /* ignore */ }
         }
         const canonical = text.match(/<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["']/i);
         if ((canonical === null || canonical === void 0 ? void 0 : canonical[1]) && !canonical[1].includes("/share/")) {
             try {
-                return new url_1.URL(canonical[1], targetUrl.toString()).toString();
+                const resolved = new url_1.URL(canonical[1], targetUrl.toString()).toString();
+                if (!isFacebookLoginUrl(resolved))
+                    return resolved;
             }
             catch ( /* ignore */_c) { /* ignore */ }
         }
@@ -318,7 +387,9 @@ async function resolveFacebookShareUrl(targetUrl, headers, timeoutMs) {
         if ((jsRedirect === null || jsRedirect === void 0 ? void 0 : jsRedirect[1]) && !jsRedirect[1].includes("/share/")) {
             try {
                 const decoded = jsRedirect[1].replace(/\\u002F/g, "/").replace(/\\\//g, "/");
-                return new url_1.URL(decoded, targetUrl.toString()).toString();
+                const resolved = new url_1.URL(decoded, targetUrl.toString()).toString();
+                if (!isFacebookLoginUrl(resolved))
+                    return resolved;
             }
             catch ( /* ignore */_d) { /* ignore */ }
         }
@@ -541,6 +612,8 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
     const facebookPreviewHeaders = Object.assign(Object.assign({}, headers), { "user-agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" });
     const isFacebook = targetUrl.hostname.includes("facebook.com") || targetUrl.hostname.includes("fb.watch");
     const isFacebookShare = isFacebook && isFacebookShareLike(targetUrl);
+    // Keep a copy of the original share URL so we can return it if resolution fails / hits a login wall
+    const originalShareUrl = isFacebookShare ? targetUrl.toString() : null;
     let shareResolvedUrl = null;
     if (isFacebookShare) {
         const extracted = extractFacebookSharedTarget(targetUrl);
@@ -558,6 +631,12 @@ async function handleRequest(req, res, fbAppId, fbAppSecret) {
                 catch ( /* keep original */_d) { /* keep original */ }
             }
         }
+    }
+    // If after resolution we ended up on a login/checkpoint page, bail out early.
+    // Return the original share URL so the client keeps the short URL (which isFacebookShortShareUrl() handles).
+    if (isFacebook && isFacebookLoginUrl(targetUrl.toString())) {
+        res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: originalShareUrl !== null && originalShareUrl !== void 0 ? originalShareUrl : targetUrl.toString(), contentType: "", status: 0, title: undefined, description: undefined, image: undefined, shareResolvedUrl: null }, (debug ? { debug: { loginWall: true } } : {})));
+        return;
     }
     const primary = await fetchTextWithTimeout(targetUrl.toString(), isFacebookShare ? facebookPreviewHeaders : headers, 10000);
     const finalUrl = primary.finalUrl;

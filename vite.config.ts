@@ -173,6 +173,41 @@ function isFacebookShareLike(url: URL): boolean {
   return false;
 }
 
+function isFacebookLoginUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    return u.hostname.includes("facebook.com") && (
+      u.pathname.startsWith("/login") ||
+      u.pathname.startsWith("/checkpoint") ||
+      u.pathname.startsWith("/recover")
+    );
+  } catch { return false; }
+}
+
+function extractPermalinkFromLoginRedirect(loginUrl: string): string | null {
+  try {
+    if (!isFacebookLoginUrl(loginUrl)) return null;
+    const u = new URL(loginUrl);
+    const next = u.searchParams.get("next");
+    if (!next) return null;
+    const nextUrl = new URL(next);
+    if (!nextUrl.hostname.includes("facebook.com")) return null;
+    if (nextUrl.pathname.toLowerCase().includes("/permalink.php")) {
+      const storyFbid = nextUrl.searchParams.get("story_fbid");
+      const id = nextUrl.searchParams.get("id");
+      if (storyFbid && id) {
+        return `https://www.facebook.com/${id}/posts/${storyFbid}/`;
+      }
+    }
+    if (!nextUrl.pathname.includes("/share/") && !isFacebookLoginUrl(next)) {
+      nextUrl.searchParams.delete("rdid");
+      nextUrl.searchParams.delete("share_url");
+      return nextUrl.toString();
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function extractFacebookSharedTarget(url: URL): URL | null {
   const uParam = url.searchParams.get("u") || url.searchParams.get("url");
   if (!uParam) return null;
@@ -420,10 +455,9 @@ async function resolveFacebookShareUrlWithTimeout(
         headers,
       });
       clearTimeout(timeoutId);
-      // After following redirects, res.url should be the final URL
-      if (res.url && res.url !== targetUrl.toString()) {
-        return res.url;
-      }
+      const finalUrl = res.url && res.url !== targetUrl.toString() ? res.url : null;
+      if (finalUrl && !isFacebookLoginUrl(finalUrl)) return finalUrl;
+      if (finalUrl && isFacebookLoginUrl(finalUrl)) return extractPermalinkFromLoginRedirect(finalUrl);
     } catch {
       // ignore
     }
@@ -444,13 +478,19 @@ async function resolveFacebookShareUrlWithTimeout(
     });
     clearTimeout(timeoutId);
 
-    // If we got redirected to a different URL, use that
-    if (
-      followRes.url &&
-      followRes.url !== targetUrl.toString() &&
-      !followRes.url.includes("/share/")
-    ) {
-      return followRes.url;
+    const finalUrl = followRes.url && followRes.url !== targetUrl.toString() ? followRes.url : null;
+
+    // Happy path: resolved to a real non-share URL
+    if (finalUrl && !finalUrl.includes("/share/") && !isFacebookLoginUrl(finalUrl)) {
+      return finalUrl;
+    }
+
+    // Login wall: extract the real destination from the `next` param
+    if (finalUrl && isFacebookLoginUrl(finalUrl)) {
+      const extracted = extractPermalinkFromLoginRedirect(finalUrl);
+      if (extracted) return extracted;
+      // Don't fall through to HTML parsing — we're on a login page
+      return null;
     }
 
     // Parse the response for redirect hints
@@ -462,7 +502,10 @@ async function resolveFacebookShareUrlWithTimeout(
     );
     if (ogUrl?.[1] && !ogUrl[1].includes("/share/")) {
       try {
-        return new URL(ogUrl[1], targetUrl.toString()).toString();
+        const resolved = new URL(ogUrl[1], targetUrl.toString()).toString();
+        if (!isFacebookLoginUrl(resolved)) return resolved;
+        const extracted = extractPermalinkFromLoginRedirect(resolved);
+        if (extracted) return extracted;
       } catch {
         // ignore
       }
@@ -474,7 +517,8 @@ async function resolveFacebookShareUrlWithTimeout(
     );
     if (canonical?.[1] && !canonical[1].includes("/share/")) {
       try {
-        return new URL(canonical[1], targetUrl.toString()).toString();
+        const resolved = new URL(canonical[1], targetUrl.toString()).toString();
+        if (!isFacebookLoginUrl(resolved)) return resolved;
       } catch {
         // ignore
       }
@@ -502,7 +546,8 @@ async function resolveFacebookShareUrlWithTimeout(
         const decoded = jsRedirect[1]
           .replace(/\\u002F/g, "/")
           .replace(/\\\//g, "/");
-        return new URL(decoded, targetUrl.toString()).toString();
+        const resolved = new URL(decoded, targetUrl.toString()).toString();
+        if (!isFacebookLoginUrl(resolved)) return resolved;
       } catch {
         // ignore
       }

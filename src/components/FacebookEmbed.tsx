@@ -45,6 +45,18 @@ function isFacebookShortShareUrl(url: string): boolean {
 }
 
 /**
+ * Detect whether the URL is a Facebook login/checkpoint redirect.
+ * These URLs must never be passed to the embed plugin.
+ */
+function isFacebookLoginUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("facebook.com/login") ||
+    lower.includes("facebook.com/checkpoint")
+  );
+}
+
+/**
  * Determine the Facebook content type label from the URL.
  */
 function getFacebookContentType(url: string): string {
@@ -117,9 +129,12 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
 
   // Facebook short-share URLs (share/p/, share/r/, share/v/) cannot be rendered by
   // Facebook's own plugin server — they always return "post no longer available".
+  // Login-redirect URLs must also never reach the plugin.
   // Skip the iframe entirely and go straight to the branded fallback card.
   const isShortShareUrl = useMemo(
-    () => (normalizedUrl ? isFacebookShortShareUrl(normalizedUrl) : false),
+    () => normalizedUrl
+      ? isFacebookShortShareUrl(normalizedUrl) || isFacebookLoginUrl(normalizedUrl)
+      : false,
     [normalizedUrl],
   );
 
