@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Masonry from "react-masonry-css";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
 import TopBar from "@/components/TopBar";
@@ -167,9 +168,9 @@ const Dashboard: React.FC = () => {
                 Save your first item
               </button>
             </div>
-          ) : (
-            <div 
-              className={`content-grid ${user?.settings?.viewDensity || 'comfortable'} layout-${user?.settings?.layoutMode || 'grid'}`}
+          ) : user?.settings?.layoutMode === 'list' ? (
+            <div
+              className={`content-grid ${user?.settings?.viewDensity || 'comfortable'} layout-list`}
             >
               {items.map((item) => (
                 <ContentCard
@@ -178,10 +179,27 @@ const Dashboard: React.FC = () => {
                   onDelete={() => handleDeleteItem(item.id)}
                   onArchive={() => handleArchiveItem(item.id)}
                   onClick={() => setSelectedItem(item)}
-                  layoutMode={user?.settings?.layoutMode || 'grid'}
+                  layoutMode="list"
                 />
               ))}
             </div>
+          ) : (
+            <Masonry
+              breakpointCols={{ default: 3, 1024: 3, 640: 2, 360: 1 }}
+              className={`content-grid masonry-grid ${user?.settings?.viewDensity || 'comfortable'}`}
+              columnClassName="masonry-grid-column"
+            >
+              {items.map((item) => (
+                <ContentCard
+                  key={item.id}
+                  item={item}
+                  onDelete={() => handleDeleteItem(item.id)}
+                  onArchive={() => handleArchiveItem(item.id)}
+                  onClick={() => setSelectedItem(item)}
+                  layoutMode="grid"
+                />
+              ))}
+            </Masonry>
           )}
         </div>
       </main>
