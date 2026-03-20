@@ -7,7 +7,6 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider } from "@/contexts/DataContext";
-import { VideoPlayerProvider } from "@/contexts/VideoPlayerContext";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
@@ -67,7 +66,6 @@ const App: React.FC = () => {
     <Router>
       <AuthProvider>
         <DataProvider>
-          <VideoPlayerProvider>
           <Routes>
             {/* Public routes */}
             <Route
@@ -118,7 +116,6 @@ const App: React.FC = () => {
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>
-          </VideoPlayerProvider>
         </DataProvider>
       </AuthProvider>
     </Router>

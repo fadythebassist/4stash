@@ -415,30 +415,6 @@
   pointer-events: none;
 }
 
-/* ── Mute/unmute toggle shown on the active (autoplaying) video card ── */
-.video-mute-btn {
-  position: absolute;
-  bottom: var(--spacing-md);
-  right: var(--spacing-md);
-  background: rgba(0, 0, 0, 0.6);
-  border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  font-size: 1.1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  backdrop-filter: blur(4px);
-  transition: background 200ms;
-}
-
-.video-mute-btn:hover {
-  background: rgba(0, 0, 0, 0.8);
-}
-
 /* ── Loading skeleton ── */
 .card-skeleton {
   background: linear-gradient(

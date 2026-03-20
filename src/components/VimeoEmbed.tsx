@@ -48,23 +48,18 @@ function extractVimeoHash(urlStr: string): string | null {
 export interface VimeoEmbedProps {
   url: string;
   autoplay?: boolean;
-  muted?: boolean;
 }
 
-const VimeoEmbed: React.FC<VimeoEmbedProps> = ({ url, autoplay = false, muted }) => {
+const VimeoEmbed: React.FC<VimeoEmbedProps> = ({ url, autoplay = false }) => {
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
   const videoId = useMemo(() => extractVimeoVideoId(url), [url]);
   const videoHash = useMemo(() => extractVimeoHash(url), [url]);
   const [failed, setFailed] = useState(false);
 
-  // Vimeo requires muted=1 for autoplay to work under browser autoplay policies.
-  const isMuted = muted !== undefined ? muted : autoplay;
-
   const embedUrl = useMemo(() => {
     if (!videoId) return null;
     const params = new URLSearchParams({
       autoplay: autoplay ? "1" : "0",
-      muted: isMuted ? "1" : "0",
       byline: "0",
       portrait: "0",
       title: "0",
@@ -72,7 +67,7 @@ const VimeoEmbed: React.FC<VimeoEmbedProps> = ({ url, autoplay = false, muted })
     });
     if (videoHash) params.set("h", videoHash);
     return `https://player.vimeo.com/video/${videoId}?${params.toString()}`;
-  }, [videoId, videoHash, autoplay, isMuted]);
+  }, [videoId, videoHash, autoplay]);
 
   if (!embedUrl || failed) {
     return (
