@@ -73,6 +73,11 @@ function detectContentType(url: string): { type: string; source?: string } {
     return { type: "link", source: "reddit" };
   }
 
+  // Threads
+  if (urlLower.includes("threads.net") || urlLower.includes("threads.com")) {
+    return { type: "text", source: "threads" };
+  }
+
   // Facebook
   if (urlLower.includes("facebook.com") || urlLower.includes("fb.watch")) {
     const isVideo =

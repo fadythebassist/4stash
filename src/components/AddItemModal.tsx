@@ -130,7 +130,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         contentType: "Post",
       };
     }
-    if (lower.includes("threads.net")) {
+    if (lower.includes("threads.net") || lower.includes("threads.com")) {
       return {
         source: "threads",
         icon: "🧵",
