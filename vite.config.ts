@@ -160,6 +160,16 @@ function isGenericRedditTitle(title?: string): boolean {
   return false;
 }
 
+function isGenericThreadsTitle(title?: string): boolean {
+  if (!title) return true;
+  const t = title.trim().toLowerCase();
+  if (t === "threads") return true;
+  if (t.includes("log in") || t.includes("login") || t.includes("sign up")) return true;
+  if (t.includes("403") || t.includes("forbidden") || t.includes("access denied")) return true;
+  if (t.includes("not available") || t.includes("error")) return true;
+  return false;
+}
+
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
@@ -1195,39 +1205,23 @@ function unfurlPlugin(): Plugin {
         if (isGenericRedditTitle(meta.title)) meta.title = undefined;
       }
 
-      // Threads handling: Try direct fetch with mobile user agent
+      // Threads — Meta blocks all server-side scraping; any request redirects to a login wall.
+      // Detect this early and return a clean empty response.
       const isThreads =
         targetUrl.hostname.includes("threads.com") ||
         targetUrl.hostname.includes("threads.net");
-      if (isThreads && (!meta.title || !meta.description || !meta.image)) {
-        attempts.threadsJina = { attempted: true, ok: false };
-        try {
-          // Threads works better with mobile user agent
-          const threadsHeaders = {
-            "user-agent":
-              "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-            accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "accept-language": "en-US,en;q=0.9",
-          };
-
-          const threadsRes = await fetchTextWithTimeout(
-            targetUrl.toString(),
-            threadsHeaders,
-            10000,
-          );
-          attempts.threadsJina.ok = threadsRes.ok;
-
-          if (threadsRes.ok) {
-            const threadsMeta = extractMetadata(threadsRes.text);
-            if (threadsMeta.title && threadsMeta.title !== "403")
-              meta.title = threadsMeta.title;
-            if (threadsMeta.description)
-              meta.description = threadsMeta.description;
-            if (threadsMeta.image) meta.image = threadsMeta.image;
+      if (isThreads) {
+        // Clear any login-wall OG tags that leaked through
+        if (isGenericThreadsTitle(meta.title)) meta.title = undefined;
+        if (meta.description) {
+          const d = meta.description.trim().toLowerCase();
+          if (d.includes("log in") || d.includes("login") || d.includes("join threads")) {
+            meta.description = undefined;
           }
-        } catch {
-          // Direct fetch failed, metadata will be empty
+        }
+        // Discard the generic Threads logo from cdninstagram CDN
+        if (meta.image && meta.image.includes("cdninstagram.com/rsrc.php")) {
+          meta.image = undefined;
         }
       }
 

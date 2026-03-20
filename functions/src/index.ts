@@ -115,6 +115,24 @@ function isGenericRedditTitle(title?: string): boolean {
   return false;
 }
 
+function isGenericThreadsTitle(title?: string): boolean {
+  if (!title) return true;
+  const t = title.trim().toLowerCase();
+  if (t === "threads") return true;
+  if (t.includes("log in") || t.includes("login") || t.includes("sign up")) return true;
+  if (t.includes("403") || t.includes("forbidden") || t.includes("access denied")) return true;
+  if (t.includes("not available") || t.includes("error")) return true;
+  return false;
+}
+
+function isGenericThreadsDescription(desc?: string): boolean {
+  if (!desc) return true;
+  const d = desc.trim().toLowerCase();
+  if (d.includes("log in") || d.includes("login") || d.includes("sign up")) return true;
+  if (d.includes("join threads")) return true;
+  return false;
+}
+
 function isGenericFacebookTitle(title?: string): boolean {
   if (!title) return true;
   const t = title.trim().toLowerCase();
@@ -893,25 +911,24 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
     if (isGenericRedditTitle(meta.title)) meta.title = undefined;
   }
 
-  // Threads
+  // Threads — Meta blocks all server-side scraping; any request redirects to a login wall.
+  // Detect this early and return a clean empty response so the client shows a styled link card.
   const isThreads = targetUrl.hostname.includes("threads.com") || targetUrl.hostname.includes("threads.net");
-  if (isThreads && (!meta.title || !meta.description || !meta.image)) {
-    attempts["threadsJina"] = { attempted: true, ok: false };
-    try {
-      const threadsHeaders: Record<string, string> = {
-        "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.9",
-      };
-      const threadsRes = await fetchTextWithTimeout(targetUrl.toString(), threadsHeaders, 10000);
-      (attempts["threadsJina"] as Record<string, unknown>)["ok"] = threadsRes.ok;
-      if (threadsRes.ok) {
-        const threadsMeta = extractMetadata(threadsRes.text);
-        if (threadsMeta.title && threadsMeta.title !== "403") meta.title = threadsMeta.title;
-        if (threadsMeta.description) meta.description = threadsMeta.description;
-        if (threadsMeta.image) meta.image = threadsMeta.image;
-      }
-    } catch { /* ignore */ }
+  if (isThreads) {
+    // Clear any login-wall OG tags that leaked through
+    if (isGenericThreadsTitle(meta.title)) meta.title = undefined;
+    if (isGenericThreadsDescription(meta.description)) meta.description = undefined;
+    // The login-wall og:image is a generic Threads logo from cdninstagram — discard it
+    if (meta.image && (meta.image.includes("cdninstagram.com/rsrc.php") || meta.image.includes("static.cdninstagram.com"))) {
+      meta.image = undefined;
+    }
+    // Return immediately — no point in further attempts, Jina also hits the login wall
+    res.status(200).setHeader("Cache-Control", "no-store").json({
+      url: targetUrl.toString(), contentType, status: primary.status,
+      title: meta.title, description: meta.description, image: meta.image,
+      ...(debug ? { debug: { isThreads: true, loginWall: true, attempts } } : {}),
+    });
+    return;
   }
 
   const image = meta.image ? new URL(meta.image, finalUrl).toString() : undefined;
