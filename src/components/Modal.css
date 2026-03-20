@@ -454,15 +454,13 @@
 
 .share-preview-fb-thumb {
   width: 100%;
-  max-height: 200px;
-  overflow: hidden;
 }
 
 .share-preview-fb-thumb img {
   width: 100%;
   height: auto;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .share-preview-fb-iframe {
