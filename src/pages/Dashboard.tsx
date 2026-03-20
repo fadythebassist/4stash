@@ -185,7 +185,7 @@ const Dashboard: React.FC = () => {
             </div>
           ) : (
             <Masonry
-              breakpointCols={{ default: 3, 1024: 3, 640: 2, 360: 1 }}
+              breakpointCols={{ default: 4, 1280: 4, 1024: 3, 640: 2, 360: 1 }}
               className={`content-grid masonry-grid ${user?.settings?.viewDensity || 'comfortable'}`}
               columnClassName="masonry-grid-column"
             >
