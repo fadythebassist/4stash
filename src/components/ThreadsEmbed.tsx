@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { threadsAuthService } from "@/services/ThreadsAuthService";
 import "./FacebookEmbed.css"; // Reuse Facebook embed styles
@@ -16,6 +16,31 @@ interface ThreadsOEmbedData {
   thumbnail_url?: string;
 }
 
+const win = window as unknown as {
+  threadsEmbedScriptLoaded?: boolean;
+  ThreadsEmbeds?: { process: () => void };
+};
+
+/** Load embed.js once per page; call process() if already loaded. */
+function loadThreadsEmbedScript(): void {
+  if (win.threadsEmbedScriptLoaded) {
+    win.ThreadsEmbeds?.process();
+    return;
+  }
+  win.threadsEmbedScriptLoaded = true;
+  const script = document.createElement("script");
+  script.src = "https://www.threads.net/embed.js";
+  script.async = true;
+  document.body.appendChild(script);
+}
+
+/** Return the current app theme so we can pass it to the blockquote. */
+function getAppTheme(): "light" | "dark" {
+  return document.documentElement.getAttribute("data-theme") === "dark"
+    ? "dark"
+    : "light";
+}
+
 const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   url,
   title,
@@ -27,8 +52,9 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const [oembedData, setOembedData] = useState<ThreadsOEmbedData | null>(null);
   const [oembedLoading, setOembedLoading] = useState(true);
   const [oembedError, setOembedError] = useState(false);
-  
-  const threadsConnection = getSocialConnection?.('threads');
+  const blockquoteRef = useRef<HTMLDivElement>(null);
+
+  const threadsConnection = getSocialConnection?.("threads");
 
   // Fetch oEmbed data if user is connected to Threads
   useEffect(() => {
@@ -37,6 +63,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       return;
     }
 
+    let cancelled = false;
     const fetchOEmbed = async () => {
       try {
         setOembedLoading(true);
@@ -45,54 +72,54 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           threadsConnection.accessToken,
           600 // max width
         );
+        if (cancelled) return;
         setOembedData(data);
         setOembedError(false);
       } catch (error) {
-        console.error('Failed to fetch Threads oEmbed data:', error);
+        console.error("Failed to fetch Threads oEmbed data:", error);
+        if (cancelled) return;
         setOembedError(true);
         setOembedData(null);
       } finally {
-        setOembedLoading(false);
+        if (!cancelled) setOembedLoading(false);
       }
     };
 
     fetchOEmbed();
+    return () => {
+      cancelled = true;
+    };
   }, [url, threadsConnection]);
 
-  // Process Threads embed script after HTML is inserted
+  // Load embed.js after oEmbed HTML is ready (connected user path)
   useEffect(() => {
     if (oembedData?.html) {
-      // Load Threads embed script if not already loaded
-      if (!(window as any).threadsEmbedProcessed) {
-        const script = document.createElement('script');
-        script.src = 'https://www.threads.net/embed.js';
-        script.async = true;
-        document.body.appendChild(script);
-        (window as any).threadsEmbedProcessed = true;
-      } else {
-        // If script already loaded, process embeds
-        if ((window as any).ThreadsEmbeds) {
-          (window as any).ThreadsEmbeds.process();
-        }
-      }
+      loadThreadsEmbedScript();
     }
   }, [oembedData]);
-  
+
+  // Load embed.js for the native blockquote path (non-connected users)
+  useEffect(() => {
+    if (!threadsConnection && !oembedLoading && url && blockquoteRef.current) {
+      loadThreadsEmbedScript();
+    }
+  }, [threadsConnection, oembedLoading, url]);
+
   const handleClick = () => {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Show rich embed if available and loaded
+  // --- Connected user: rich oEmbed HTML ---
   if (threadsConnection && oembedData?.html && !oembedError) {
     return (
-      <div 
+      <div
         className="threads-embed"
         dangerouslySetInnerHTML={{ __html: oembedData.html }}
       />
     );
   }
 
-  // Show loading state while fetching oEmbed
+  // --- Connected user: loading ---
   if (threadsConnection && oembedLoading) {
     return (
       <div className="fb-card">
@@ -101,7 +128,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           <span>Threads</span>
         </div>
         <div className="fb-card-body">
-          <div className="fb-card-description" style={{ color: 'var(--text-tertiary)' }}>
+          <div className="fb-card-description" style={{ color: "var(--text-tertiary)" }}>
             Loading preview...
           </div>
         </div>
@@ -109,15 +136,35 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     );
   }
 
-  // Fallback to card UI (no connection or oEmbed failed)
-  const isInstagramCDN = thumbnail?.includes('cdninstagram.com');
+  // --- Non-connected user (or oEmbed failed): native blockquote embed ---
+  // embed.js will replace the blockquote with an iframe for public posts.
+  if (url) {
+    const theme = getAppTheme();
+    return (
+      <div className="threads-embed" ref={blockquoteRef}>
+        <blockquote
+          className="text-post-media"
+          data-text-post-permalink={url}
+          data-theme={theme}
+        >
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            View on Threads
+          </a>
+        </blockquote>
+      </div>
+    );
+  }
+
+  // --- Last-resort card fallback (no URL) ---
+  const isInstagramCDN = thumbnail?.includes("cdninstagram.com");
   const shouldShowThumbnail = thumbnail && !isInstagramCDN && !thumbnailError;
 
-  // Filter out generic login/placeholder text
-  const isGenericTitle = title?.includes('Log in') || title?.includes('Threads • Log in');
-  const isGenericDescription = description?.includes('Join Threads to share ideas') || 
-                                  description?.includes('Log in with your Instagram');
-  
+  const isGenericTitle =
+    title?.includes("Log in") || title?.includes("Threads • Log in");
+  const isGenericDescription =
+    description?.includes("Join Threads to share ideas") ||
+    description?.includes("Log in with your Instagram");
+
   const displayTitle = !isGenericTitle ? title : undefined;
   const displayDescription = !isGenericDescription ? description : undefined;
 
@@ -140,8 +187,8 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       </div>
       {shouldShowThumbnail && (
         <div className="fb-card-thumb">
-          <img 
-            src={thumbnail} 
+          <img
+            src={thumbnail}
             alt="Threads preview"
             onError={() => setThumbnailError(true)}
             loading="lazy"
@@ -156,11 +203,6 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         {!displayTitle && !displayDescription && (
           <div className="fb-card-description">
             🧵 View on Threads
-            {!threadsConnection && (
-              <div style={{ fontSize: '0.85em', marginTop: '4px', opacity: 0.7 }}>
-                💡 Connect your Threads account in Settings for rich previews
-              </div>
-            )}
           </div>
         )}
       </div>
