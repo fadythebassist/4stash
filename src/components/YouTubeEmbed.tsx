@@ -47,15 +47,21 @@ function extractYouTubeVideoId(urlStr: string): string | null {
 export interface YouTubeEmbedProps {
   url: string;
   autoplay?: boolean;
+  muted?: boolean;
 }
 
 const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({
   url,
   autoplay = false,
+  muted,
 }) => {
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
   const videoId = useMemo(() => extractYouTubeVideoId(url), [url]);
   const [failed, setFailed] = useState(false);
+
+  // mute=1 is required for autoplay to work under browser autoplay policies.
+  // If caller explicitly passes muted, respect it; otherwise default to muted-when-autoplaying.
+  const isMuted = muted !== undefined ? muted : autoplay;
 
   const embedUrl = useMemo(() => {
     if (!videoId) return null;
@@ -63,12 +69,10 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({
       rel: "0",
       modestbranding: "1",
       autoplay: autoplay ? "1" : "0",
-      // mute=1 is required for autoplay to work under browser autoplay policies.
-      // When not autoplaying, leave unmuted so user gets full sound on manual play.
-      mute: autoplay ? "1" : "0",
+      mute: isMuted ? "1" : "0",
     });
     return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-  }, [videoId, autoplay]);
+  }, [videoId, autoplay, isMuted]);
 
   if (!embedUrl || failed) {
     return (

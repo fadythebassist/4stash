@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Item } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
+import { useVideoPlayer } from "@/contexts/VideoPlayerContext";
 import FacebookEmbed from "./FacebookEmbed";
 import InstagramEmbed from "./InstagramEmbed";
 import RedditEmbed from "./RedditEmbed";
@@ -38,11 +39,15 @@ const ContentCard: React.FC<ContentCardProps> = ({
 }) => {
   const { user } = useAuth();
   const { updateItem } = useData();
+  const { activeVideoId, globalMuted, setActiveVideo, setGlobalMuted } = useVideoPlayer();
   // Keep updateItem in a ref so the unfurl effect never needs it as a dependency.
   // This prevents the effect from re-running every time the context re-renders.
   const updateItemRef = useRef(updateItem);
   useEffect(() => { updateItemRef.current = updateItem; }, [updateItem]);
   const autoplayVideos = user?.settings?.autoplayVideos !== false;
+
+  // Ref on the card root element — used by IntersectionObserver to detect viewport entry
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -141,6 +146,34 @@ const ContentCard: React.FC<ContentCardProps> = ({
     // Fall back to stored source if URL detection failed
     return item.source;
   }, [item.source, item.url]);
+
+  // Platforms that support scroll-triggered autoplay (controllable via remount)
+  const isVideoCard = ["youtube", "vimeo", "facebook", "tiktok"].includes(derivedSource ?? "");
+
+  // Whether this card is the currently active (autoplaying) video
+  const isActiveVideo = autoplayVideos && activeVideoId === item.id;
+
+  // IntersectionObserver: claim/release the active video slot as this card scrolls in/out
+  useEffect(() => {
+    if (!isVideoCard || !autoplayVideos) return;
+    const el = cardRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setActiveVideo(item.id);
+        } else {
+          // Only clear if this card was the active one — avoids racing with another card
+          setActiveVideo(null);
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isVideoCard, autoplayVideos, item.id, setActiveVideo]);
 
   const sourceBadges: Record<string, { emoji: string; color: string; name: string }> = {
     youtube: { emoji: "▶️", color: "#ff0000", name: "YouTube" },
@@ -345,6 +378,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
   return (
     <div
+      ref={cardRef}
       className={`content-card ${item.type} ${layoutMode === 'list' ? 'list-view' : ''}`}
       style={{ transform: `translateX(-${swipeOffset}px)` }}
       onTouchStart={onTouchStart}
@@ -475,9 +509,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
         {shouldShowTikTokEmbed && item.url && (
           <TikTokEmbed
-            key={`tt-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
+            key={`tt-${item.id}-${isActiveVideo ? 'play' : 'stop'}`}
             url={item.url}
-            autoplay={autoplayVideos}
+            autoplay={isActiveVideo}
           />
         )}
 
@@ -485,12 +519,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
         {shouldShowFacebookPreview && item.url && (
           <FacebookEmbed
-            key={`fb-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
+            key={`fb-${item.id}-${isActiveVideo ? 'play' : 'stop'}`}
             url={displayUrl || item.url}
             title={item.title}
             description={displayContent}
             thumbnail={displayThumbnail}
-            autoplay={autoplayVideos}
+            autoplay={isActiveVideo}
           />
         )}
 
@@ -509,17 +543,19 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
         {shouldShowYouTubeEmbed && item.url && (
           <YouTubeEmbed
-            key={`yt-${item.id}-${autoplayVideos ? "on" : "off"}`}
+            key={`yt-${item.id}-${isActiveVideo ? 'play' : 'stop'}-${globalMuted ? 'muted' : 'unmuted'}`}
             url={item.url}
-            autoplay={autoplayVideos}
+            autoplay={isActiveVideo}
+            muted={globalMuted}
           />
         )}
 
         {shouldShowVimeoEmbed && item.url && (
           <VimeoEmbed
-            key={`vm-${item.id}-${autoplayVideos ? "on" : "off"}`}
+            key={`vm-${item.id}-${isActiveVideo ? 'play' : 'stop'}-${globalMuted ? 'muted' : 'unmuted'}`}
             url={item.url}
-            autoplay={autoplayVideos}
+            autoplay={isActiveVideo}
+            muted={globalMuted}
           />
         )}
 
@@ -577,6 +613,19 @@ const ContentCard: React.FC<ContentCardProps> = ({
         >
           Archive
         </div>
+      )}
+
+      {isActiveVideo && (
+        <button
+          className="video-mute-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setGlobalMuted(!globalMuted);
+          }}
+          aria-label={globalMuted ? "Unmute" : "Mute"}
+        >
+          {globalMuted ? "🔇" : "🔊"}
+        </button>
       )}
     </div>
   );
