@@ -209,7 +209,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       ((source.source === "facebook" && isGenericFacebookTitle(initialTitle)) ||
         (source.source === "instagram" &&
           isGenericInstagramTitle(initialTitle)) ||
-        (source.source === "threads" && isGenericThreadsTitle(initialTitle)) ||
         (source.source === "reddit" && isGenericRedditTitle(initialTitle)));
 
     const shouldFetchInitialMetadata = !initialTitle || hasGenericInitialTitle;
@@ -309,16 +308,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       console.error("[AddItemModal] Failed to fetch metadata:", error);
       return null;
     }
-  };
-
-  const isGenericThreadsTitle = (value?: string) => {
-    if (!value) return true;
-    const t = value.trim().toLowerCase();
-    if (t === "threads") return true;
-    if (t.includes("log in") || t.includes("login") || t.includes("sign up")) return true;
-    if (t.includes("403") || t.includes("forbidden") || t.includes("access denied")) return true;
-    if (t.includes("not available") || t.includes("error")) return true;
-    return false;
   };
 
   const isGenericRedditTitle = (value?: string) => {
@@ -608,8 +597,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return !existingTitle || isGenericFacebookTitle(existingTitle);
       if (src === "instagram")
         return !existingTitle || isGenericInstagramTitle(existingTitle);
-      if (src === "threads")
-        return !existingTitle || isGenericThreadsTitle(existingTitle);
       if (src === "reddit")
         return !existingTitle || isGenericRedditTitle(existingTitle);
       return !existingTitle;
@@ -635,8 +622,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           isGenericFacebookTitle(existingTitle)) ||
         (source?.source === "instagram" &&
           isGenericInstagramTitle(existingTitle)) ||
-        (source?.source === "threads" &&
-          isGenericThreadsTitle(existingTitle)) ||
         (source?.source === "reddit" &&
           isGenericRedditTitle(existingTitle)));
 
@@ -662,8 +647,6 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             isGenericFacebookTitle(existingTitle)) ||
           (source?.source === "instagram" &&
             isGenericInstagramTitle(existingTitle)) ||
-          (source?.source === "threads" &&
-            isGenericThreadsTitle(existingTitle)) ||
           (source?.source === "reddit" &&
             isGenericRedditTitle(existingTitle));
 
