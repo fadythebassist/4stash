@@ -739,11 +739,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           meta?.image && !meta.image.includes("cdninstagram.com")
             ? meta.image
             : undefined;
+        // Do NOT use meta.url — the unfurl follows threads.net → threads.com
+        // redirects and would overwrite the user's URL. Keep fullUrl as-is.
         return {
           title: safeTitle,
           description: safeDescription,
           thumbnail: safeThumbnail,
-          url: meta?.url ?? fullUrl,
+          url: fullUrl,
         };
       }
 
