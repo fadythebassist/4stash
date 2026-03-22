@@ -221,7 +221,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     // Always resolve short/opaque URLs even when a title was provided by the share intent,
     // because without resolution the embed cannot render (no video ID / no real post URL).
     const isShortUrlThatNeedsResolution =
-      initialUrl.includes("vt.tiktok.com") ||
+      isTikTokShortUrl(initialUrl) ||
       initialUrl.includes("facebook.com/share/") ||
       initialUrl.includes("fb.watch");
 
@@ -274,6 +274,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       return `https://${trimmed}`;
     } catch {
       return null;
+    }
+  };
+
+  const isTikTokShortUrl = (urlStr: string): boolean => {
+    try {
+      const fullUrl = normalizeUrl(urlStr);
+      if (!fullUrl) return false;
+      const parsed = new URL(fullUrl);
+      const host = parsed.hostname.toLowerCase();
+      const path = parsed.pathname.toLowerCase();
+
+      if (host.includes("vt.tiktok.com") || host.includes("vm.tiktok.com")) {
+        return true;
+      }
+
+      if (host.includes("tiktok.com") && path.startsWith("/t/")) {
+        return true;
+      }
+
+      return false;
+    } catch {
+      return false;
     }
   };
 
@@ -453,9 +475,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
       // For TikTok, resolve short URLs (vt.tiktok.com) first, then use oEmbed
       if (url.hostname.includes("tiktok.com")) {
-        // Short share URLs (vt.tiktok.com) don't have a video ID — resolve via unfurl
+        // Short share URLs (vt/vm/t path) don't have a video ID — resolve via unfurl
         let resolvedTikTokUrl = fullUrl;
-        if (url.hostname.includes("vt.tiktok.com")) {
+        if (isTikTokShortUrl(fullUrl)) {
           try {
             const meta = await fetchUnfurl(fullUrl);
             if (meta?.url && meta.url !== fullUrl) {
@@ -674,7 +696,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         // This is critical for short/opaque URLs (vt.tiktok.com, fb.watch, facebook.com/share/)
         // where the embed cannot work without the canonical URL.
         const isShortOrShareUrl =
-          (source?.source === "tiktok" && trimmedUrl.includes("vt.tiktok.com")) ||
+          (source?.source === "tiktok" && isTikTokShortUrl(trimmedUrl)) ||
           trimmedUrl.includes("fb.watch") ||
           trimmedUrl.includes("facebook.com/share/");
         if (fetched?.url && fetched.url !== trimmedUrl && isShortOrShareUrl) {
@@ -723,6 +745,20 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     let finalContent = content.trim() || undefined;
 
     const hasUrl = !!currentUrl.trim();
+
+    // Final guard: if we're still holding a TikTok short URL at submit time,
+    // resolve it once more right before save.
+    if (finalUrl && isTikTokShortUrl(finalUrl)) {
+      try {
+        const resolved = await fetchUnfurl(finalUrl);
+        if (resolved?.url && resolved.url !== finalUrl) {
+          finalUrl = resolved.url;
+          updateUrl(resolved.url);
+        }
+      } catch {
+        // keep original
+      }
+    }
 
     if (!finalTitle && hasUrl) {
       const meta = await fetchUrlMetadata(currentUrl.trim());
