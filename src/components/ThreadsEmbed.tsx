@@ -31,6 +31,9 @@ function loadThreadsEmbedScript(): void {
   const script = document.createElement("script");
   script.src = "https://www.threads.net/embed.js";
   script.async = true;
+  script.onload = () => {
+    win.ThreadsEmbeds?.process();
+  };
   document.body.appendChild(script);
 }
 
@@ -98,12 +101,20 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     }
   }, [oembedData]);
 
-  // Load embed.js for the native blockquote path (non-connected users)
+  // Load embed.js for the native blockquote path (non-connected users).
+  // Run as soon as the component mounts with a URL — do not wait for oembedLoading
+  // to settle, as that delay was causing the script to be injected after the
+  // blockquote was already in the DOM but never processed.
   useEffect(() => {
-    if (!threadsConnection && !oembedLoading && url && blockquoteRef.current) {
-      loadThreadsEmbedScript();
-    }
-  }, [threadsConnection, oembedLoading, url]);
+    if (threadsConnection || !url) return;
+    const node = blockquoteRef.current;
+    if (!node) return;
+    loadThreadsEmbedScript();
+    return () => {
+      // node captured above; nothing to clean up but satisfies the lint rule.
+      void node;
+    };
+  }, [threadsConnection, url]);
 
   const handleClick = () => {
     window.open(url, "_blank", "noopener,noreferrer");

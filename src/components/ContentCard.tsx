@@ -311,7 +311,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
       const needsUnfurl =
         (derivedSource === "facebook" && ((!resolvedThumbnailRef.current && !item.thumbnail) || !item.content || !resolvedFacebookUrlRef.current)) ||
-        derivedSource === "threads" ||
+        (derivedSource === "threads" && (!item.thumbnail || !item.content)) ||
         derivedSource === "reddit" ||
         !item.thumbnail ||
         thumbnailError ||

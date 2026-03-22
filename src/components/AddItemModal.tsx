@@ -216,7 +216,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       ((source.source === "facebook" && isGenericFacebookTitle(initialTitle)) ||
         (source.source === "instagram" &&
           isGenericInstagramTitle(initialTitle)) ||
-        (source.source === "reddit" && isGenericRedditTitle(initialTitle)));
+        (source.source === "reddit" && isGenericRedditTitle(initialTitle)) ||
+        (source.source === "threads" && isGenericThreadsTitle(initialTitle)));
 
     // Always resolve short/opaque URLs even when a title was provided by the share intent,
     // because without resolution the embed cannot render (no video ID / no real post URL).
@@ -490,6 +491,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     return false;
   };
 
+  const isGenericThreadsTitle = (value?: string) => {
+    if (!value) return true;
+    const t = value.trim().toLowerCase();
+    if (t === "threads") return true;
+    if (t === "403" || t.includes("forbidden") || t.includes("access denied"))
+      return true;
+    if (t.includes("log in") || t.includes("login") || t.includes("sign up"))
+      return true;
+    if (t.includes("not found") || t.includes("unavailable")) return true;
+    return false;
+  };
+
+  const isGenericThreadsDescription = (value?: string) => {
+    if (!value) return true;
+    const t = value.trim().toLowerCase();
+    if (!t) return true;
+    if (t.includes("join threads to share ideas")) return true;
+    if (t.includes("log in with your instagram")) return true;
+    if (t.includes("say more with threads")) return true;
+    return false;
+  };
+
   // Fetch metadata from URL (title/description/thumbnail)
   const fetchUrlMetadata = async (
     urlStr: string,
@@ -699,6 +722,31 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
       }
 
+      // For Threads URLs, strip login-wall metadata before saving
+      if (
+        url.hostname.includes("threads.net") ||
+        url.hostname.includes("threads.com")
+      ) {
+        const meta = await fetchUnfurl(fullUrl);
+        const safeTitle = !isGenericThreadsTitle(meta?.title)
+          ? meta?.title
+          : undefined;
+        const safeDescription = !isGenericThreadsDescription(meta?.description)
+          ? meta?.description
+          : undefined;
+        // cdninstagram.com thumbnails are CORS-blocked; skip them
+        const safeThumbnail =
+          meta?.image && !meta.image.includes("cdninstagram.com")
+            ? meta.image
+            : undefined;
+        return {
+          title: safeTitle,
+          description: safeDescription,
+          thumbnail: safeThumbnail,
+          url: meta?.url ?? fullUrl,
+        };
+      }
+
       // For other URLs, try unfurl then fall back to domain
       const meta = await fetchUnfurl(fullUrl);
       if (meta?.title || meta?.description || meta?.image) {
@@ -733,6 +781,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return !existingTitle || isGenericInstagramTitle(existingTitle);
       if (src === "reddit")
         return !existingTitle || isGenericRedditTitle(existingTitle);
+      if (src === "threads")
+        return !existingTitle || isGenericThreadsTitle(existingTitle);
       return !existingTitle;
     };
 
@@ -757,7 +807,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         (source?.source === "instagram" &&
           isGenericInstagramTitle(existingTitle)) ||
         (source?.source === "reddit" &&
-          isGenericRedditTitle(existingTitle)));
+          isGenericRedditTitle(existingTitle)) ||
+        (source?.source === "threads" &&
+          isGenericThreadsTitle(existingTitle)));
 
     // Auto-fetch metadata if URL is provided and title is missing or generic
     if (shouldFetchMetadata) {
@@ -790,7 +842,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           (source?.source === "instagram" &&
             isGenericInstagramTitle(existingTitle)) ||
           (source?.source === "reddit" &&
-            isGenericRedditTitle(existingTitle));
+            isGenericRedditTitle(existingTitle)) ||
+          (source?.source === "threads" &&
+            isGenericThreadsTitle(existingTitle));
 
         if (shouldUpdateTitle && fetched?.title) {
           setTitle(decodeHtmlEntities(fetched.title));
