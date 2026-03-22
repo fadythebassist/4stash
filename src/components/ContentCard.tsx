@@ -289,15 +289,23 @@ const ContentCard: React.FC<ContentCardProps> = ({
         if (cancelled) return;
 
         // For Facebook: update resolved URL if available and it's not a login redirect
-        if (
-          derivedSource === "facebook" &&
-          typeof data.url === "string" &&
-          data.url &&
-          data.url !== fullUrl &&
-          !data.url.includes("/login") &&
-          !data.url.includes("/checkpoint")
-        ) {
-          setResolvedFacebookUrl(data.url);
+        if (derivedSource === "facebook" && typeof data.url === "string" && data.url) {
+          let resolvedUrl = data.url;
+
+          // If the unfurl landed on a login wall, extract the real destination from ?next=
+          if (resolvedUrl.includes("/login") || resolvedUrl.includes("/checkpoint")) {
+            try {
+              const loginUrl = new URL(resolvedUrl);
+              const next = loginUrl.searchParams.get("next");
+              if (next) resolvedUrl = decodeURIComponent(next);
+            } catch {
+              resolvedUrl = "";
+            }
+          }
+
+          if (resolvedUrl && resolvedUrl !== fullUrl && !resolvedUrl.includes("/login")) {
+            setResolvedFacebookUrl(resolvedUrl);
+          }
         }
 
         // Update thumbnail if missing or failed

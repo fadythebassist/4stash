@@ -432,15 +432,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         };
       }
 
-      // For TikTok, use oEmbed API
+      // For TikTok, resolve short URLs (vt.tiktok.com) first, then use oEmbed
       if (url.hostname.includes("tiktok.com")) {
+        // Short share URLs (vt.tiktok.com) don't have a video ID — resolve via unfurl
+        let resolvedTikTokUrl = fullUrl;
+        if (url.hostname.includes("vt.tiktok.com")) {
+          try {
+            const meta = await fetchUnfurl(fullUrl);
+            if (meta?.url && meta.url !== fullUrl) {
+              resolvedTikTokUrl = meta.url;
+            }
+          } catch {
+            // keep original, oEmbed will likely fail but we tried
+          }
+        }
         try {
-          const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(fullUrl)}`;
+          const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(resolvedTikTokUrl)}`;
           const response = await fetch(oembedUrl);
           if (response.ok) {
             const data = await response.json();
             if (data.title) {
               return {
+                url: resolvedTikTokUrl,
                 title:
                   data.title.length > 80
                     ? data.title.substring(0, 77) + "..."
@@ -450,6 +463,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             }
             if (data.author_name) {
               return {
+                url: resolvedTikTokUrl,
                 title: `TikTok by @${data.author_name}`,
                 thumbnail: data.thumbnail_url || undefined,
               };
@@ -458,7 +472,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         } catch (err) {
           console.error("Failed to fetch TikTok title:", err);
         }
-        return { title: "TikTok Video" };
+        return { url: resolvedTikTokUrl, title: "TikTok Video" };
       }
 
       // For Twitter/X — try unfurl first for real metadata, fall back to username
@@ -640,6 +654,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         // Note: for Facebook share/short links the server may resolve to a canonical URL.
         // We intentionally do NOT overwrite the URL field — the user typed the share link
         // and that is what should be saved. We only use the resolved metadata (title/thumbnail).
+        // For TikTok short links (vt.tiktok.com), we DO update the URL so the embed works.
+        if (
+          fetched?.url &&
+          fetched.url !== trimmedUrl &&
+          source?.source === "tiktok" &&
+          trimmedUrl.includes("vt.tiktok.com")
+        ) {
+          setUrl(fetched.url);
+        }
 
         const shouldUpdateTitle =
           !existingTitle ||
