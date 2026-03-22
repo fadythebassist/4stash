@@ -211,12 +211,21 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           isGenericInstagramTitle(initialTitle)) ||
         (source.source === "reddit" && isGenericRedditTitle(initialTitle)));
 
-    const shouldFetchInitialMetadata = !initialTitle || hasGenericInitialTitle;
+    // Always resolve short/opaque URLs even when a title was provided by the share intent,
+    // because without resolution the embed cannot render (no video ID / no real post URL).
+    const isShortUrlThatNeedsResolution =
+      initialUrl.includes("vt.tiktok.com") ||
+      initialUrl.includes("facebook.com/share/") ||
+      initialUrl.includes("fb.watch");
+
+    const shouldFetchInitialMetadata =
+      !initialTitle || hasGenericInitialTitle || isShortUrlThatNeedsResolution;
     if (!shouldFetchInitialMetadata) {
       return;
     }
 
-    if (source) {
+    // Only set a generic placeholder title if no real title was provided
+    if (source && !initialTitle) {
       setTitle(`${source.label} ${source.contentType}`);
     }
 
@@ -224,7 +233,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       setFetchingTitle(true);
       try {
         const meta = await fetchUrlMetadata(initialUrl);
-        if (meta?.title) {
+        // Only overwrite title if we don't already have a real one from the share intent
+        if (meta?.title && !initialTitle) {
           setTitle(decodeHtmlEntities(meta.title));
         }
         if (meta?.thumbnail) {
@@ -233,6 +243,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         if (meta?.description && !content) {
           setContent(decodeHtmlEntities(meta.description));
         }
+        // Always update the URL if it resolved to something different
+        // (critical for vt.tiktok.com and facebook.com/share/ URLs)
         if (meta?.url && meta.url !== initialUrl) {
           setUrl(meta.url);
         }
@@ -651,16 +663,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
         const fetched = await Promise.race([metaPromise, timeoutPromise]);
 
-        // Note: for Facebook share/short links the server may resolve to a canonical URL.
-        // We intentionally do NOT overwrite the URL field — the user typed the share link
-        // and that is what should be saved. We only use the resolved metadata (title/thumbnail).
-        // For TikTok short links (vt.tiktok.com), we DO update the URL so the embed works.
-        if (
-          fetched?.url &&
-          fetched.url !== trimmedUrl &&
-          source?.source === "tiktok" &&
-          trimmedUrl.includes("vt.tiktok.com")
-        ) {
+        // Update the URL if it resolved to something more specific.
+        // This is critical for short/opaque URLs (vt.tiktok.com, fb.watch, facebook.com/share/)
+        // where the embed cannot work without the canonical URL.
+        const isShortOrShareUrl =
+          (source?.source === "tiktok" && trimmedUrl.includes("vt.tiktok.com")) ||
+          trimmedUrl.includes("fb.watch") ||
+          trimmedUrl.includes("facebook.com/share/");
+        if (fetched?.url && fetched.url !== trimmedUrl && isShortOrShareUrl) {
           setUrl(fetched.url);
         }
 
@@ -706,34 +716,22 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
     if (!finalTitle && hasUrl) {
       const meta = await fetchUrlMetadata(url.trim());
-      // For Facebook share/short links, don't overwrite with the resolved canonical URL.
-      const isFacebookShareUrl =
-        url.trim().includes("facebook.com/share/") ||
-        url.trim().includes("fb.watch");
-      const resolvedUrl = isFacebookShareUrl
-        ? url.trim()
-        : (meta?.url || url.trim());
+      const resolvedUrl = meta?.url || url.trim();
       finalUrl = resolvedUrl;
       finalTitle = meta?.title || "Untitled";
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
-      if (!isFacebookShareUrl) setUrl(resolvedUrl);
+      setUrl(resolvedUrl);
     } else if (hasUrl && (!finalThumbnail || !finalContent)) {
       // Title might already be a fallback (e.g. "Instagram Photo"), but we still want thumbnail/snippet.
       const meta = await fetchUrlMetadata(url.trim());
-      // For Facebook share/short links, don't overwrite with the resolved canonical URL.
-      const isFacebookShareUrl =
-        url.trim().includes("facebook.com/share/") ||
-        url.trim().includes("fb.watch");
-      const resolvedUrl = isFacebookShareUrl
-        ? url.trim()
-        : (meta?.url || url.trim());
+      const resolvedUrl = meta?.url || url.trim();
       finalUrl = resolvedUrl;
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
-      if (!isFacebookShareUrl) setUrl(resolvedUrl);
+      setUrl(resolvedUrl);
     } else if (!finalTitle && !hasUrl) {
       alert("Please enter a title or URL");
       return;
