@@ -359,27 +359,47 @@ async function resolveRedditShortUrl(targetUrl: URL, headers: Record<string, str
   const isShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
   if (!isShort) return null;
 
-  const tryManual = async (method: "HEAD" | "GET"): Promise<string | null> => {
-    try {
-      const res = await nodeFetch(targetUrl.toString(), {
-        method,
-        headers,
-        timeoutMs,
-        redirect: "manual",
-      });
-      const location = res.headers.get("location");
-      if (!location) return null;
-      return new URL(location, targetUrl.toString()).toString();
-    } catch {
-      return null;
+  const headerVariants: Record<string, string>[] = [
+    headers,
+    {
+      "user-agent": "curl/8.0.1",
+      accept: "*/*",
+    },
+    {},
+  ];
+
+  for (const h of headerVariants) {
+    for (const method of ["HEAD", "GET"] as const) {
+      try {
+        const res = await nodeFetch(targetUrl.toString(), {
+          method,
+          headers: h,
+          timeoutMs,
+          redirect: "manual",
+        });
+        const location = res.headers.get("location");
+        if (location) {
+          return new URL(location, targetUrl.toString()).toString();
+        }
+      } catch {
+        // try next variant
+      }
     }
-  };
 
-  const fromHead = await tryManual("HEAD");
-  if (fromHead) return fromHead;
-
-  const fromGet = await tryManual("GET");
-  if (fromGet) return fromGet;
+    try {
+      const followed = await nodeFetch(targetUrl.toString(), {
+        method: "GET",
+        headers: h,
+        timeoutMs,
+        redirect: "follow",
+      });
+      if (followed.finalUrl && followed.finalUrl !== targetUrl.toString()) {
+        return followed.finalUrl;
+      }
+    } catch {
+      // try next variant
+    }
+  }
 
   return null;
 }
@@ -692,6 +712,7 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   let finalUrl = primary.finalUrl;
   const contentType = primary.contentType;
   const meta = extractMetadata(primary.text);
+  let redditShortUnresolved = false;
 
   const attempts: Record<string, unknown> = {
     primary: { ok: primary.ok, status: primary.status, contentType },
@@ -838,6 +859,7 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   // Reddit
   const isReddit = targetUrl.hostname.includes("reddit.com") || targetUrl.hostname.includes("redd.it");
   if (isReddit) {
+    const originalRedditShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
     // Resolve Reddit /s/CODE mobile share URLs before trying .json.
     const redditResolved = await resolveRedditShortUrl(targetUrl, headers, 8000);
     if (redditResolved) {
@@ -848,6 +870,9 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
       } catch {
         // keep original targetUrl
       }
+    }
+    if (originalRedditShort && !targetUrl.pathname.includes("/comments/")) {
+      redditShortUnresolved = true;
     }
 
     attempts["redditJson"] = { attempted: true, ok: false };
@@ -967,6 +992,7 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   res.status(200).setHeader("Cache-Control", "no-store").json({
     url: finalUrl, contentType, status: primary.status,
     title: meta.title, description: meta.description, image: proxiedImage,
+    redditShortUnresolved,
     ...(debug ? { debug: { isInstagram, attempts, extracted: { hasTitle: !!meta.title, hasDescription: !!meta.description, hasImage: !!meta.image } } } : {}),
   });
 }

@@ -426,29 +426,47 @@ async function resolveRedditShortUrl(targetUrl, headers, timeoutMs) {
     const isShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
     if (!isShort)
         return null;
-    const tryManual = async (method) => {
+    const headerVariants = [
+        headers,
+        {
+            "user-agent": "curl/8.0.1",
+            accept: "*/*",
+        },
+        {},
+    ];
+    for (const h of headerVariants) {
+        for (const method of ["HEAD", "GET"]) {
+            try {
+                const res = await nodeFetch(targetUrl.toString(), {
+                    method,
+                    headers: h,
+                    timeoutMs,
+                    redirect: "manual",
+                });
+                const location = res.headers.get("location");
+                if (location) {
+                    return new url_1.URL(location, targetUrl.toString()).toString();
+                }
+            }
+            catch (_a) {
+                // try next variant
+            }
+        }
         try {
-            const res = await nodeFetch(targetUrl.toString(), {
-                method,
-                headers,
+            const followed = await nodeFetch(targetUrl.toString(), {
+                method: "GET",
+                headers: h,
                 timeoutMs,
-                redirect: "manual",
+                redirect: "follow",
             });
-            const location = res.headers.get("location");
-            if (!location)
-                return null;
-            return new url_1.URL(location, targetUrl.toString()).toString();
+            if (followed.finalUrl && followed.finalUrl !== targetUrl.toString()) {
+                return followed.finalUrl;
+            }
         }
-        catch (_a) {
-            return null;
+        catch (_b) {
+            // try next variant
         }
-    };
-    const fromHead = await tryManual("HEAD");
-    if (fromHead)
-        return fromHead;
-    const fromGet = await tryManual("GET");
-    if (fromGet)
-        return fromGet;
+    }
     return null;
 }
 function tryParseJson(text) {
@@ -793,6 +811,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     let finalUrl = primary.finalUrl;
     const contentType = primary.contentType;
     const meta = extractMetadata(primary.text);
+    let redditShortUnresolved = false;
     const attempts = {
         primary: { ok: primary.ok, status: primary.status, contentType },
         shareResolve: { attempted: isFacebookShare, url: shareResolvedUrl },
@@ -949,6 +968,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     // Reddit
     const isReddit = targetUrl.hostname.includes("reddit.com") || targetUrl.hostname.includes("redd.it");
     if (isReddit) {
+        const originalRedditShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
         // Resolve Reddit /s/CODE mobile share URLs before trying .json.
         const redditResolved = await resolveRedditShortUrl(targetUrl, headers, 8000);
         if (redditResolved) {
@@ -960,6 +980,9 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
             catch (_m) {
                 // keep original targetUrl
             }
+        }
+        if (originalRedditShort && !targetUrl.pathname.includes("/comments/")) {
+            redditShortUnresolved = true;
         }
         attempts["redditJson"] = { attempted: true, ok: false };
         try {
@@ -1084,7 +1107,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
             return image;
         }
     })();
-    res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: finalUrl, contentType, status: primary.status, title: meta.title, description: meta.description, image: proxiedImage }, (debug ? { debug: { isInstagram, attempts, extracted: { hasTitle: !!meta.title, hasDescription: !!meta.description, hasImage: !!meta.image } } } : {})));
+    res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: finalUrl, contentType, status: primary.status, title: meta.title, description: meta.description, image: proxiedImage, redditShortUnresolved }, (debug ? { debug: { isInstagram, attempts, extracted: { hasTitle: !!meta.title, hasDescription: !!meta.description, hasImage: !!meta.image } } } : {})));
 }
 // ---------------------------------------------------------------------------
 // Exported Cloud Function

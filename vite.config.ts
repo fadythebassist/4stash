@@ -292,38 +292,50 @@ async function resolveRedditShortUrl(
   const isShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
   if (!isShort) return null;
 
-  const tryManual = async (method: "HEAD" | "GET"): Promise<string | null> => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      const res = await fetch(targetUrl.toString(), {
-        method,
-        redirect: "manual",
-        headers,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      const location = res.headers.get("location");
-      if (!location) return null;
-      return new URL(location, targetUrl.toString()).toString();
-    } catch {
-      return null;
-    }
-  };
-
-  const fromHead = await tryManual("HEAD");
-  if (fromHead) return fromHead;
-
-  const fromGet = await tryManual("GET");
-  if (fromGet) return fromGet;
-
-  const followed = await followRedirectsWithHeadThenGet(
-    targetUrl.toString(),
+  const headerVariants: Record<string, string>[] = [
     headers,
-    timeoutMs,
-    3,
-  );
-  return followed !== targetUrl.toString() ? followed : null;
+    {
+      "user-agent": "curl/8.0.1",
+      accept: "*/*",
+    },
+    {},
+  ];
+
+  for (const h of headerVariants) {
+    for (const method of ["HEAD", "GET"] as const) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const res = await fetch(targetUrl.toString(), {
+          method,
+          redirect: "manual",
+          headers: h,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const location = res.headers.get("location");
+        if (location) {
+          return new URL(location, targetUrl.toString()).toString();
+        }
+      } catch {
+        // try next variant
+      }
+    }
+
+    try {
+      const followed = await followRedirectsWithHeadThenGet(
+        targetUrl.toString(),
+        h,
+        timeoutMs,
+        3,
+      );
+      if (followed !== targetUrl.toString()) return followed;
+    } catch {
+      // try next variant
+    }
+  }
+
+  return null;
 }
 
 function tryParseJson(text: string): any | null {
@@ -845,6 +857,7 @@ function unfurlPlugin(): Plugin {
       let finalUrl = primary.finalUrl;
       const contentType = primary.contentType;
       const meta = extractMetadata(primary.text);
+      let redditShortUnresolved = false;
 
       const attempts: Record<string, any> = {
         primary: { ok: primary.ok, status: primary.status, contentType },
@@ -1108,6 +1121,7 @@ function unfurlPlugin(): Plugin {
         targetUrl.hostname.includes("reddit.com") ||
         targetUrl.hostname.includes("redd.it");
       if (isReddit) {
+        const originalRedditShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
         // Resolve Reddit /s/CODE mobile share URLs before trying .json.
         // These links are a redirect hop and must become /comments/... first.
         const redditResolved = await resolveRedditShortUrl(targetUrl, headers, 8000);
@@ -1119,6 +1133,9 @@ function unfurlPlugin(): Plugin {
           } catch {
             // keep original targetUrl
           }
+        }
+        if (originalRedditShort && !targetUrl.pathname.includes("/comments/")) {
+          redditShortUnresolved = true;
         }
 
         attempts.redditJson = { attempted: true, ok: false };
@@ -1312,6 +1329,7 @@ function unfurlPlugin(): Plugin {
           title: meta.title,
           description: meta.description,
           image: proxiedImage,
+          redditShortUnresolved,
           ...(debug
             ? {
                 debug: {

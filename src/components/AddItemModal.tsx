@@ -343,6 +343,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     description?: string;
     image?: string;
     nsfw?: boolean;
+    redditShortUnresolved?: boolean;
   } | null> => {
     try {
       // Try the API endpoint first
@@ -366,6 +367,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             typeof data.description === "string" ? data.description : undefined,
           image: typeof data.image === "string" ? data.image : undefined,
           nsfw: data.nsfw === true,
+          redditShortUnresolved: data.redditShortUnresolved === true,
         };
       }
     } catch {
@@ -799,14 +801,33 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
     // Final guard: resolve Reddit short share links and strip tracking params before save.
     if (finalUrl && isRedditShortOrDirtyUrl(finalUrl)) {
+      const startedAsRedditShort = /\/s\/[a-zA-Z0-9]+/.test(finalUrl);
       try {
         const resolved = await fetchUnfurl(finalUrl);
         const cleanUrl = resolved?.url || cleanRedditUrl(finalUrl);
+        const resolvedHasCanonicalComments = /\/comments\//.test(cleanUrl);
+
+        if (
+          startedAsRedditShort &&
+          (resolved?.redditShortUnresolved === true || !resolvedHasCanonicalComments)
+        ) {
+          alert(
+            "Could not resolve this Reddit short link. Open the post in Reddit/browser, copy the full URL containing /comments/, then save again.",
+          );
+          return;
+        }
+
         if (cleanUrl !== finalUrl) {
           finalUrl = cleanUrl;
           updateUrl(cleanUrl);
         }
       } catch {
+        if (startedAsRedditShort) {
+          alert(
+            "Could not resolve this Reddit short link. Open the post in Reddit/browser, copy the full URL containing /comments/, then save again.",
+          );
+          return;
+        }
         finalUrl = cleanRedditUrl(finalUrl);
         updateUrl(finalUrl);
       }
