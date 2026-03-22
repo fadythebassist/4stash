@@ -24,6 +24,8 @@ const win = window as unknown as {
 /** Load embed.js once per page; call process() if already loaded. */
 function loadThreadsEmbedScript(): void {
   if (win.threadsEmbedScriptLoaded) {
+    // Script already injected — call process() if the API is ready,
+    // otherwise it will be called from the onload callback below.
     win.ThreadsEmbeds?.process();
     return;
   }
@@ -33,6 +35,10 @@ function loadThreadsEmbedScript(): void {
   script.async = true;
   script.onload = () => {
     win.ThreadsEmbeds?.process();
+  };
+  script.onerror = () => {
+    // Allow retry on next call
+    win.threadsEmbedScriptLoaded = false;
   };
   document.body.appendChild(script);
 }
@@ -130,7 +136,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   // to settle, as that delay was causing the script to be injected after the
   // blockquote was already in the DOM but never processed.
   useEffect(() => {
-    if (threadsConnection || !url) return;
+    if (threadsConnection || !embedUrl) return;
     const node = blockquoteRef.current;
     if (!node) return;
     loadThreadsEmbedScript();
@@ -138,7 +144,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       // node captured above; nothing to clean up but satisfies the lint rule.
       void node;
     };
-  }, [threadsConnection, url]);
+  }, [threadsConnection, embedUrl]);
 
   const handleClick = () => {
     window.open(embedUrl, "_blank", "noopener,noreferrer");
