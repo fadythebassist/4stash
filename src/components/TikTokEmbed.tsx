@@ -1,8 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-
-const TIKTOK_EMBED_SRC = "https://www.tiktok.com/embed.js";
-
-let tiktokEmbedPromise: Promise<void> | null = null;
+import React, { useMemo } from "react";
 
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
@@ -28,108 +24,22 @@ function extractTikTokVideoId(urlStr: string): string | null {
   }
 }
 
-function loadTikTokEmbed(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-
-  if (tiktokEmbedPromise) return tiktokEmbedPromise;
-
-  tiktokEmbedPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${TIKTOK_EMBED_SRC}"]`,
-    );
-
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Failed to load TikTok embed")),
-        {
-          once: true,
-        },
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = TIKTOK_EMBED_SRC;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load TikTok embed"));
-    document.head.appendChild(script);
-  });
-
-  return tiktokEmbedPromise;
-}
-
 export interface TikTokEmbedProps {
   url: string;
-  autoplay?: boolean;
 }
 
-const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, autoplay = true }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
   const videoId = useMemo(() => extractTikTokVideoId(url), [url]);
-  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const render = async () => {
-      setFailed(false);
-      if (!normalizedUrl || !videoId || !containerRef.current) {
-        setFailed(true);
-        return;
-      }
-
-      containerRef.current.innerHTML = "";
-
-      // Create blockquote structure TikTok script expects
-      const blockquote = document.createElement("blockquote");
-      blockquote.className = "tiktok-embed";
-      blockquote.setAttribute("cite", normalizedUrl);
-      blockquote.setAttribute("data-video-id", videoId);
-      blockquote.setAttribute("data-autoplay", autoplay ? "1" : "0");
-      blockquote.style.maxWidth = "100%";
-      blockquote.style.minWidth = "0";
-
-      const section = document.createElement("section");
-      const link = document.createElement("a");
-      link.href = normalizedUrl;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = "View on TikTok";
-
-      section.appendChild(link);
-      blockquote.appendChild(section);
-      containerRef.current.appendChild(blockquote);
-
-      try {
-        await loadTikTokEmbed();
-        if (cancelled) return;
-
-        // TikTok embed.js usually scans the DOM automatically on load.
-        // For dynamic inserts, re-adding the blockquote before/after load is enough.
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    };
-
-    render();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [normalizedUrl, videoId, autoplay]);
-
-  if (failed && normalizedUrl) {
+  if (!videoId || !normalizedUrl) {
     return (
       <div
         className="tiktok-embed-container"
         onClick={(e) => e.stopPropagation()}
       >
         <a
-          href={normalizedUrl}
+          href={normalizedUrl ?? url}
           target="_blank"
           rel="noopener noreferrer"
           className="card-link"
@@ -144,9 +54,16 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, autoplay = true }) => {
   return (
     <div
       className="tiktok-embed-container"
-      ref={containerRef}
       onClick={(e) => e.stopPropagation()}
-    />
+    >
+      <iframe
+        src={`https://www.tiktok.com/embed/v3/${videoId}`}
+        allowFullScreen
+        allow="autoplay; encrypted-media"
+        style={{ border: "none", width: "100%", height: "740px" }}
+        title="TikTok video"
+      />
+    </div>
   );
 };
 

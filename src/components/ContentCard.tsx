@@ -483,9 +483,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
         {shouldShowTikTokEmbed && item.url && (
           <TikTokEmbed
-            key={`tt-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
+            key={`tt-${item.id}`}
             url={item.url}
-            autoplay={autoplayVideos}
           />
         )}
 
