@@ -298,26 +298,23 @@
 }
 
 .tiktok-embed-container {
-  margin-bottom: var(--spacing-sm);
+  position: relative;
   width: 100%;
-  max-width: 100%;
+  /* TikTok videos are portrait 9:16 */
+  aspect-ratio: 9 / 16;
+  max-height: 80vh;
+  overflow: hidden;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  margin-bottom: var(--spacing-sm);
+  background: #000;
 }
 
 .tiktok-embed-container iframe {
-  width: 100% !important;
-  max-width: 100% !important;
-}
-
-.tiktok-embed-container blockquote {
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 0 !important;
-}
-
-.tiktok-embed-container .tiktok-embed {
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 0 auto !important;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 
 /* ── YouTube & Vimeo embeds — 16:9 full-card width ── */
