@@ -478,6 +478,18 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     return false;
   };
 
+  const isGenericFacebookDescription = (value?: string) => {
+    if (!value) return true;
+    const t = value.trim().toLowerCase();
+    if (!t) return true;
+    if (t.includes("log into facebook")) return true;
+    if (t.includes("log in to facebook")) return true;
+    if (t.includes("start sharing and connecting")) return true;
+    if (t.includes("create a page for a celebrity")) return true;
+    if (t.includes("facebook helps you connect")) return true;
+    return false;
+  };
+
   // Fetch metadata from URL (title/description/thumbnail)
   const fetchUrlMetadata = async (
     urlStr: string,
@@ -636,11 +648,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           const meta = await fetchUnfurl(fullUrl);
           const hasValidTitle =
             meta?.title && !isGenericFacebookTitle(meta.title);
+          const safeDescription = !isGenericFacebookDescription(meta?.description)
+            ? meta?.description
+            : undefined;
 
           return {
             url: meta?.url || fullUrl,
             title: hasValidTitle ? meta.title : fallbackTitle,
-            description: meta?.description,
+            description: safeDescription,
             thumbnail: meta?.image,
           };
         } catch (error) {

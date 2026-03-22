@@ -307,6 +307,15 @@ function extractPermalinkFromLoginRedirect(loginUrl: string): string | null {
       }
     }
 
+    // Case 1b: /story.php?story_fbid=X&id=Y  →  /Y/posts/X/
+    if (nextUrl.pathname.toLowerCase().includes("/story.php")) {
+      const storyFbid = nextUrl.searchParams.get("story_fbid");
+      const id = nextUrl.searchParams.get("id");
+      if (storyFbid && id) {
+        return `https://www.facebook.com/${id}/posts/${storyFbid}/`;
+      }
+    }
+
     // Case 2: the next URL itself is already a usable permalink (not a /share/ or /login/)
     if (!nextUrl.pathname.includes("/share/") && !isFacebookLoginUrl(next)) {
       // Strip tracking params before returning

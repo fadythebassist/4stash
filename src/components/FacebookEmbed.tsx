@@ -56,6 +56,18 @@ function isFacebookLoginUrl(url: string): boolean {
   );
 }
 
+function isGenericFacebookDescription(text?: string): boolean {
+  if (!text) return true;
+  const t = text.trim().toLowerCase();
+  if (!t) return true;
+  if (t.includes("log into facebook")) return true;
+  if (t.includes("log in to facebook")) return true;
+  if (t.includes("log in to facebook to start sharing")) return true;
+  if (t.includes("create a page for a celebrity")) return true;
+  if (t.includes("facebook helps you connect")) return true;
+  return false;
+}
+
 /**
  * Returns true only for URL patterns that Facebook's embed plugin can actually render:
  * - /<username>/posts/<id>/
@@ -151,6 +163,10 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     () => (normalizedUrl ? isFacebookVideoUrl(normalizedUrl) : false),
     [normalizedUrl],
   );
+  const safeDescription = useMemo(
+    () => (isGenericFacebookDescription(description) ? undefined : description),
+    [description],
+  );
   const contentType = useMemo(
     () => (normalizedUrl ? getFacebookContentType(normalizedUrl) : "Post"),
     [normalizedUrl],
@@ -225,6 +241,8 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
       // Messages arrive as JSON strings or objects with a type like "xfbml.size".
       try {
         if (!event.origin.includes("facebook.com")) return;
+        const iframeWindow = iframeRef.current?.contentWindow;
+        if (iframeWindow && event.source !== iframeWindow) return;
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
         // Facebook resize/ready events signal the embed rendered real content.
@@ -260,7 +278,9 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
         if (!isVideo) {
           // For posts/photos: CSS doesn't fix height, so measure it.
           // A working embed renders at >100px; an error/unavailable post renders very small.
-          if (height < 100) {
+          // Some blocked embeds still render a large gray frame with a broken icon.
+          // In that case height looks valid, but Facebook never sends resize/ready messages.
+          if (height < 100 || !receivedFacebookMessage) {
             setShowFallback(true);
           }
         } else {
@@ -279,7 +299,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
           }
         }
       }
-    }, isVideo ? 6000 : 3000); // Posts render fast; videos need more time for postMessage
+    }, 6000);
 
     return () => {
       clearTimeout(timer);
@@ -397,11 +417,11 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
         </div>
       )}
 
-      {description && (
+      {safeDescription && (
         <div
           style={{ padding: "8px 14px", fontSize: "0.85rem", color: "#65676b" }}
         >
-          {decodeHtmlEntities(description)}
+          {decodeHtmlEntities(safeDescription)}
         </div>
       )}
 
