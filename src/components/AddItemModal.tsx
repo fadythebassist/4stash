@@ -338,6 +338,25 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  /**
+   * Strip Threads tracking/share parameters from a URL.
+   * The `mt` param (and variants) is appended by the Threads share sheet and causes
+   * embed.js to reject the URL with "Thread not available".
+   */
+  const cleanThreadsUrl = (urlStr: string): string => {
+    try {
+      const fullUrl = normalizeUrl(urlStr);
+      if (!fullUrl) return urlStr;
+      const parsed = new URL(fullUrl);
+      const trackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+      for (const p of trackingParams) parsed.searchParams.delete(p);
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+      return parsed.toString();
+    } catch {
+      return urlStr;
+    }
+  };
+
   const isTikTokShortUrl = (urlStr: string): boolean => {
     try {
       const fullUrl = normalizeUrl(urlStr);
@@ -722,12 +741,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
       }
 
-      // For Threads URLs, strip login-wall metadata before saving
+      // For Threads URLs, strip tracking params and login-wall metadata before saving
       if (
         url.hostname.includes("threads.net") ||
         url.hostname.includes("threads.com")
       ) {
-        const meta = await fetchUnfurl(fullUrl);
+        const cleanUrl = cleanThreadsUrl(fullUrl);
+        const meta = await fetchUnfurl(cleanUrl);
         const safeTitle = !isGenericThreadsTitle(meta?.title)
           ? meta?.title
           : undefined;
@@ -743,7 +763,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           title: safeTitle,
           description: safeDescription,
           thumbnail: safeThumbnail,
-          url: meta?.url ?? fullUrl,
+          url: cleanUrl,
         };
       }
 
@@ -907,6 +927,25 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       } catch {
         finalUrl = cleanRedditUrl(finalUrl);
         updateUrl(finalUrl);
+      }
+    }
+
+    // Final guard: strip Threads tracking params (e.g. ?mt=...) before save.
+    if (finalUrl) {
+      try {
+        const parsed = new URL(finalUrl);
+        if (
+          parsed.hostname.includes("threads.net") ||
+          parsed.hostname.includes("threads.com")
+        ) {
+          const cleanUrl = cleanThreadsUrl(finalUrl);
+          if (cleanUrl !== finalUrl) {
+            finalUrl = cleanUrl;
+            updateUrl(cleanUrl);
+          }
+        }
+      } catch {
+        // keep original
       }
     }
 

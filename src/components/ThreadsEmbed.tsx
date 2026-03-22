@@ -44,6 +44,22 @@ function getAppTheme(): "light" | "dark" {
     : "light";
 }
 
+/**
+ * Strip Threads share/tracking parameters that cause embed.js to reject the URL.
+ * The `mt` param added by the Threads share sheet is the main culprit.
+ */
+function cleanThreadsUrl(urlStr: string): string {
+  try {
+    const parsed = new URL(urlStr);
+    const trackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+    for (const p of trackingParams) parsed.searchParams.delete(p);
+    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return parsed.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
 const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   url,
   title,
@@ -57,11 +73,14 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const [oembedError, setOembedError] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
 
+  // Strip tracking params so embed.js doesn't reject the URL with "Thread not available"
+  const cleanUrl = cleanThreadsUrl(url);
+
   const threadsConnection = getSocialConnection?.("threads");
 
   // Fetch oEmbed data if user is connected to Threads
   useEffect(() => {
-    if (!threadsConnection || !url) {
+    if (!threadsConnection || !cleanUrl) {
       setOembedLoading(false);
       return;
     }
@@ -71,7 +90,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       try {
         setOembedLoading(true);
         const data = await threadsAuthService.getOEmbedData(
-          url,
+          cleanUrl,
           threadsConnection.accessToken,
           600 // max width
         );
@@ -92,7 +111,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [url, threadsConnection]);
+  }, [cleanUrl, threadsConnection]);
 
   // Load embed.js after oEmbed HTML is ready (connected user path)
   useEffect(() => {
@@ -106,7 +125,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   // to settle, as that delay was causing the script to be injected after the
   // blockquote was already in the DOM but never processed.
   useEffect(() => {
-    if (threadsConnection || !url) return;
+    if (threadsConnection || !cleanUrl) return;
     const node = blockquoteRef.current;
     if (!node) return;
     loadThreadsEmbedScript();
@@ -114,10 +133,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       // node captured above; nothing to clean up but satisfies the lint rule.
       void node;
     };
-  }, [threadsConnection, url]);
+  }, [threadsConnection, cleanUrl]);
 
   const handleClick = () => {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(cleanUrl, "_blank", "noopener,noreferrer");
   };
 
   // --- Connected user: rich oEmbed HTML ---
@@ -149,16 +168,16 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
 
   // --- Non-connected user (or oEmbed failed): native blockquote embed ---
   // embed.js will replace the blockquote with an iframe for public posts.
-  if (url) {
+  if (cleanUrl) {
     const theme = getAppTheme();
     return (
       <div className="threads-embed" ref={blockquoteRef}>
         <blockquote
           className="text-post-media"
-          data-text-post-permalink={url}
+          data-text-post-permalink={cleanUrl}
           data-theme={theme}
         >
-          <a href={url} target="_blank" rel="noopener noreferrer">
+          <a href={cleanUrl} target="_blank" rel="noopener noreferrer">
             View on Threads
           </a>
         </blockquote>
