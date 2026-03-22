@@ -734,7 +734,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         const isShortOrShareUrl =
           (source?.source === "tiktok" && isTikTokShortUrl(trimmedUrl)) ||
           trimmedUrl.includes("fb.watch") ||
-          trimmedUrl.includes("facebook.com/share/");
+          trimmedUrl.includes("facebook.com/share/") ||
+          (source?.source === "reddit" && isRedditShortOrDirtyUrl(trimmedUrl));
         if (fetched?.url && fetched.url !== trimmedUrl && isShortOrShareUrl) {
           updateUrl(fetched.url);
         }

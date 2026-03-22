@@ -660,7 +660,7 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   }
 
   const primary = await fetchTextWithTimeout(targetUrl.toString(), isFacebookShare ? facebookPreviewHeaders : headers, 10000);
-  const finalUrl = primary.finalUrl;
+  let finalUrl = primary.finalUrl;
   const contentType = primary.contentType;
   const meta = extractMetadata(primary.text);
 
@@ -809,6 +809,27 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   // Reddit
   const isReddit = targetUrl.hostname.includes("reddit.com") || targetUrl.hostname.includes("redd.it");
   if (isReddit) {
+    // Reddit short share links (/r/sub/s/CODE) use a JS redirect, not HTTP 301/302,
+    // so fetch(redirect:"follow") does not resolve them. Extract the canonical URL
+    // from the og:url meta tag in the HTML returned by the primary fetch.
+    const isRedditShortLink = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
+    if (isRedditShortLink && primary.text) {
+      const ogUrlMatch = primary.text.match(
+        /<meta\s+[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i,
+      );
+      if (ogUrlMatch?.[1]) {
+        try {
+          const canonical = new URL(ogUrlMatch[1]);
+          if (canonical.pathname.includes("/comments/")) {
+            targetUrl = canonical;
+            finalUrl = canonical.toString(); // return canonical URL in response
+          }
+        } catch {
+          // keep original targetUrl
+        }
+      }
+    }
+
     attempts["redditJson"] = { attempted: true, ok: false };
     try {
       const redditJsonUrl = new URL(targetUrl.toString());

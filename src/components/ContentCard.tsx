@@ -57,6 +57,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const [resolvedFacebookUrl, setResolvedFacebookUrl] = useState<
     string | undefined
   >(undefined);
+  const [resolvedRedditUrl, setResolvedRedditUrl] = useState<
+    string | undefined
+  >(undefined);
   const [isTextExpanded, setIsTextExpanded] = useState(false);
 
   // Refs so the unfurl effect can read the latest resolved values
@@ -216,10 +219,11 @@ const ContentCard: React.FC<ContentCardProps> = ({
     /\/video\/\d+/.test(item.url);
   // Only show Reddit embed when the URL is a canonical /comments/ URL.
   // Short share links (/s/CODE) and UTM-laden URLs both render blank in the widget.
+  // resolvedRedditUrl is set by the unfurl effect when a bad URL is resolved at render time.
   const shouldShowRedditEmbed =
     derivedSource === "reddit" &&
-    !!item.url &&
-    item.url.includes("/comments/");
+    !!(resolvedRedditUrl || item.url) &&
+    (resolvedRedditUrl?.includes("/comments/") || item.url?.includes("/comments/"));
   const shouldShowFacebookPreview = derivedSource === "facebook" && !!item.url;
   const shouldShowThreadsPreview = derivedSource === "threads" && !!item.url;
   const shouldShowYouTubeEmbed = derivedSource === "youtube" && !!item.url;
@@ -271,21 +275,32 @@ const ContentCard: React.FC<ContentCardProps> = ({
     };
 
     const unfurl = async () => {
-      // Only attempt unfurl for Instagram, Facebook, and Threads
+      // Only attempt unfurl for Instagram, Facebook, Threads, and Reddit (with bad URLs)
       if (
         derivedSource !== "instagram" &&
         derivedSource !== "facebook" &&
-        derivedSource !== "threads"
+        derivedSource !== "threads" &&
+        derivedSource !== "reddit"
       )
         return;
       if (!item.url) return;
       const fullUrl = normalizeUrl(item.url);
       if (!fullUrl) return;
 
+      // For Reddit: only run if the stored URL is a short /s/ link or has tracking params.
+      // Canonical /comments/ URLs are already embeddable — no resolution needed.
+      const isRedditBadUrl =
+        derivedSource === "reddit" &&
+        (/\/s\/[a-zA-Z0-9]+/.test(item.url) ||
+          ["utm_source", "utm_medium", "utm_name", "utm_term", "utm_content", "utm_campaign", "ref", "sh"]
+            .some((p) => item.url?.includes(p)));
+      if (derivedSource === "reddit" && !isRedditBadUrl) return;
+
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
       const needsUnfurl =
         (derivedSource === "facebook" && ((!resolvedThumbnailRef.current && !item.thumbnail) || !item.content || !resolvedFacebookUrlRef.current)) ||
         derivedSource === "threads" ||
+        derivedSource === "reddit" ||
         !item.thumbnail ||
         thumbnailError ||
         !item.content;
@@ -317,6 +332,32 @@ const ContentCard: React.FC<ContentCardProps> = ({
           if (resolvedUrl && resolvedUrl !== fullUrl && !resolvedUrl.includes("/login")) {
             setResolvedFacebookUrl(resolvedUrl);
           }
+        }
+
+        // For Reddit: the unfurl endpoint resolves short /s/ links to canonical /comments/ URLs.
+        // Update local state so shouldShowRedditEmbed flips to true immediately,
+        // and persist the canonical URL to storage so future renders don't need to re-resolve.
+        if (derivedSource === "reddit" && typeof data.url === "string" && data.url.includes("/comments/")) {
+          setResolvedRedditUrl(data.url);
+          try {
+            await updateItemRef.current({ id: item.id, url: data.url });
+          } catch {
+            // Non-critical
+          }
+          // Also backfill thumbnail and content if missing
+          if (typeof data.image === "string" && data.image && !item.thumbnail) {
+            setResolvedThumbnail(data.image);
+            try {
+              await updateItemRef.current({ id: item.id, thumbnail: data.image });
+            } catch { /* Non-critical */ }
+          }
+          if (!item.content && typeof data.description === "string" && data.description) {
+            setResolvedContent(data.description);
+            try {
+              await updateItemRef.current({ id: item.id, content: data.description });
+            } catch { /* Non-critical */ }
+          }
+          return; // Done for Reddit
         }
 
         // Update thumbnail if missing or failed
@@ -499,7 +540,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           />
         )}
 
-        {shouldShowRedditEmbed && item.url && <RedditEmbed url={item.url} />}
+        {shouldShowRedditEmbed && (resolvedRedditUrl || item.url) && <RedditEmbed url={resolvedRedditUrl ?? item.url!} />}
 
         {shouldShowFacebookPreview && item.url && (
           <FacebookEmbed
