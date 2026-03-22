@@ -17,7 +17,7 @@ function normalizeUrl(urlStr: string): string | null {
     // utm_term, utm_content etc. which prevent the widget from resolving the post.
     const TRACKING_PARAMS = [
       "utm_source", "utm_medium", "utm_name", "utm_term", "utm_content",
-      "utm_campaign", "ref", "ref_source", "context", "sh",
+      "utm_campaign", "ref", "ref_source", "context", "share_id", "sh",
     ];
     for (const p of TRACKING_PARAMS) u.searchParams.delete(p);
     // Remove trailing slash for consistency

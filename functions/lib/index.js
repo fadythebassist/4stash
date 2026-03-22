@@ -161,7 +161,36 @@ function isGenericRedditTitle(title) {
         return true;
     if (t.includes("whoa there"))
         return true;
+    if (t === "reddit post")
+        return true;
+    if (/^reddit post in r\/.+/.test(t))
+        return true;
     return false;
+}
+function cleanRedditUrl(urlStr) {
+    try {
+        const u = new url_1.URL(urlStr);
+        const trackingParams = [
+            "utm_source",
+            "utm_medium",
+            "utm_name",
+            "utm_term",
+            "utm_content",
+            "utm_campaign",
+            "ref",
+            "ref_source",
+            "context",
+            "share_id",
+            "sh",
+        ];
+        for (const p of trackingParams)
+            u.searchParams.delete(p);
+        u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+        return u.toString();
+    }
+    catch (_a) {
+        return urlStr;
+    }
 }
 function isGenericFacebookTitle(title) {
     if (!title)
@@ -424,50 +453,113 @@ async function resolveFacebookShareUrl(targetUrl, headers, timeoutMs) {
 }
 async function resolveRedditShortUrl(targetUrl, headers, timeoutMs) {
     const isShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
-    if (!isShort)
-        return null;
+    if (!isShort) {
+        return {
+            resolvedUrl: null,
+            debugAttempts: [],
+        };
+    }
+    const redditBotHeaders = Object.assign(Object.assign({}, headers), { "user-agent": "Mozilla/5.0 (compatible; redditbot/1.0; +http://www.reddit.com/feedback)" });
+    const facebookBotHeaders = Object.assign(Object.assign({}, headers), { "user-agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" });
     const headerVariants = [
-        headers,
+        { host: "www.reddit.com", headers },
+        { host: "www.reddit.com", headers: redditBotHeaders },
+        { host: "www.reddit.com", headers: facebookBotHeaders },
+        { host: "old.reddit.com", headers },
+        { host: "old.reddit.com", headers: redditBotHeaders },
+        { host: "old.reddit.com", headers: facebookBotHeaders },
         {
-            "user-agent": "curl/8.0.1",
-            accept: "*/*",
+            host: "www.reddit.com",
+            headers: {
+                "user-agent": "curl/8.0.1",
+                accept: "*/*",
+            },
         },
-        {},
+        {
+            host: "old.reddit.com",
+            headers: {
+                "user-agent": "curl/8.0.1",
+                accept: "*/*",
+            },
+        },
+        { host: "www.reddit.com", headers: {} },
+        { host: "old.reddit.com", headers: {} },
     ];
-    for (const h of headerVariants) {
+    const debugAttempts = [];
+    for (const variant of headerVariants) {
+        const candidateUrl = new url_1.URL(targetUrl.toString());
+        candidateUrl.hostname = variant.host;
         for (const method of ["HEAD", "GET"]) {
             try {
-                const res = await nodeFetch(targetUrl.toString(), {
+                const res = await nodeFetch(candidateUrl.toString(), {
                     method,
-                    headers: h,
+                    headers: variant.headers,
                     timeoutMs,
                     redirect: "manual",
                 });
                 const location = res.headers.get("location");
+                debugAttempts.push({
+                    phase: "manual",
+                    method,
+                    host: variant.host,
+                    status: res.status,
+                    location: location !== null && location !== void 0 ? location : null,
+                    finalUrl: res.finalUrl,
+                    ok: res.ok,
+                });
                 if (location) {
-                    return new url_1.URL(location, targetUrl.toString()).toString();
+                    return {
+                        resolvedUrl: new url_1.URL(location, candidateUrl.toString()).toString(),
+                        debugAttempts,
+                    };
                 }
             }
             catch (_a) {
+                debugAttempts.push({
+                    phase: "manual",
+                    method,
+                    host: variant.host,
+                    ok: false,
+                });
                 // try next variant
             }
         }
         try {
-            const followed = await nodeFetch(targetUrl.toString(), {
+            const followed = await nodeFetch(candidateUrl.toString(), {
                 method: "GET",
-                headers: h,
+                headers: variant.headers,
                 timeoutMs,
                 redirect: "follow",
             });
-            if (followed.finalUrl && followed.finalUrl !== targetUrl.toString()) {
-                return followed.finalUrl;
+            debugAttempts.push({
+                phase: "follow",
+                method: "GET",
+                host: variant.host,
+                status: followed.status,
+                finalUrl: followed.finalUrl,
+                ok: followed.ok,
+            });
+            if (followed.finalUrl && followed.finalUrl !== candidateUrl.toString()) {
+                return {
+                    resolvedUrl: followed.finalUrl,
+                    debugAttempts,
+                };
             }
         }
         catch (_b) {
+            debugAttempts.push({
+                phase: "follow",
+                method: "GET",
+                host: variant.host,
+                ok: false,
+            });
             // try next variant
         }
     }
-    return null;
+    return {
+        resolvedUrl: null,
+        debugAttempts,
+    };
 }
 function tryParseJson(text) {
     try {
@@ -820,6 +912,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         fallbackMediaUrl: { attempted: false, used: false },
         facebookJina: { attempted: false, ok: false },
         redditJson: { attempted: false, ok: false },
+        redditResolve: { attempted: false, ok: false },
         redditJina: { attempted: false, ok: false },
         threadsJina: { attempted: false, ok: false },
     };
@@ -970,16 +1063,33 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     if (isReddit) {
         const originalRedditShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
         // Resolve Reddit /s/CODE mobile share URLs before trying .json.
-        const redditResolved = await resolveRedditShortUrl(targetUrl, headers, 8000);
+        attempts["redditResolve"] = { attempted: originalRedditShort, ok: false, resolvedUrl: null };
+        const redditResolveResult = await resolveRedditShortUrl(targetUrl, headers, 8000);
+        const redditResolved = redditResolveResult.resolvedUrl;
         if (redditResolved) {
             try {
                 const resolvedUrl = new url_1.URL(redditResolved);
                 targetUrl = resolvedUrl;
-                finalUrl = resolvedUrl.toString();
+                finalUrl = cleanRedditUrl(resolvedUrl.toString());
+                targetUrl = new url_1.URL(finalUrl);
+                attempts["redditResolve"] = {
+                    attempted: true,
+                    ok: true,
+                    resolvedUrl: finalUrl,
+                    steps: redditResolveResult.debugAttempts,
+                };
             }
             catch (_m) {
                 // keep original targetUrl
             }
+        }
+        else if (originalRedditShort) {
+            attempts["redditResolve"] = {
+                attempted: true,
+                ok: false,
+                resolvedUrl: null,
+                steps: redditResolveResult.debugAttempts,
+            };
         }
         if (originalRedditShort && !targetUrl.pathname.includes("/comments/")) {
             redditShortUnresolved = true;

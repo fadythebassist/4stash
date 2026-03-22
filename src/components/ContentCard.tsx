@@ -292,7 +292,19 @@ const ContentCard: React.FC<ContentCardProps> = ({
       const isRedditBadUrl =
         derivedSource === "reddit" &&
         (/\/s\/[a-zA-Z0-9]+/.test(item.url) ||
-          ["utm_source", "utm_medium", "utm_name", "utm_term", "utm_content", "utm_campaign", "ref", "sh"]
+          [
+            "utm_source",
+            "utm_medium",
+            "utm_name",
+            "utm_term",
+            "utm_content",
+            "utm_campaign",
+            "ref",
+            "ref_source",
+            "context",
+            "share_id",
+            "sh",
+          ]
             .some((p) => item.url?.includes(p)));
       if (derivedSource === "reddit" && !isRedditBadUrl) return;
 

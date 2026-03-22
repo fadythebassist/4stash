@@ -288,7 +288,19 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       // Short share links: reddit.com/r/sub/s/CODE
       if (/\/s\/[a-zA-Z0-9]+/.test(parsed.pathname)) return true;
       // Has UTM or tracking params that would confuse the embed widget
-      const trackingParams = ["utm_source", "utm_medium", "utm_name", "utm_term", "utm_content", "utm_campaign", "ref", "sh"];
+      const trackingParams = [
+        "utm_source",
+        "utm_medium",
+        "utm_name",
+        "utm_term",
+        "utm_content",
+        "utm_campaign",
+        "ref",
+        "ref_source",
+        "context",
+        "share_id",
+        "sh",
+      ];
       for (const p of trackingParams) {
         if (parsed.searchParams.has(p)) return true;
       }
@@ -303,7 +315,19 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       const fullUrl = normalizeUrl(urlStr);
       if (!fullUrl) return urlStr;
       const parsed = new URL(fullUrl);
-      const trackingParams = ["utm_source", "utm_medium", "utm_name", "utm_term", "utm_content", "utm_campaign", "ref", "ref_source", "context", "sh"];
+      const trackingParams = [
+        "utm_source",
+        "utm_medium",
+        "utm_name",
+        "utm_term",
+        "utm_content",
+        "utm_campaign",
+        "ref",
+        "ref_source",
+        "context",
+        "share_id",
+        "sh",
+      ];
       for (const p of trackingParams) parsed.searchParams.delete(p);
       // Remove trailing slash for consistency
       parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
@@ -404,6 +428,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       return true;
     if (t.includes("something went wrong")) return true;
     if (t.includes("whoa there")) return true;
+    if (t === "reddit post") return true;
+    if (/^reddit post in r\/.+/.test(t)) return true;
     return false;
   };
 
@@ -645,7 +671,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         try {
           const meta = await fetchUnfurl(fullUrl);
           // meta.url from the server is the resolved canonical URL (no tracking params, no /s/ short link)
-          const resolvedUrl = meta?.url || cleanRedditUrl(fullUrl);
+          const resolvedUrl = cleanRedditUrl(meta?.url || fullUrl);
           const hasValidTitle = meta?.title && !isGenericRedditTitle(meta.title);
           return {
             url: resolvedUrl,
@@ -801,33 +827,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
     // Final guard: resolve Reddit short share links and strip tracking params before save.
     if (finalUrl && isRedditShortOrDirtyUrl(finalUrl)) {
-      const startedAsRedditShort = /\/s\/[a-zA-Z0-9]+/.test(finalUrl);
       try {
         const resolved = await fetchUnfurl(finalUrl);
-        const cleanUrl = resolved?.url || cleanRedditUrl(finalUrl);
-        const resolvedHasCanonicalComments = /\/comments\//.test(cleanUrl);
-
-        if (
-          startedAsRedditShort &&
-          (resolved?.redditShortUnresolved === true || !resolvedHasCanonicalComments)
-        ) {
-          alert(
-            "Could not resolve this Reddit short link. Open the post in Reddit/browser, copy the full URL containing /comments/, then save again.",
-          );
-          return;
-        }
+        const cleanUrl = cleanRedditUrl(resolved?.url || finalUrl);
 
         if (cleanUrl !== finalUrl) {
           finalUrl = cleanUrl;
           updateUrl(cleanUrl);
         }
       } catch {
-        if (startedAsRedditShort) {
-          alert(
-            "Could not resolve this Reddit short link. Open the post in Reddit/browser, copy the full URL containing /comments/, then save again.",
-          );
-          return;
-        }
         finalUrl = cleanRedditUrl(finalUrl);
         updateUrl(finalUrl);
       }
