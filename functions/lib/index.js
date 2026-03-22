@@ -422,6 +422,35 @@ async function resolveFacebookShareUrl(targetUrl, headers, timeoutMs) {
     }
     return null;
 }
+async function resolveRedditShortUrl(targetUrl, headers, timeoutMs) {
+    const isShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
+    if (!isShort)
+        return null;
+    const tryManual = async (method) => {
+        try {
+            const res = await nodeFetch(targetUrl.toString(), {
+                method,
+                headers,
+                timeoutMs,
+                redirect: "manual",
+            });
+            const location = res.headers.get("location");
+            if (!location)
+                return null;
+            return new url_1.URL(location, targetUrl.toString()).toString();
+        }
+        catch (_a) {
+            return null;
+        }
+    };
+    const fromHead = await tryManual("HEAD");
+    if (fromHead)
+        return fromHead;
+    const fromGet = await tryManual("GET");
+    if (fromGet)
+        return fromGet;
+    return null;
+}
 function tryParseJson(text) {
     try {
         return JSON.parse(text);
@@ -761,7 +790,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         return;
     }
     const primary = await fetchTextWithTimeout(targetUrl.toString(), isFacebookShare ? facebookPreviewHeaders : headers, 10000);
-    const finalUrl = primary.finalUrl;
+    let finalUrl = primary.finalUrl;
     const contentType = primary.contentType;
     const meta = extractMetadata(primary.text);
     const attempts = {
@@ -920,6 +949,18 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     // Reddit
     const isReddit = targetUrl.hostname.includes("reddit.com") || targetUrl.hostname.includes("redd.it");
     if (isReddit) {
+        // Resolve Reddit /s/CODE mobile share URLs before trying .json.
+        const redditResolved = await resolveRedditShortUrl(targetUrl, headers, 8000);
+        if (redditResolved) {
+            try {
+                const resolvedUrl = new url_1.URL(redditResolved);
+                targetUrl = resolvedUrl;
+                finalUrl = resolvedUrl.toString();
+            }
+            catch (_m) {
+                // keep original targetUrl
+            }
+        }
         attempts["redditJson"] = { attempted: true, ok: false };
         try {
             const redditJsonUrl = new url_1.URL(targetUrl.toString());
@@ -963,7 +1004,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 }
             }
         }
-        catch ( /* Reddit JSON failed */_m) { /* Reddit JSON failed */ }
+        catch ( /* Reddit JSON failed */_o) { /* Reddit JSON failed */ }
         // Reddit oEmbed — works server-side and returns the real post title.
         // Try this before Jina since it's more reliable.
         if (!meta.title) {
@@ -984,7 +1025,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     }
                 }
             }
-            catch ( /* ignore */_o) { /* ignore */ }
+            catch ( /* ignore */_p) { /* ignore */ }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["redditJina"] = { attempted: true, ok: false };
@@ -1000,7 +1041,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 if (!meta.image && redditMeta.image)
                     meta.image = redditMeta.image;
             }
-            catch ( /* ignore */_p) { /* ignore */ }
+            catch ( /* ignore */_q) { /* ignore */ }
         }
         // If title is still a generic error string (e.g. "403" from the error page HTML),
         // clear it so the client falls back to its own "Reddit Post in r/..." label.
@@ -1029,7 +1070,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     meta.image = threadsMeta.image;
             }
         }
-        catch ( /* ignore */_q) { /* ignore */ }
+        catch ( /* ignore */_r) { /* ignore */ }
     }
     const image = meta.image ? new url_1.URL(meta.image, finalUrl).toString() : undefined;
     const proxiedImage = (() => {

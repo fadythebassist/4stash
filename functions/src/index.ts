@@ -355,6 +355,35 @@ async function resolveFacebookShareUrl(targetUrl: URL, headers: Record<string, s
   return null;
 }
 
+async function resolveRedditShortUrl(targetUrl: URL, headers: Record<string, string>, timeoutMs: number): Promise<string | null> {
+  const isShort = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
+  if (!isShort) return null;
+
+  const tryManual = async (method: "HEAD" | "GET"): Promise<string | null> => {
+    try {
+      const res = await nodeFetch(targetUrl.toString(), {
+        method,
+        headers,
+        timeoutMs,
+        redirect: "manual",
+      });
+      const location = res.headers.get("location");
+      if (!location) return null;
+      return new URL(location, targetUrl.toString()).toString();
+    } catch {
+      return null;
+    }
+  };
+
+  const fromHead = await tryManual("HEAD");
+  if (fromHead) return fromHead;
+
+  const fromGet = await tryManual("GET");
+  if (fromGet) return fromGet;
+
+  return null;
+}
+
 function tryParseJson(text: string): unknown {
   try { return JSON.parse(text); } catch { return null; }
 }
@@ -809,24 +838,15 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   // Reddit
   const isReddit = targetUrl.hostname.includes("reddit.com") || targetUrl.hostname.includes("redd.it");
   if (isReddit) {
-    // Reddit short share links (/r/sub/s/CODE) use a JS redirect, not HTTP 301/302,
-    // so fetch(redirect:"follow") does not resolve them. Extract the canonical URL
-    // from the og:url meta tag in the HTML returned by the primary fetch.
-    const isRedditShortLink = /\/s\/[a-zA-Z0-9]+/.test(targetUrl.pathname);
-    if (isRedditShortLink && primary.text) {
-      const ogUrlMatch = primary.text.match(
-        /<meta\s+[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i,
-      );
-      if (ogUrlMatch?.[1]) {
-        try {
-          const canonical = new URL(ogUrlMatch[1]);
-          if (canonical.pathname.includes("/comments/")) {
-            targetUrl = canonical;
-            finalUrl = canonical.toString(); // return canonical URL in response
-          }
-        } catch {
-          // keep original targetUrl
-        }
+    // Resolve Reddit /s/CODE mobile share URLs before trying .json.
+    const redditResolved = await resolveRedditShortUrl(targetUrl, headers, 8000);
+    if (redditResolved) {
+      try {
+        const resolvedUrl = new URL(redditResolved);
+        targetUrl = resolvedUrl;
+        finalUrl = resolvedUrl.toString();
+      } catch {
+        // keep original targetUrl
       }
     }
 
