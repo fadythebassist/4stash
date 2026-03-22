@@ -93,23 +93,11 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
     };
   }, [normalizedUrl, videoId]);
 
+  // No video ID means this is a short/unresolved URL — render nothing.
+  // ContentCard gates shouldShowTikTokEmbed on the video ID being present,
+  // so this branch should rarely be hit, but guard defensively.
   if (!videoId || !normalizedUrl) {
-    return (
-      <div
-        className="tiktok-embed-container"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <a
-          href={normalizedUrl ?? url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="card-link"
-          onClick={(e) => e.stopPropagation()}
-        >
-          View on TikTok
-        </a>
-      </div>
-    );
+    return null;
   }
 
   return (

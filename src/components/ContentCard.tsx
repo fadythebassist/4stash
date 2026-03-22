@@ -207,7 +207,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
     !!item.url &&
     (!displayContent || !displayThumbnail || thumbnailError);
 
-  const shouldShowTikTokEmbed = derivedSource === "tiktok" && !!item.url;
+  // Only show the TikTok embed when we have a canonical URL containing a video ID.
+  // Items saved from short URLs (vt.tiktok.com) before resolution will fall back
+  // to the stored thumbnail instead of rendering a broken black embed widget.
+  const shouldShowTikTokEmbed =
+    derivedSource === "tiktok" &&
+    !!item.url &&
+    /\/video\/\d+/.test(item.url);
   const shouldShowRedditEmbed = derivedSource === "reddit" && !!item.url;
   const shouldShowFacebookPreview = derivedSource === "facebook" && !!item.url;
   const shouldShowThreadsPreview = derivedSource === "threads" && !!item.url;
