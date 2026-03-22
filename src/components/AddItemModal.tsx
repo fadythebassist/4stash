@@ -714,6 +714,27 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
     const hasUrl = !!url.trim();
 
+    // Safety net: if the URL is still a short/opaque URL (vt.tiktok.com, facebook share),
+    // resolve it now before saving. This handles the race where fetchInitialMetadata
+    // hasn't completed yet when the user taps Add.
+    if (finalUrl) {
+      const isStillShortUrl =
+        finalUrl.includes("vt.tiktok.com") ||
+        finalUrl.includes("facebook.com/share/") ||
+        finalUrl.includes("fb.watch");
+      if (isStillShortUrl) {
+        try {
+          const resolved = await fetchUnfurl(finalUrl);
+          if (resolved?.url && resolved.url !== finalUrl) {
+            finalUrl = resolved.url;
+            setUrl(resolved.url);
+          }
+        } catch {
+          // keep original
+        }
+      }
+    }
+
     if (!finalTitle && hasUrl) {
       const meta = await fetchUrlMetadata(url.trim());
       const resolvedUrl = meta?.url || url.trim();
@@ -980,9 +1001,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading}
+              disabled={loading || fetchingTitle}
             >
-              {loading ? "Adding..." : "Add Item"}
+              {loading ? "Adding..." : fetchingTitle ? "Fetching..." : "Add Item"}
             </button>
           </div>
         </form>
