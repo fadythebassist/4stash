@@ -223,7 +223,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     const isShortUrlThatNeedsResolution =
       isTikTokShortUrl(initialUrl) ||
       initialUrl.includes("facebook.com/share/") ||
-      initialUrl.includes("fb.watch");
+      initialUrl.includes("fb.watch") ||
+      isRedditShortOrDirtyUrl(initialUrl);
 
     const shouldFetchInitialMetadata =
       !initialTitle || hasGenericInitialTitle || isShortUrlThatNeedsResolution;
@@ -274,6 +275,41 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       return `https://${trimmed}`;
     } catch {
       return null;
+    }
+  };
+
+  const isRedditShortOrDirtyUrl = (urlStr: string): boolean => {
+    try {
+      const fullUrl = normalizeUrl(urlStr);
+      if (!fullUrl) return false;
+      const parsed = new URL(fullUrl);
+      const host = parsed.hostname.toLowerCase();
+      if (!host.includes("reddit.com") && !host.includes("redd.it")) return false;
+      // Short share links: reddit.com/r/sub/s/CODE
+      if (/\/s\/[a-zA-Z0-9]+/.test(parsed.pathname)) return true;
+      // Has UTM or tracking params that would confuse the embed widget
+      const trackingParams = ["utm_source", "utm_medium", "utm_name", "utm_term", "utm_content", "utm_campaign", "ref", "sh"];
+      for (const p of trackingParams) {
+        if (parsed.searchParams.has(p)) return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const cleanRedditUrl = (urlStr: string): string => {
+    try {
+      const fullUrl = normalizeUrl(urlStr);
+      if (!fullUrl) return urlStr;
+      const parsed = new URL(fullUrl);
+      const trackingParams = ["utm_source", "utm_medium", "utm_name", "utm_term", "utm_content", "utm_campaign", "ref", "ref_source", "context", "sh"];
+      for (const p of trackingParams) parsed.searchParams.delete(p);
+      // Remove trailing slash for consistency
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+      return parsed.toString();
+    } catch {
+      return urlStr;
     }
   };
 
@@ -594,10 +630,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
       }
 
-      // For Reddit — route through our Cloud Function unfurl which tries:
-      // 1. Reddit .json API (often 403'd from GCP, but worth trying)
-      // 2. Reddit oEmbed API (works server-side, returns real post title)
-      // 3. Jina proxy as final fallback
+      // For Reddit — resolve short share URLs and strip tracking params before saving.
+      // reddit.com/r/sub/s/CODE short links and UTM-laden URLs both break the embed widget.
       if (url.hostname.includes("reddit.com") || url.hostname.includes("redd.it")) {
         const pathParts = url.pathname.split("/").filter((p) => p);
         let fallbackTitle = "Reddit Post";
@@ -608,15 +642,17 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
         try {
           const meta = await fetchUnfurl(fullUrl);
+          // meta.url from the server is the resolved canonical URL (no tracking params, no /s/ short link)
+          const resolvedUrl = meta?.url || cleanRedditUrl(fullUrl);
           const hasValidTitle = meta?.title && !isGenericRedditTitle(meta.title);
           return {
-            url: meta?.url || fullUrl,
+            url: resolvedUrl,
             title: hasValidTitle ? meta.title : fallbackTitle,
             description: meta?.description,
             thumbnail: meta?.image,
           };
         } catch {
-          return { url: fullUrl, title: fallbackTitle };
+          return { url: cleanRedditUrl(fullUrl), title: fallbackTitle };
         }
       }
 
@@ -757,6 +793,21 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         }
       } catch {
         // keep original
+      }
+    }
+
+    // Final guard: resolve Reddit short share links and strip tracking params before save.
+    if (finalUrl && isRedditShortOrDirtyUrl(finalUrl)) {
+      try {
+        const resolved = await fetchUnfurl(finalUrl);
+        const cleanUrl = resolved?.url || cleanRedditUrl(finalUrl);
+        if (cleanUrl !== finalUrl) {
+          finalUrl = cleanUrl;
+          updateUrl(cleanUrl);
+        }
+      } catch {
+        finalUrl = cleanRedditUrl(finalUrl);
+        updateUrl(finalUrl);
       }
     }
 

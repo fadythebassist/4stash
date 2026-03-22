@@ -214,7 +214,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
     derivedSource === "tiktok" &&
     !!item.url &&
     /\/video\/\d+/.test(item.url);
-  const shouldShowRedditEmbed = derivedSource === "reddit" && !!item.url;
+  // Only show Reddit embed when the URL is a canonical /comments/ URL.
+  // Short share links (/s/CODE) and UTM-laden URLs both render blank in the widget.
+  const shouldShowRedditEmbed =
+    derivedSource === "reddit" &&
+    !!item.url &&
+    item.url.includes("/comments/");
   const shouldShowFacebookPreview = derivedSource === "facebook" && !!item.url;
   const shouldShowThreadsPreview = derivedSource === "threads" && !!item.url;
   const shouldShowYouTubeEmbed = derivedSource === "youtube" && !!item.url;
