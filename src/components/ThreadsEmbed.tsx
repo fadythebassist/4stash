@@ -45,15 +45,20 @@ function getAppTheme(): "light" | "dark" {
 }
 
 /**
- * Strip Threads share/tracking parameters that cause embed.js to reject the URL.
- * The `mt` param added by the Threads share sheet is the main culprit.
+ * Normalize a Threads URL so embed.js always receives a threads.net URL.
+ * embed.js is hosted on threads.net and only reliably processes threads.net
+ * permalinks — threads.com URLs and tracking params cause "Thread not available".
  */
-function cleanThreadsUrl(urlStr: string): string {
+function normalizeThreadsUrl(urlStr: string): string {
   try {
     const parsed = new URL(urlStr);
+    // Rewrite threads.com → threads.net
+    if (parsed.hostname.includes("threads.com")) {
+      parsed.hostname = parsed.hostname.replace("threads.com", "threads.net");
+    }
+    // Strip tracking/share params that embed.js rejects
     const trackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
     for (const p of trackingParams) parsed.searchParams.delete(p);
-    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
     return parsed.toString();
   } catch {
     return urlStr;
@@ -73,14 +78,14 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const [oembedError, setOembedError] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
 
-  // Strip tracking params so embed.js doesn't reject the URL with "Thread not available"
-  const cleanUrl = cleanThreadsUrl(url);
+  // Always use a threads.net URL with tracking params stripped for embed.js
+  const embedUrl = normalizeThreadsUrl(url);
 
   const threadsConnection = getSocialConnection?.("threads");
 
   // Fetch oEmbed data if user is connected to Threads
   useEffect(() => {
-    if (!threadsConnection || !cleanUrl) {
+    if (!threadsConnection || !url) {
       setOembedLoading(false);
       return;
     }
@@ -90,7 +95,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       try {
         setOembedLoading(true);
         const data = await threadsAuthService.getOEmbedData(
-          cleanUrl,
+          url,
           threadsConnection.accessToken,
           600 // max width
         );
@@ -111,7 +116,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [cleanUrl, threadsConnection]);
+  }, [url, threadsConnection]);
 
   // Load embed.js after oEmbed HTML is ready (connected user path)
   useEffect(() => {
@@ -125,7 +130,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   // to settle, as that delay was causing the script to be injected after the
   // blockquote was already in the DOM but never processed.
   useEffect(() => {
-    if (threadsConnection || !cleanUrl) return;
+    if (threadsConnection || !url) return;
     const node = blockquoteRef.current;
     if (!node) return;
     loadThreadsEmbedScript();
@@ -133,10 +138,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       // node captured above; nothing to clean up but satisfies the lint rule.
       void node;
     };
-  }, [threadsConnection, cleanUrl]);
+  }, [threadsConnection, url]);
 
   const handleClick = () => {
-    window.open(cleanUrl, "_blank", "noopener,noreferrer");
+    window.open(embedUrl, "_blank", "noopener,noreferrer");
   };
 
   // --- Connected user: rich oEmbed HTML ---
@@ -168,16 +173,17 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
 
   // --- Non-connected user (or oEmbed failed): native blockquote embed ---
   // embed.js will replace the blockquote with an iframe for public posts.
-  if (cleanUrl) {
+  // Always use embedUrl (threads.net, no tracking params) so embed.js accepts it.
+  if (embedUrl) {
     const theme = getAppTheme();
     return (
       <div className="threads-embed" ref={blockquoteRef}>
         <blockquote
           className="text-post-media"
-          data-text-post-permalink={cleanUrl}
+          data-text-post-permalink={embedUrl}
           data-theme={theme}
         >
-          <a href={cleanUrl} target="_blank" rel="noopener noreferrer">
+          <a href={embedUrl} target="_blank" rel="noopener noreferrer">
             View on Threads
           </a>
         </blockquote>

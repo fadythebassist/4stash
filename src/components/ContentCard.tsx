@@ -309,13 +309,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
       if (derivedSource === "reddit" && !isRedditBadUrl) return;
 
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
-      const isThreadsDirtyUrl =
-        derivedSource === "threads" &&
-        !!item.url &&
-        ["mt", "igshid"].some((p) => item.url?.includes(`${p}=`));
       const needsUnfurl =
         (derivedSource === "facebook" && ((!resolvedThumbnailRef.current && !item.thumbnail) || !item.content || !resolvedFacebookUrlRef.current)) ||
-        (derivedSource === "threads" && (!item.thumbnail || !item.content || isThreadsDirtyUrl)) ||
+        (derivedSource === "threads" && (!item.thumbnail || !item.content)) ||
         derivedSource === "reddit" ||
         !item.thumbnail ||
         thumbnailError ||
@@ -374,26 +370,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
             } catch { /* Non-critical */ }
           }
           return; // Done for Reddit
-        }
-
-        // For Threads: if the stored URL has tracking params (e.g. ?mt=...) that
-        // cause embed.js to reject the post, persist the clean version to storage.
-        // ThreadsEmbed already strips params at render time, but we backfill here
-        // so future renders don't have to strip on the fly.
-        if (derivedSource === "threads" && item.url) {
-          try {
-            const parsed = new URL(item.url);
-            const threadsTrackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
-            const hasDirtyParams = threadsTrackingParams.some((p) => parsed.searchParams.has(p));
-            if (hasDirtyParams) {
-              for (const p of threadsTrackingParams) parsed.searchParams.delete(p);
-              parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
-              const cleanUrl = parsed.toString();
-              await updateItemRef.current({ id: item.id, url: cleanUrl });
-            }
-          } catch {
-            // Non-critical
-          }
         }
 
         // Update thumbnail if missing or failed
