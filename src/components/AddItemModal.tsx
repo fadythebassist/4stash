@@ -338,6 +338,21 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  const cleanThreadsUrl = (urlStr: string): string => {
+    try {
+      const normalized = normalizeUrl(urlStr);
+      if (!normalized) return urlStr;
+      const parsed = new URL(normalized);
+      // Strip Threads share-sheet tracking params
+      const trackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
+      for (const p of trackingParams) parsed.searchParams.delete(p);
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+      return parsed.toString();
+    } catch {
+      return urlStr;
+    }
+  };
+
   const isTikTokShortUrl = (urlStr: string): boolean => {
     try {
       const fullUrl = normalizeUrl(urlStr);
@@ -740,12 +755,12 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             ? meta.image
             : undefined;
         // Do NOT use meta.url — the unfurl follows threads.net → threads.com
-        // redirects and would overwrite the user's URL. Keep fullUrl as-is.
+        // redirects and would overwrite the user's URL. Strip tracking params from fullUrl.
         return {
           title: safeTitle,
           description: safeDescription,
           thumbnail: safeThumbnail,
-          url: fullUrl,
+          url: cleanThreadsUrl(fullUrl),
         };
       }
 

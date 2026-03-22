@@ -396,12 +396,29 @@ const ContentCard: React.FC<ContentCardProps> = ({
           typeof data.description === "string" &&
           data.description
         ) {
-          setResolvedContent(data.description);
-          // Persist the resolved description
-          try {
-            await updateItemRef.current({ id: item.id, content: data.description });
-          } catch {
-            // Non-critical
+          // For Threads, filter out login-wall descriptions before persisting
+          if (derivedSource === "threads") {
+            const d = data.description.toLowerCase();
+            const isLoginWall =
+              d.includes("join threads to share ideas") ||
+              d.includes("log in with your instagram") ||
+              d.includes("say more with threads");
+            if (isLoginWall) {
+              // Don't save login-wall text — leave content empty so embed renders instead
+            } else {
+              setResolvedContent(data.description);
+              try {
+                await updateItemRef.current({ id: item.id, content: data.description });
+              } catch { /* Non-critical */ }
+            }
+          } else {
+            setResolvedContent(data.description);
+            // Persist the resolved description
+            try {
+              await updateItemRef.current({ id: item.id, content: data.description });
+            } catch {
+              // Non-critical
+            }
           }
         }
       } catch {
