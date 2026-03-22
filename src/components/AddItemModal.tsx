@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useData } from "@/contexts/DataContext";
 import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
@@ -32,6 +32,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     initialTitle ? decodeHtmlEntities(initialTitle) : "",
   );
   const [url, setUrl] = useState(initialUrl);
+  // Ref to always hold the latest resolved URL, bypassing React state closure lag.
+  // This ensures handleSubmit always uses the canonical URL even if state hasn't re-rendered.
+  const resolvedUrlRef = useRef<string>(initialUrl);
+  const updateUrl = (newUrl: string) => {
+    resolvedUrlRef.current = newUrl;
+    setUrl(newUrl);
+  };
   const [content, setContent] = useState(
     initialContent ? decodeHtmlEntities(initialContent) : "",
   );
@@ -246,7 +253,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         // Always update the URL if it resolved to something different
         // (critical for vt.tiktok.com and facebook.com/share/ URLs)
         if (meta?.url && meta.url !== initialUrl) {
-          setUrl(meta.url);
+          updateUrl(meta.url);
         }
       } catch (err) {
         console.error("[AddItemModal] Error fetching initial metadata:", err);
@@ -609,7 +616,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   };
 
   const handleUrlChange = async (newUrl: string) => {
-    setUrl(newUrl);
+    updateUrl(newUrl);
     setThumbnail(undefined);
     const source = detectSource(newUrl);
     setDetectedSource(source?.source ?? null);
@@ -671,7 +678,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           trimmedUrl.includes("fb.watch") ||
           trimmedUrl.includes("facebook.com/share/");
         if (fetched?.url && fetched.url !== trimmedUrl && isShortOrShareUrl) {
-          setUrl(fetched.url);
+          updateUrl(fetched.url);
         }
 
         const shouldUpdateTitle =
@@ -706,53 +713,35 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // If no title provided, try to generate one from URL
+    // If no title provided, try to generate one from URL.
+    // Use resolvedUrlRef.current to get the latest canonical URL regardless of whether
+    // React has flushed the state update from fetchInitialMetadata yet (race condition fix).
     let finalTitle = title.trim();
-    let finalUrl = url.trim() || undefined;
+    const currentUrl = resolvedUrlRef.current || url;
+    let finalUrl = currentUrl.trim() || undefined;
     let finalThumbnail = thumbnail;
     let finalContent = content.trim() || undefined;
 
-    const hasUrl = !!url.trim();
-
-    // Safety net: if the URL is still a short/opaque URL (vt.tiktok.com, facebook share),
-    // resolve it now before saving. This handles the race where fetchInitialMetadata
-    // hasn't completed yet when the user taps Add.
-    if (finalUrl) {
-      const isStillShortUrl =
-        finalUrl.includes("vt.tiktok.com") ||
-        finalUrl.includes("facebook.com/share/") ||
-        finalUrl.includes("fb.watch");
-      if (isStillShortUrl) {
-        try {
-          const resolved = await fetchUnfurl(finalUrl);
-          if (resolved?.url && resolved.url !== finalUrl) {
-            finalUrl = resolved.url;
-            setUrl(resolved.url);
-          }
-        } catch {
-          // keep original
-        }
-      }
-    }
+    const hasUrl = !!currentUrl.trim();
 
     if (!finalTitle && hasUrl) {
-      const meta = await fetchUrlMetadata(url.trim());
-      const resolvedUrl = meta?.url || url.trim();
+      const meta = await fetchUrlMetadata(currentUrl.trim());
+      const resolvedUrl = meta?.url || currentUrl.trim();
       finalUrl = resolvedUrl;
       finalTitle = meta?.title || "Untitled";
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
-      setUrl(resolvedUrl);
+      updateUrl(resolvedUrl);
     } else if (hasUrl && (!finalThumbnail || !finalContent)) {
       // Title might already be a fallback (e.g. "Instagram Photo"), but we still want thumbnail/snippet.
-      const meta = await fetchUrlMetadata(url.trim());
-      const resolvedUrl = meta?.url || url.trim();
+      const meta = await fetchUrlMetadata(currentUrl.trim());
+      const resolvedUrl = meta?.url || currentUrl.trim();
       finalUrl = resolvedUrl;
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
       if (!finalContent && meta?.description) finalContent = meta.description;
 
-      setUrl(resolvedUrl);
+      updateUrl(resolvedUrl);
     } else if (!finalTitle && !hasUrl) {
       alert("Please enter a title or URL");
       return;
