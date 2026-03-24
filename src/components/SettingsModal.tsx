@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { setStoredAnalyticsConsent } from '@/services/AnalyticsService';
 import { threadsAuthService } from '@/services/ThreadsAuthService';
 import './SettingsModal.css';
 
@@ -19,6 +20,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     viewDensity: user?.settings?.viewDensity || 'comfortable',
     layoutMode: user?.settings?.layoutMode || 'grid',
     defaultListId: user?.settings?.defaultListId || '',
+    analyticsConsent: user?.settings?.analyticsConsent,
     autoFetchMetadata: user?.settings?.autoFetchMetadata !== false,
     confirmDelete: user?.settings?.confirmDelete !== false,
     thumbnailQuality: user?.settings?.thumbnailQuality || 'high',
@@ -134,6 +136,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     setSettings(updated);
 
     try {
+      if (newSettings.analyticsConsent) {
+        setStoredAnalyticsConsent(newSettings.analyticsConsent);
+      }
+
       if (updateUserSettings) {
         await updateUserSettings(updated);
       }
@@ -366,6 +372,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
   const renderPrivacyTab = () => (
     <div className="settings-section">
+      <div className="setting-group">
+        <label className="setting-label">
+          <strong>Usage Analytics</strong>
+          <p className="setting-description">
+            Control whether Google Analytics can collect anonymous page and feature
+            usage data. Your saved items are never used for analytics.
+          </p>
+        </label>
+        <div className="setting-options">
+          <button
+            className={`option-btn ${settings.analyticsConsent === 'granted' ? 'active' : ''}`}
+            onClick={() => handleSettingChange({ analyticsConsent: 'granted' })}
+          >
+            Allow
+          </button>
+          <button
+            className={`option-btn ${settings.analyticsConsent === 'denied' ? 'active' : ''}`}
+            onClick={() => handleSettingChange({ analyticsConsent: 'denied' })}
+          >
+            Disable
+          </button>
+        </div>
+      </div>
+
       <div className="setting-group">
         <label className="setting-label">
           <strong>Content Moderation</strong>

@@ -49,6 +49,7 @@ export interface AppSettings {
   viewDensity?: 'compact' | 'comfortable';
   layoutMode?: 'grid' | 'list';
   defaultListId?: string;
+  analyticsConsent?: 'granted' | 'denied';
   autoFetchMetadata?: boolean;
   confirmDelete?: boolean;
   thumbnailQuality?: 'low' | 'medium' | 'high';

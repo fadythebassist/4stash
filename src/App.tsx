@@ -4,9 +4,12 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import AnalyticsConsentBanner from "@/components/AnalyticsConsentBanner";
 import { DataProvider } from "@/contexts/DataContext";
+import { trackPageView } from "@/services/AnalyticsService";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
@@ -61,11 +64,24 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return user ? <Navigate to="/dashboard" /> : <>{children}</>;
 };
 
+const AnalyticsTracker: React.FC = () => {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    const path = `${location.pathname}${location.search}${location.hash}`;
+    void trackPageView(path);
+  }, [location.hash, location.pathname, location.search]);
+
+  return null;
+};
+
 const App: React.FC = () => {
   return (
     <Router>
+      <AnalyticsTracker />
       <AuthProvider>
         <DataProvider>
+          <AnalyticsConsentBanner />
           <Routes>
             {/* Public routes */}
             <Route

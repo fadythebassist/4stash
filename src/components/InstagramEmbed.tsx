@@ -1,54 +1,62 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const INSTAGRAM_EMBEDS_SRC = "https://www.instagram.com/embed.js";
-
-let instagramEmbedsPromise: Promise<void> | null = null;
-
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
-    return trimmed;
-  return `https://${trimmed}`;
-}
 
-function loadInstagramEmbeds(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
+  const withProtocol =
+    trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
 
-  const win = window as unknown as {
-    instgrm?: { Embeds?: { process?: () => void } };
-  };
-  if (win.instgrm?.Embeds) return Promise.resolve();
+  try {
+    const parsed = new URL(withProtocol);
 
-  if (instagramEmbedsPromise) return instagramEmbedsPromise;
+    if (parsed.hostname.includes("instagram.com")) {
+      parsed.protocol = "https:";
+      parsed.search = "";
+      parsed.hash = "";
 
-  instagramEmbedsPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${INSTAGRAM_EMBEDS_SRC}"]`,
-    );
+      if (parsed.pathname.startsWith("/reels/")) {
+        parsed.pathname = parsed.pathname.replace("/reels/", "/reel/");
+      }
 
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Failed to load Instagram embeds")),
-        {
-          once: true,
-        },
-      );
-      return;
+      if (!parsed.pathname.endsWith("/")) {
+        parsed.pathname = `${parsed.pathname}/`;
+      }
     }
 
-    const script = document.createElement("script");
-    script.src = INSTAGRAM_EMBEDS_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Instagram embeds"));
-    document.head.appendChild(script);
-  });
+    return parsed.toString();
+  } catch {
+    return withProtocol;
+  }
+}
 
-  return instagramEmbedsPromise;
+interface InstagramEmbedInfo {
+  embedUrl: string;
+  type: "reel" | "p" | "tv";
+}
+
+function getInstagramEmbedInfo(urlStr: string): InstagramEmbedInfo | null {
+  try {
+    const parsed = new URL(urlStr);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length < 2) return null;
+
+    const type = segments[0];
+    const id = segments[1];
+
+    if ((type === "reel" || type === "p" || type === "tv") && id) {
+      return {
+        embedUrl: `https://www.instagram.com/${type}/${id}/embed/`,
+        type,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export interface InstagramEmbedProps {
@@ -58,49 +66,28 @@ export interface InstagramEmbedProps {
 const InstagramEmbed: React.FC<InstagramEmbedProps> = ({ url }) => {
   const [failed, setFailed] = useState(false);
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
+  const embedInfo = useMemo(
+    () => (normalizedUrl ? getInstagramEmbedInfo(normalizedUrl) : null),
+    [normalizedUrl],
+  );
+  const embedHeight = embedInfo?.type === "reel" ? 730 : 860;
 
   useEffect(() => {
-    let cancelled = false;
-
-    const render = async () => {
-      setFailed(false);
-      if (!normalizedUrl) {
-        setFailed(true);
-        return;
-      }
-
-      try {
-        await loadInstagramEmbeds();
-        if (cancelled) return;
-
-        const win = window as unknown as {
-          instgrm?: { Embeds?: { process?: () => void } };
-        };
-        win.instgrm?.Embeds?.process?.();
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    };
-
-    render();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [normalizedUrl]);
+    setFailed(!normalizedUrl || !embedInfo);
+  }, [normalizedUrl, embedInfo]);
 
   return (
     <div className="instagram-embed" onClick={(e) => e.stopPropagation()}>
-      {!failed && normalizedUrl ? (
-        <blockquote
-          className="instagram-media"
-          data-instgrm-permalink={normalizedUrl}
-          data-instgrm-version="14"
-        >
-          <a href={normalizedUrl} target="_blank" rel="noopener noreferrer">
-            View this post on Instagram
-          </a>
-        </blockquote>
+      {!failed && embedInfo ? (
+        <iframe
+          src={embedInfo.embedUrl}
+          title="Instagram post"
+          loading="lazy"
+          scrolling="no"
+          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+          allowFullScreen
+          style={{ width: "100%", height: `${embedHeight}px`, border: "0", borderRadius: "12px", overflow: "hidden" }}
+        />
       ) : normalizedUrl ? (
         <a
           href={normalizedUrl}

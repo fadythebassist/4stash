@@ -343,9 +343,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       const normalized = normalizeUrl(urlStr);
       if (!normalized) return urlStr;
       const parsed = new URL(normalized);
-      // Strip Threads share-sheet tracking params
-      const trackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
-      for (const p of trackingParams) parsed.searchParams.delete(p);
+      // Rewrite threads.com -> threads.net for embed compatibility.
+      if (parsed.hostname.includes("threads.com")) {
+        parsed.hostname = parsed.hostname.replace("threads.com", "threads.net");
+      }
+      // Threads permalinks do not need query/hash. Share links often include
+      // mt/xmt and other tracking params that break embeds.
+      parsed.search = "";
+      parsed.hash = "";
       parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
       return parsed.toString();
     } catch {
@@ -924,6 +929,20 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       } catch {
         finalUrl = cleanRedditUrl(finalUrl);
         updateUrl(finalUrl);
+      }
+    }
+
+    // Final guard: always normalize Threads links before save.
+    // This handles paths where metadata fetch is skipped (e.g. title already present),
+    // so share-sheet params like ?mt=... are never persisted.
+    if (
+      finalUrl &&
+      (finalUrl.includes("threads.net") || finalUrl.includes("threads.com"))
+    ) {
+      const cleanUrl = cleanThreadsUrl(finalUrl);
+      if (cleanUrl !== finalUrl) {
+        finalUrl = cleanUrl;
+        updateUrl(cleanUrl);
       }
     }
 

@@ -18,26 +18,27 @@ interface ThreadsOEmbedData {
 
 const win = window as unknown as {
   threadsEmbedScriptLoaded?: boolean;
-  ThreadsEmbeds?: { process: () => void };
+  instgrm?: { Embeds?: { process: () => void } };
 };
 
-/** Load embed.js once per page; call process() if already loaded. */
+function processThreadsEmbeds(): void {
+  win.instgrm?.Embeds?.process();
+}
+
 function loadThreadsEmbedScript(): void {
   if (win.threadsEmbedScriptLoaded) {
-    // Script already injected — call process() if the API is ready,
-    // otherwise it will be called from the onload callback below.
-    win.ThreadsEmbeds?.process();
+    processThreadsEmbeds();
     return;
   }
+
   win.threadsEmbedScriptLoaded = true;
   const script = document.createElement("script");
   script.src = "https://www.threads.net/embed.js";
   script.async = true;
   script.onload = () => {
-    win.ThreadsEmbeds?.process();
+    processThreadsEmbeds();
   };
   script.onerror = () => {
-    // Allow retry on next call
     win.threadsEmbedScriptLoaded = false;
   };
   document.body.appendChild(script);
@@ -62,9 +63,10 @@ function normalizeThreadsUrl(urlStr: string): string {
     if (parsed.hostname.includes("threads.com")) {
       parsed.hostname = parsed.hostname.replace("threads.com", "threads.net");
     }
-    // Strip tracking/share params that embed.js rejects
-    const trackingParams = ["mt", "igshid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
-    for (const p of trackingParams) parsed.searchParams.delete(p);
+    // Threads permalinks do not require query/hash for rendering;
+    // embed.js is sensitive to share-sheet params (mt/xmt/etc.).
+    parsed.search = "";
+    parsed.hash = "";
     return parsed.toString();
   } catch {
     return urlStr;
@@ -124,27 +126,28 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     };
   }, [url, threadsConnection]);
 
-  // Load embed.js after oEmbed HTML is ready (connected user path)
+  // Load Threads embed.js after oEmbed HTML is ready (connected user path)
   useEffect(() => {
     if (oembedData?.html) {
       loadThreadsEmbedScript();
     }
   }, [oembedData]);
 
-  // Load embed.js for the native blockquote path (non-connected users).
-  // Run as soon as the component mounts with a URL — do not wait for oembedLoading
-  // to settle, as that delay was causing the script to be injected after the
-  // blockquote was already in the DOM but never processed.
+  // Load Threads embed.js for the native blockquote path.
+  // This must also run for connected users when oEmbed fails, since we then
+  // render the same blockquote fallback and still need embed.js to process it.
   useEffect(() => {
-    if (threadsConnection || !embedUrl) return;
+    if (!embedUrl) return;
+    if (threadsConnection && oembedData?.html && !oembedError) return;
     const node = blockquoteRef.current;
     if (!node) return;
     loadThreadsEmbedScript();
+    const rafId = requestAnimationFrame(() => processThreadsEmbeds());
     return () => {
-      // node captured above; nothing to clean up but satisfies the lint rule.
       void node;
+      if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [threadsConnection, embedUrl]);
+  }, [threadsConnection, embedUrl, oembedData, oembedError]);
 
   const handleClick = () => {
     window.open(embedUrl, "_blank", "noopener,noreferrer");

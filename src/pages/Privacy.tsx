@@ -51,8 +51,11 @@ const Privacy: React.FC = () => {
 
           <h3>Usage Data</h3>
           <p>
-            We do not run analytics or tracking scripts. We do not use cookies
-            beyond what Firebase Authentication requires for session management.
+            If you consent, we use Google Analytics to measure aggregate app
+            usage such as page views, navigation patterns, and feature
+            engagement. We do not use Google Analytics to read the private
+            content you save. Firebase Authentication may also use essential
+            cookies for session management.
           </p>
         </section>
 
@@ -61,6 +64,10 @@ const Privacy: React.FC = () => {
           <ul>
             <li>To authenticate you and maintain your session</li>
             <li>To store and retrieve the content you save</li>
+            <li>
+              If you opt in, to understand overall app usage and improve the
+              product experience
+            </li>
             <li>
               To fetch metadata (title, description, preview image) for URLs you
               save — this is done server-side and the URL is sent to our Vite
@@ -86,6 +93,17 @@ const Privacy: React.FC = () => {
                 rel="noopener noreferrer"
               >
                 Firebase Privacy
+              </a>
+            </li>
+            <li>
+              <strong>Google Analytics</strong> — Used to understand app usage
+              and improve product performance.{" "}
+              <a
+                href="https://support.google.com/analytics/answer/7318509"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Google Analytics Privacy
               </a>
             </li>
             <li>

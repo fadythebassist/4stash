@@ -1,4 +1,4 @@
-import { initializeApp, FirebaseApp } from "firebase/app";
+import { getApp, getApps, initializeApp, FirebaseApp } from "firebase/app";
 import {
   getAuth,
   Auth,
@@ -174,7 +174,7 @@ export class FirebaseStorageService implements StorageService {
   private twitterProvider: TwitterAuthProvider;
 
   constructor() {
-    this.app = initializeApp(firebaseConfig);
+    this.app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     this.auth = getAuth(this.app);
     this.db = getFirestore(this.app);
     this.googleProvider = new GoogleAuthProvider();

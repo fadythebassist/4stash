@@ -207,8 +207,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
   const shouldShowInstagramEmbed =
     derivedSource === "instagram" &&
-    !!item.url &&
-    (!displayContent || !displayThumbnail || thumbnailError);
+    !!item.url;
 
   // Only show the TikTok embed when we have a canonical URL containing a video ID.
   // Items saved from short URLs (vt.tiktok.com) before resolution will fall back
