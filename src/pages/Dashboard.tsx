@@ -44,13 +44,21 @@ const Dashboard: React.FC = () => {
 
   // Track item count to detect when a new post is added
   const prevItemCountRef = useRef(items.length);
+  const prevFirstItemIdRef = useRef<string | null>(items[0]?.id ?? null);
 
   // Scroll to top when a new item is added
   useEffect(() => {
-    if (items.length > prevItemCountRef.current) {
+    const currentFirstItemId = items[0]?.id ?? null;
+    const hadNewItemPrepended =
+      items.length > prevItemCountRef.current &&
+      currentFirstItemId !== prevFirstItemIdRef.current;
+
+    if (hadNewItemPrepended) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+
     prevItemCountRef.current = items.length;
+    prevFirstItemIdRef.current = currentFirstItemId;
   }, [items.length]);
 
   // Collect all unique tags from items for the TopBar filter
@@ -135,7 +143,7 @@ const Dashboard: React.FC = () => {
       },
       {
         root: null,
-        rootMargin: "200px 0px",
+        rootMargin: "1200px 0px",
         threshold: 0.1,
       },
     );
