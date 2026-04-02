@@ -11,8 +11,11 @@ import { firebaseStorageService } from "./FirebaseStorageService";
  */
 
 interface MockData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   users: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lists: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   items: any[];
   currentUserId: string | null;
 }
@@ -113,10 +116,10 @@ export async function migrateLocalStorageToFirebase(): Promise<void> {
 
         successCount++;
         console.log(`  ✅ ${oldItem.title}`);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(
           `  ❌ Failed to migrate "${oldItem.title}":`,
-          err.message,
+          err instanceof Error ? err.message : String(err),
         );
         errorCount++;
       }
@@ -148,14 +151,15 @@ export async function migrateLocalStorageToFirebase(): Promise<void> {
     console.log(
       '💡 Tip: You can now delete "4later_mock_data" from localStorage if everything looks good.',
     );
-  } catch (err: any) {
-    console.error("\n❌ Migration failed:", err.message);
+  } catch (err: unknown) {
+    console.error("\n❌ Migration failed:", err instanceof Error ? err.message : String(err));
     throw err;
   }
 }
 
 // Make it available globally in browser console
 if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).migrateToFirebase = migrateLocalStorageToFirebase;
 }
 

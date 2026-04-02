@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import Masonry from "react-masonry-css";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,14 +6,16 @@ import { useData } from "@/contexts/DataContext";
 import TopBar from "@/components/TopBar";
 import ContentCard from "@/components/ContentCard";
 import FAB from "@/components/FAB";
-import AddItemModal from "@/components/AddItemModal";
-import AddListModal from "@/components/AddListModal";
-import ItemDetailModal from "@/components/ItemDetailModal";
-import EditItemModal from "@/components/EditItemModal";
-import AvatarPickerModal from "@/components/AvatarPickerModal";
-import SettingsModal from "@/components/SettingsModal";
 import { Item } from "@/types";
 import "./Dashboard.css";
+
+// Modal components are lazy-loaded so their JS only downloads when first opened.
+const AddItemModal = React.lazy(() => import("@/components/AddItemModal"));
+const AddListModal = React.lazy(() => import("@/components/AddListModal"));
+const ItemDetailModal = React.lazy(() => import("@/components/ItemDetailModal"));
+const EditItemModal = React.lazy(() => import("@/components/EditItemModal"));
+const AvatarPickerModal = React.lazy(() => import("@/components/AvatarPickerModal"));
+const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
 
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -34,6 +36,47 @@ const Dashboard: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  // Track item count to detect when a new post is added
+  const prevItemCountRef = useRef(items.length);
+
+  // Scroll to top when a new item is added
+  useEffect(() => {
+    if (items.length > prevItemCountRef.current) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    prevItemCountRef.current = items.length;
+  }, [items.length]);
+
+  // Collect all unique tags from items for the TopBar filter
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const item of items) {
+      for (const tag of item.tags ?? []) {
+        tagSet.add(tag);
+      }
+    }
+    return Array.from(tagSet).sort();
+  }, [items]);
+
+  // Filter items by selected tags (items must have ALL selected tags)
+  const filteredItems = useMemo(() => {
+    if (selectedTags.length === 0) return items;
+    return items.filter((item) =>
+      selectedTags.every((tag) => item.tags?.includes(tag)),
+    );
+  }, [items, selectedTags]);
+
+  const handleToggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
+
+  const handleClearTags = () => {
+    setSelectedTags([]);
+  };
 
   // Apply theme from user settings
   useEffect(() => {
@@ -142,7 +185,11 @@ const Dashboard: React.FC = () => {
       <TopBar
         lists={lists}
         selectedListId={selectedListId}
+        availableTags={availableTags}
+        selectedTags={selectedTags}
         onSelectList={selectList}
+        onToggleTag={handleToggleTag}
+        onClearTags={handleClearTags}
         onAddList={() => setShowAddList(true)}
         onDeleteList={handleDeleteList}
       />
@@ -150,7 +197,7 @@ const Dashboard: React.FC = () => {
       {/* Main Content */}
       <main className="dashboard-main">
         <div className="container">
-          {items.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon-wrapper">
                 <div className="empty-icon">📭</div>
@@ -172,7 +219,7 @@ const Dashboard: React.FC = () => {
             <div
               className={`content-grid ${user?.settings?.viewDensity || 'comfortable'} layout-list`}
             >
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <ContentCard
                   key={item.id}
                   item={item}
@@ -189,7 +236,7 @@ const Dashboard: React.FC = () => {
               className={`content-grid masonry-grid ${user?.settings?.viewDensity || 'comfortable'}`}
               columnClassName="masonry-grid-column"
             >
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <ContentCard
                   key={item.id}
                   item={item}
@@ -207,7 +254,8 @@ const Dashboard: React.FC = () => {
       {/* FAB */}
       <FAB onClick={() => setShowAddItem(true)} />
 
-      {/* Modals */}
+      {/* Modals — inside Suspense; lazy chunks only download when first opened */}
+      <Suspense fallback={null}>
       {showAddItem && (
         <AddItemModal
           onClose={() => setShowAddItem(false)}
@@ -253,6 +301,7 @@ const Dashboard: React.FC = () => {
           onClose={() => setShowSettings(false)} 
         />
       )}
+      </Suspense>
     </div>
   );
 };

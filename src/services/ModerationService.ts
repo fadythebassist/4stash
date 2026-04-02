@@ -110,6 +110,7 @@ export function checkText(text: string | undefined): ModerationResult {
  * Check if metadata from unfurl indicates NSFW content
  * This catches Reddit/Twitter posts marked as NSFW
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function checkMetadata(_metadata: any): ModerationResult {
   // NSFW content is allowed — the nsfw flag is stored on the item and shown as a badge.
   // We do not block saving; the user intentionally chose to save this post.

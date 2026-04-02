@@ -138,3 +138,18 @@ export interface CreateListDTO {
 export interface UpdateListDTO extends Partial<CreateListDTO> {
   id: string;
 }
+
+export interface AutoCategorySuggestion {
+  name: string;
+  icon: string;
+  confidence: number;
+  matchedKeywords: string[];
+}
+
+export interface AutoCategorizationResult {
+  tags: string[];
+  categories: AutoCategorySuggestion[];
+  autoCategories: AutoCategorySuggestion[];
+  autoCategory: AutoCategorySuggestion | undefined;
+  suggestedCategory: AutoCategorySuggestion | undefined;
+}

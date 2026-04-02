@@ -1,22 +1,45 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { Item } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
-import FacebookEmbed from "./FacebookEmbed";
-import InstagramEmbed from "./InstagramEmbed";
-import RedditEmbed from "./RedditEmbed";
-import TikTokEmbed from "./TikTokEmbed";
-import TweetEmbed from "./TweetEmbed";
-import ThreadsEmbed from "./ThreadsEmbed";
-import YouTubeEmbed from "./YouTubeEmbed";
-import VimeoEmbed from "./VimeoEmbed";
 import "./ContentCard.css";
+
+// Embed components: each platform JS chunk only downloads when the first card
+// of that type is rendered. The Suspense boundary below renders null while loading.
+const FacebookEmbed = React.lazy(() => import("./FacebookEmbed"));
+const InstagramEmbed = React.lazy(() => import("./InstagramEmbed"));
+const RedditEmbed = React.lazy(() => import("./RedditEmbed"));
+const TikTokEmbed = React.lazy(() => import("./TikTokEmbed"));
+const TweetEmbed = React.lazy(() => import("./TweetEmbed"));
+const ThreadsEmbed = React.lazy(() => import("./ThreadsEmbed"));
+const YouTubeEmbed = React.lazy(() => import("./YouTubeEmbed"));
+const VimeoEmbed = React.lazy(() => import("./VimeoEmbed"));
 
 // Decode HTML entities for proper display
 function decodeHtmlEntities(text: string): string {
   const textarea = document.createElement("textarea");
   textarea.innerHTML = text;
   return textarea.value;
+}
+
+function shouldProxyThumbnail(source: string | undefined, thumbnail: string): boolean {
+  if (source !== "instagram" && source !== "facebook") return false;
+
+  try {
+    const host = new URL(thumbnail).hostname.toLowerCase();
+    return (
+      host.includes("instagram") ||
+      host.endsWith("fbcdn.net") ||
+      host.includes("facebook.com") ||
+      host.endsWith("fbsbx.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function toProxyThumbnail(thumbnail: string): string {
+  return `/api/proxy-image?url=${encodeURIComponent(thumbnail)}`;
 }
 
 interface ContentCardProps {
@@ -194,6 +217,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
   const displayThumbnail = resolvedThumbnail ?? item.thumbnail;
   const displayContent = item.content ?? resolvedContent;
+  const displayEmbedThumbnail = useMemo(() => {
+    if (!displayThumbnail) return undefined;
+    return shouldProxyThumbnail(derivedSource, displayThumbnail)
+      ? toProxyThumbnail(displayThumbnail)
+      : displayThumbnail;
+  }, [derivedSource, displayThumbnail]);
 
   // Keep refs in sync so the unfurl effect can read the latest values
   // without them being listed as effect dependencies.
@@ -561,6 +590,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           </p>
         )}
 
+        <Suspense fallback={null}>
         {shouldShowTikTokEmbed && item.url && (
           <TikTokEmbed
             key={`tt-${item.id}`}
@@ -591,7 +621,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
         )}
 
         {shouldShowInstagramEmbed && item.url && (
-          <InstagramEmbed url={item.url} />
+          <InstagramEmbed
+            url={item.url}
+            thumbnail={displayEmbedThumbnail}
+            title={item.title}
+            description={displayContent}
+            onThumbnailError={() => setThumbnailError(true)}
+          />
         )}
 
         {shouldShowYouTubeEmbed && item.url && (
@@ -634,6 +670,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
               {hostname}
             </a>
           )}
+
+        </Suspense>
 
         <div className="card-footer">
           <span className="card-date">

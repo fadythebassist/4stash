@@ -16,6 +16,10 @@
   border: 1px solid var(--border);
 }
 
+.hashtag-tags:empty {
+  display: none;
+}
+
 .hashtag-tag {
   display: inline-flex;
   align-items: center;

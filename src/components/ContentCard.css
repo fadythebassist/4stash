@@ -572,7 +572,8 @@
 .layout-list .content-card .reddit-embed,
 .layout-list .content-card .facebook-video-embed,
 .layout-list .content-card .facebook-post-embed,
-.layout-list .content-card .fb-card {
+.layout-list .content-card .fb-card,
+.layout-list .content-card .social-card {
   display: none;
 }
 

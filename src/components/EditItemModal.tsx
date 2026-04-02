@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Item, List } from "@/types";
 import { useData } from "@/contexts/DataContext";
+import { categorizeContent } from "@/services/AutoCategorizationService";
+import HashtagInput from "@/components/HashtagInput";
 import "./Modal.css";
 
 interface EditItemModalProps {
@@ -20,8 +22,20 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
   const [title, setTitle] = useState(item.title);
   const [content, setContent] = useState(item.content || "");
   const [listIds, setListIds] = useState<string[]>(item.listIds);
+  const [tags, setTags] = useState<string[]>(item.tags || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const suggestedTags = categorizeContent({
+    title,
+    content,
+    url: item.url,
+    source: item.source,
+  }).tags.filter((tag) => !tags.includes(tag));
+
+  const handleAddSuggestedTag = (tag: string) => {
+    setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
+  };
 
   const addedToLists = lists.filter(
     (l) => listIds.includes(l.id) && !item.listIds.includes(l.id),
@@ -42,6 +56,7 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
         title: title.trim() || item.title,
         content: content.trim() || undefined,
         listIds,
+        tags,
       });
       onSave();
       onClose();
@@ -89,6 +104,33 @@ const EditItemModal: React.FC<EditItemModalProps> = ({
               rows={4}
               disabled={loading}
             />
+          </div>
+
+          <div className="form-group">
+            <label>Tags</label>
+            <HashtagInput
+              tags={tags}
+              onChange={setTags}
+              placeholder="Add or remove tags..."
+              maxTags={10}
+            />
+            {suggestedTags.length > 0 && (
+              <div className="auto-category-panel">
+                <div className="auto-category-title">Suggested tags</div>
+                <div className="auto-category-tags">
+                  {suggestedTags.slice(0, 8).map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="auto-category-tag auto-category-tag-button"
+                      onClick={() => handleAddSuggestedTag(tag)}
+                    >
+                      + #{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="form-group">

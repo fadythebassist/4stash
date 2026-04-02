@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./SocialCard.css";
 
 const TIKTOK_EMBED_SRC = "https://www.tiktok.com/embed.js";
 
@@ -16,7 +17,6 @@ function extractTikTokVideoId(urlStr: string): string | null {
 
   try {
     const url = new URL(normalized);
-    // Common format: /@user/video/{id}
     const match = url.pathname.match(/\/video\/(\d+)/);
     if (match?.[1]) return match[1];
     return null;
@@ -26,46 +26,84 @@ function extractTikTokVideoId(urlStr: string): string | null {
   }
 }
 
-/**
- * Trigger TikTok embed.js to process newly inserted blockquotes.
- *
- * TikTok's embed.js scans the DOM once on load. For dynamically inserted
- * blockquotes we remove the existing script and re-append a fresh copy —
- * this forces embed.js to re-run and pick up the new blockquote.
- */
+// Module-level singleton — the TikTok embed script is loaded once and reused.
+// Calling triggerTikTokEmbed() on subsequent cards reuses the already-loaded script
+// instead of re-injecting a new <script> tag on every render.
+let tikTokEmbedPromise: Promise<void> | null = null;
+
 function triggerTikTokEmbed(): void {
   if (typeof window === "undefined") return;
 
-  // Remove any existing embed.js script so we can re-inject it fresh.
-  const existing = document.querySelector<HTMLScriptElement>(
-    `script[src="${TIKTOK_EMBED_SRC}"]`,
-  );
-  if (existing) {
-    existing.parentNode?.removeChild(existing);
+  // If the script already ran and the SDK is available, just call reload().
+  const win = window as unknown as {
+    tiktokEmbed?: { reload?: () => void };
+  };
+  if (win.tiktokEmbed?.reload) {
+    win.tiktokEmbed.reload();
+    return;
   }
 
-  const script = document.createElement("script");
-  script.src = TIKTOK_EMBED_SRC;
-  script.async = true;
-  document.head.appendChild(script);
+  // Script is already loading — nothing more to do; it will process the
+  // blockquote once it fires its load event.
+  if (tikTokEmbedPromise) return;
+
+  tikTokEmbedPromise = new Promise<void>((resolve) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${TIKTOK_EMBED_SRC}"]`,
+    );
+    if (existing) {
+      // Already in DOM from a previous module evaluation (e.g. HMR) — reuse.
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = TIKTOK_EMBED_SRC;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => { tikTokEmbedPromise = null; resolve(); };
+    document.head.appendChild(script);
+  });
 }
+
+const TikTokLogo: React.FC = () => (
+  <svg
+    className="social-card-logo"
+    width="18"
+    height="20"
+    viewBox="0 0 18 21"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M9.37 0h3.24c.17 1.86.94 3.24 2.12 4.16A5.84 5.84 0 0 0 18 5.26v3.38a9.2 9.2 0 0 1-5.24-1.68v7.46A6.58 6.58 0 0 1 6.18 21 6.58 6.58 0 0 1 0 14.58a6.58 6.58 0 0 1 6.94-6.52v3.44a3.24 3.24 0 0 0-3.58 3.14 3.24 3.24 0 0 0 3.28 3.22A3.26 3.26 0 0 0 9.9 14.7l.02-14.7h-.55z"
+      fill="white"
+    />
+  </svg>
+);
 
 export interface TikTokEmbedProps {
   url: string;
+  thumbnail?: string;
+  title?: string;
+  description?: string;
 }
 
-const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, description }) => {
+  const embedRef = useRef<HTMLDivElement | null>(null);
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
   const videoId = useMemo(() => extractTikTokVideoId(url), [url]);
+  const [failed, setFailed] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
 
   useEffect(() => {
-    if (!normalizedUrl || !videoId || !containerRef.current) return;
+    if (!normalizedUrl || !videoId || !embedRef.current) return;
 
-    // Clear any previous embed
-    containerRef.current.innerHTML = "";
+    setFailed(false);
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    // Build the blockquote structure TikTok embed.js expects
+    embedRef.current.innerHTML = "";
+
     const blockquote = document.createElement("blockquote");
     blockquote.className = "tiktok-embed";
     blockquote.setAttribute("cite", normalizedUrl);
@@ -81,31 +119,138 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url }) => {
     link.textContent = "View on TikTok";
     section.appendChild(link);
     blockquote.appendChild(section);
-    containerRef.current.appendChild(blockquote);
+    embedRef.current.appendChild(blockquote);
 
-    // Re-inject embed.js to force a fresh DOM scan that picks up this blockquote
     triggerTikTokEmbed();
 
+    timeoutId = setTimeout(() => {
+      if (cancelled) return;
+      const iframe = embedRef.current?.querySelector("iframe");
+      if (!iframe) {
+        setFailed(true);
+      }
+    }, 10000);
+
     return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (embedRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- ref cleanup is intentional
+        embedRef.current.innerHTML = "";
       }
     };
   }, [normalizedUrl, videoId]);
 
-  // No video ID means this is a short/unresolved URL — render nothing.
-  // ContentCard gates shouldShowTikTokEmbed on the video ID being present,
-  // so this branch should rarely be hit, but guard defensively.
-  if (!videoId || !normalizedUrl) {
-    return null;
+  const handleClick = useCallback(() => {
+    if (normalizedUrl) {
+      window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+    }
+  }, [normalizedUrl]);
+
+  if (!normalizedUrl) return null;
+
+  const isGenericTitle = !title || title.length < 5;
+  const isGenericDesc = !description || description.length < 10;
+  const displayTitle = !isGenericTitle ? title : undefined;
+  const displayDesc = !isGenericDesc ? description : undefined;
+
+  // No video ID — show card-only fallback
+  if (!videoId) {
+    return (
+      <div className="social-card social-card--tiktok" onClick={(e) => e.stopPropagation()}>
+        <div className="social-card-header">
+          <TikTokLogo />
+          <span className="social-card-header-text">TikTok</span>
+        </div>
+        {thumbnail && !thumbnailFailed ? (
+          <div
+            className="social-card-thumbnail"
+            onClick={(e) => { e.stopPropagation(); handleClick(); }}
+            style={{ cursor: "pointer" }}
+          >
+            <img
+              src={thumbnail}
+              alt={displayTitle || "TikTok video"}
+              onError={() => setThumbnailFailed(true)}
+              loading="lazy"
+            />
+          </div>
+        ) : (
+          <div
+            className="social-card-body"
+            onClick={(e) => { e.stopPropagation(); handleClick(); }}
+            style={{ cursor: "pointer" }}
+          >
+            <div className="social-card-icon">🎵</div>
+            <p className="social-card-cta">Tap to view on TikTok</p>
+          </div>
+        )}
+        <a
+          href={normalizedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="social-card-button"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Open in TikTok
+        </a>
+      </div>
+    );
   }
 
+  // Has video ID — always wrap embed with branded header + button
   return (
-    <div
-      className="tiktok-embed-container"
-      ref={containerRef}
-      onClick={(e) => e.stopPropagation()}
-    />
+    <div className="social-card social-card--tiktok" onClick={(e) => e.stopPropagation()}>
+      <div className="social-card-header">
+        <TikTokLogo />
+        <span className="social-card-header-text">TikTok</span>
+      </div>
+
+      {!failed ? (
+        <div ref={embedRef} className="social-card-embed-wrap" />
+      ) : thumbnail && !thumbnailFailed ? (
+        <div
+          className="social-card-thumbnail"
+          onClick={(e) => { e.stopPropagation(); handleClick(); }}
+          style={{ cursor: "pointer" }}
+        >
+          <img
+            src={thumbnail}
+            alt={displayTitle || "TikTok video"}
+            onError={() => setThumbnailFailed(true)}
+            loading="lazy"
+          />
+        </div>
+      ) : (
+        <div
+          className="social-card-body"
+          onClick={(e) => { e.stopPropagation(); handleClick(); }}
+          style={{ cursor: "pointer" }}
+        >
+          {(displayTitle || displayDesc) ? (
+            <>
+              {displayTitle && <div className="social-card-title">{displayTitle}</div>}
+              {displayDesc && <div className="social-card-description">{displayDesc}</div>}
+            </>
+          ) : (
+            <>
+              <div className="social-card-icon">🎵</div>
+              <p className="social-card-cta">Tap to view on TikTok</p>
+            </>
+          )}
+        </div>
+      )}
+
+      <a
+        href={normalizedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="social-card-button"
+        onClick={(e) => e.stopPropagation()}
+      >
+        Open in TikTok
+      </a>
+    </div>
   );
 };
 

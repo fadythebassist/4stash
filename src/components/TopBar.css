@@ -1,9 +1,17 @@
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  padding: 0;
-  border-bottom: 1px solid var(--glass-border);
+  padding: var(--spacing-xs) 0;
+}
+
+.topbar-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.topbar-group + .topbar-group {
+  border-top: 1px solid var(--glass-border);
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
 }
 
 .topbar-scroll {
@@ -49,6 +57,14 @@
   border-bottom-color: var(--accent-primary);
   background: transparent;
   font-weight: 600;
+}
+
+.topbar-chip-tag {
+  color: var(--text-secondary);
+}
+
+.topbar-scroll-tags {
+  padding-bottom: var(--spacing-xs);
 }
 
 .chip-delete {

@@ -10,6 +10,8 @@ function decodeHtmlEntities(text: string): string {
 
 interface FacebookEmbedProps {
   url: string;
+  /** Original saved URL — used for video/reel detection when `url` is a resolved redirect. */
+  originalUrl?: string;
   title?: string;
   description?: string;
   thumbnail?: string;
@@ -77,6 +79,7 @@ function isGenericFacebookDescription(text?: string): boolean {
  * - /video.php?v=... or /watch/?v=...
  * - /<username>/videos/<id>/
  * - /<username>/reels/<id>/
+ * - /groups/<id>/permalink/<id>/ or /groups/<id>/posts/<id>/
  * - fb.watch/...
  *
  * Profile pages, page indexes, events, groups index, marketplace etc. are NOT embeddable.
@@ -87,10 +90,11 @@ function isFacebookEmbeddableUrl(url: string): boolean {
     if (!u.hostname.includes("facebook.com") && !u.hostname.includes("fb.watch")) return false;
     if (u.hostname.includes("fb.watch")) return true;
     const path = u.pathname.toLowerCase().replace(/\/$/, "");
-    // Posts
+    // Posts (including group posts)
     if (/\/posts\//.test(path)) return true;
-    // Permalinks
+    // Permalinks (including group permalinks)
     if (path.includes("/permalink.php") || (path === "/permalink.php")) return true;
+    if (/\/permalink\//.test(path)) return true;
     if (u.searchParams.has("story_fbid")) return true;
     // Photos
     if (path.includes("/photo") || u.searchParams.has("fbid")) return true;
@@ -139,6 +143,7 @@ const FacebookLogo: React.FC = () => (
  */
 const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   url,
+  originalUrl,
   title,
   description,
   thumbnail,
@@ -147,46 +152,62 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
-  const [manualFallback, setManualFallback] = useState(false);
-  const [isPotentiallyBroken, setIsPotentiallyBroken] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const normalizedUrl = useMemo(() => {
     const trimmed = url.trim();
     if (!trimmed) return null;
-    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
-      ? trimmed
-      : `https://${trimmed}`;
+    const withProtocol =
+      trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        ? trimmed
+        : `https://${trimmed}`;
+    try {
+      const parsed = new URL(withProtocol);
+      if (parsed.hostname.includes("facebook.com")) {
+        parsed.protocol = "https:";
+        parsed.hash = "";
+        parsed.search = "";
+        if (parsed.hostname === "m.facebook.com" || parsed.hostname === "mbasic.facebook.com") {
+          parsed.hostname = "www.facebook.com";
+        }
+      }
+      return parsed.toString();
+    } catch {
+      return withProtocol;
+    }
   }, [url]);
 
   const isVideo = useMemo(
-    () => (normalizedUrl ? isFacebookVideoUrl(normalizedUrl) : false),
-    [normalizedUrl],
+    () => {
+      if (normalizedUrl && isFacebookVideoUrl(normalizedUrl)) return true;
+      // Also check original URL — the resolved URL may have lost the /reel/ or /video/ path
+      if (originalUrl && isFacebookVideoUrl(originalUrl)) return true;
+      return false;
+    },
+    [normalizedUrl, originalUrl],
   );
   const safeDescription = useMemo(
     () => (isGenericFacebookDescription(description) ? undefined : description),
     [description],
   );
   const contentType = useMemo(
-    () => (normalizedUrl ? getFacebookContentType(normalizedUrl) : "Post"),
-    [normalizedUrl],
+    () => {
+      // Check resolved URL first, then fall back to original URL for type detection
+      if (normalizedUrl) {
+        const ct = getFacebookContentType(normalizedUrl);
+        if (ct !== "Post") return ct;
+      }
+      if (originalUrl) return getFacebookContentType(originalUrl);
+      return "Post";
+    },
+    [normalizedUrl, originalUrl],
   );
-  const isGroupPermalink = useMemo(() => {
-    if (!normalizedUrl) return false;
-    const lower = normalizedUrl.toLowerCase();
-    if (!lower.includes("facebook.com/groups/")) return false;
-    // Group post URLs: /groups/<id>/permalink/<id>/ or /groups/<id>/posts/<id>/
-    // Facebook's embed plugin does not work for group content — skip iframe entirely.
-    return (
-      lower.includes("/permalink/") ||
-      lower.includes("/posts/")
-    );
-  }, [normalizedUrl]);
-
   // Facebook short-share URLs (share/p/, share/r/, share/v/) cannot be rendered by
   // Facebook's own plugin server — they always return "post no longer available".
   // Login-redirect URLs must also never reach the plugin.
   // Skip the iframe entirely and go straight to the branded fallback card.
+  // NOTE: Only check the resolved URL (normalizedUrl), not the original — if the
+  // unfurl resolved a short-share URL to a proper embeddable URL, use that.
   const isShortShareUrl = useMemo(
     () => normalizedUrl
       ? isFacebookShortShareUrl(normalizedUrl) || isFacebookLoginUrl(normalizedUrl)
@@ -221,18 +242,23 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   useEffect(() => {
     setIframeLoaded(false);
     setShowFallback(false);
-    setIsPotentiallyBroken(false);
   }, [iframeSrc]);
 
   // After the iframe fires onLoad, check if it rendered real content.
   // Facebook plugin iframes load but render a tiny ~0-height body when the URL is invalid.
   // Give it a grace period then measure height; if still tiny → show fallback.
   //
-  // For videos, the CSS fixes the iframe at 600px, so getBoundingClientRect won't help.
-  // Instead, listen for Facebook's postMessage resize events — a working embed sends them;
-  // a blocked/unavailable one never does. If none arrive within 6s of onLoad, auto-fallback.
+  // For posts: listen for Facebook's postMessage resize events and check iframe height.
+  // For videos/reels: the video.php plugin iframe is a standalone player that does NOT
+  // send postMessage events — so skip postMessage detection entirely for videos.
+  // The video iframe either loads and plays, or shows a gray error. The onLoad hard-timeout
+  // (below) is the only safety net for videos.
   useEffect(() => {
     if (!iframeLoaded) return;
+
+    // For videos/reels, the video.php iframe doesn't send postMessage events.
+    // If it loaded (onLoad fired), the player is rendered — keep it.
+    if (isVideo) return;
 
     let receivedFacebookMessage = false;
 
@@ -267,36 +293,12 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
       const el = iframeRef.current;
       if (el) {
         const height = el.getBoundingClientRect().height;
-        console.log(
-          "[FacebookEmbed] Detected iframe height:",
-          height,
-          "isVideo:",
-          isVideo,
-          "receivedFacebookMessage:",
-          receivedFacebookMessage,
-        );
-        if (!isVideo) {
-          // For posts/photos: CSS doesn't fix height, so measure it.
-          // A working embed renders at >100px; an error/unavailable post renders very small.
-          // Some blocked embeds still render a large gray frame with a broken icon.
-          // In that case height looks valid, but Facebook never sends resize/ready messages.
-          if (height < 100 || !receivedFacebookMessage) {
-            setShowFallback(true);
-          }
-        } else {
-          // For videos/reels: iframe is CSS-fixed at 600px so height check is useless.
-          // Rely on postMessage signal instead.
-          // If Facebook sent a resize/ready event, the embed is working — keep it.
-          // If no message arrived, the embed is showing the "Unavailable" error screen.
-          if (!receivedFacebookMessage) {
-            if (thumbnail) {
-              // We have a thumbnail — switch straight to the static card.
-              setShowFallback(true);
-            } else {
-              // No thumbnail but still blocked — show the manual fallback button.
-              setIsPotentiallyBroken(true);
-            }
-          }
+        // For posts/photos: CSS doesn't fix height, so measure it.
+        // A working embed renders at >100px; an error/unavailable post renders very small.
+        // Some blocked embeds still render a large gray frame with a broken icon.
+        // In that case height looks valid, but Facebook never sends resize/ready messages.
+        if (height < 100 || !receivedFacebookMessage) {
+          setShowFallback(true);
         }
       }
     }, 6000);
@@ -305,7 +307,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
       clearTimeout(timer);
       window.removeEventListener("message", onMessage);
     };
-  }, [iframeLoaded, isVideo, thumbnail]);
+  }, [iframeLoaded, isVideo]);
 
   // Hard timeout: if iframe hasn't fired onLoad at all after 6s (posts) or 10s (videos), show fallback
   useEffect(() => {
@@ -320,11 +322,11 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   if (!normalizedUrl) return null;
 
   // ── Show iframe plugin (always attempted first) ──
+  // Group permalinks are attempted via iframe too — the postMessage timeout will
+  // auto-fallback to the static card if the plugin can't render them.
   if (
     iframeSrc &&
     !showFallback &&
-    !manualFallback &&
-    !isGroupPermalink &&
     !isShortShareUrl &&
     !isNotEmbeddable &&
     !shouldPreferThumbnailCard
@@ -353,26 +355,13 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
             src={iframeSrc}
             title={`Facebook ${contentType}`}
             scrolling="no"
-            allow="encrypted-media; picture-in-picture; web-share; unload"
+            allow="autoplay; encrypted-media; picture-in-picture; web-share"
             allowFullScreen
             style={{ opacity: iframeLoaded ? 1 : 0 }}
             onLoad={() => setIframeLoaded(true)}
             onError={() => setShowFallback(true)}
           />
         </div>
-
-        {isPotentiallyBroken && thumbnail && (
-          <button
-            className="fb-card-fallback-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setManualFallback(true);
-            }}
-            title="Video not working? Show preview card instead"
-          >
-            🖼️ Show as card
-          </button>
-        )}
 
         <a
           href={normalizedUrl}

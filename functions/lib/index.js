@@ -111,6 +111,16 @@ function isGenericInstagramTitle(title) {
     const t = title.trim().toLowerCase();
     if (t === "instagram")
         return true;
+    if (t === "instagram post")
+        return true;
+    if (t === "instagram photo")
+        return true;
+    if (t === "instagram reel")
+        return true;
+    if (t === "instagram video")
+        return true;
+    if (/^post by @.+/.test(t))
+        return true;
     if (t.includes("403") || t.includes("forbidden") || t.includes("access denied"))
         return true;
     if (t.includes("not available"))
@@ -137,9 +147,24 @@ function isGenericInstagramDescription(desc) {
         return true;
     if (d.includes("log in") || d.includes("login") || d.includes("sign up"))
         return true;
+    if (d.includes("url source:"))
+        return true;
+    if (d.includes("markdown content:"))
+        return true;
+    if (d.includes("see everyday moments from your close friends"))
+        return true;
     if (d.includes("instagram"))
         return false;
     return false;
+}
+function isInstagramLoginUrl(url) {
+    try {
+        const u = new url_1.URL(url);
+        return u.hostname.includes("instagram.com") && u.pathname.startsWith("/accounts/login");
+    }
+    catch (_a) {
+        return false;
+    }
 }
 function isGenericRedditTitle(title) {
     if (!title)
@@ -208,9 +233,103 @@ function isGenericFacebookTitle(title) {
         return true;
     return false;
 }
+function cleanFacebookUrl(urlStr) {
+    try {
+        const u = new url_1.URL(urlStr);
+        const trackingParams = [
+            "utm_source",
+            "utm_medium",
+            "utm_name",
+            "utm_term",
+            "utm_content",
+            "utm_campaign",
+            "ref",
+            "ref_source",
+            "context",
+            "share_id",
+            "sh",
+            "rdid",
+            "share_url",
+            "mibextid",
+            "__cft__",
+            "__tn__",
+        ];
+        for (const p of trackingParams)
+            u.searchParams.delete(p);
+        u.hash = "";
+        u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+        return u.toString();
+    }
+    catch (_a) {
+        return urlStr;
+    }
+}
+function getFacebookFallbackTitle(urlStr) {
+    try {
+        const u = new url_1.URL(urlStr);
+        const path = u.pathname.toLowerCase();
+        if (path.includes("/groups/") && (path.includes("/permalink/") || path.includes("/posts/"))) {
+            return "Facebook Group Post";
+        }
+        if (path.includes("/reel") || path.includes("/reels/")) {
+            return "Facebook Reel";
+        }
+        if (path.includes("/video") || path.includes("/watch")) {
+            return "Facebook Video";
+        }
+        if (path.includes("/photo")) {
+            return "Facebook Photo";
+        }
+        return "Facebook Post";
+    }
+    catch (_a) {
+        return undefined;
+    }
+}
+/** Extract a numeric Facebook video/reel ID from a URL, or null. */
+function extractFacebookVideoId(urlStr) {
+    try {
+        const u = new url_1.URL(urlStr);
+        const path = u.pathname;
+        // /reel/933897635709855
+        const reelMatch = path.match(/\/reel\/(\d+)/);
+        if (reelMatch)
+            return reelMatch[1];
+        // /reels/933897635709855
+        const reelsMatch = path.match(/\/reels\/(\d+)/);
+        if (reelsMatch)
+            return reelsMatch[1];
+        // /watch/?v=933897635709855
+        const vParam = u.searchParams.get("v");
+        if (path.startsWith("/watch") && vParam && /^\d+$/.test(vParam))
+            return vParam;
+        // /username/videos/933897635709855
+        const videosMatch = path.match(/\/videos\/(\d+)/);
+        if (videosMatch)
+            return videosMatch[1];
+        // /video.php?v=933897635709855
+        if (path.includes("video.php") && vParam && /^\d+$/.test(vParam))
+            return vParam;
+        return null;
+    }
+    catch (_a) {
+        return null;
+    }
+}
+/** Check if a Facebook URL points to a video or reel. */
+function isFacebookVideoUrl(urlStr) {
+    try {
+        const path = new url_1.URL(urlStr).pathname.toLowerCase();
+        return path.includes("/reel") || path.includes("/reels/") ||
+            path.includes("/video") || path.includes("/watch");
+    }
+    catch (_a) {
+        return false;
+    }
+}
 function shouldProxyImageHost(hostname) {
     const h = hostname.toLowerCase();
-    return ((h.includes("instagram.com") && !h.includes("cdninstagram.com")) ||
+    return (h.includes("instagram.com") ||
         h.endsWith("fbcdn.net") ||
         h.includes("facebook.com") ||
         h.endsWith("fbsbx.com"));
@@ -619,17 +738,133 @@ function extractInstagramCaptionFromHtml(html) {
         /"caption"\s*:\s*\{[^}]*"text"\s*:\s*"([^"]+)"/i,
         /"edge_media_to_caption"\s*:\s*\{[\s\S]*?"text"\s*:\s*"([^"]+)"/i,
         /"accessibility_caption"\s*:\s*"([^"]+)"/i,
+        /"caption_text"\s*:\s*"([^"]+)"/i,
+        /"sharing_friction_info"[\s\S]*?"bloks_app_url"\s*:\s*"([^"]+)"/i,
     ];
     for (const re of patterns) {
         const m = html.match(re);
         if (m === null || m === void 0 ? void 0 : m[1]) {
-            const unescaped = m[1].replace(/\\n/g, " ").replace(/\\u003c/g, "<").replace(/\\u003e/g, ">");
+            const unescaped = m[1]
+                .replace(/\\n/g, " ")
+                .replace(/\\u003c/g, "<")
+                .replace(/\\u003e/g, ">")
+                .replace(/\\u0026/g, "&")
+                .replace(/\\\//g, "/");
             const cleaned = cleanInstagramText(unescaped);
             if (cleaned && cleaned.length >= 5)
                 return cleaned;
         }
     }
     return undefined;
+}
+function extractInstagramCaptionFromPageText(html) {
+    const normalized = decodeHtmlEntities(html)
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!normalized)
+        return undefined;
+    const patterns = [
+        /(?:likes?,\s*\d+\s*comments?\s*-\s*)(.{30,500}?)(?:\s+more\b|\s+view all\b|\s+on instagram\b)/i,
+        /(?:add a comment\.{0,3}\s+)(.{30,500}?)(?:\s+more\b|\s+view all\b|\s+on instagram\b)/i,
+    ];
+    for (const re of patterns) {
+        const m = normalized.match(re);
+        const candidate = cleanInstagramText(m === null || m === void 0 ? void 0 : m[1]);
+        if (candidate && candidate.length >= 20)
+            return candidate;
+    }
+    return undefined;
+}
+function extractInstagramImageFromHtml(html) {
+    const metaMatch = html.match(/<meta[^>]+property=["']og:image(?::secure_url|:url)?["'][^>]+content=["']([^"']+)/i);
+    if (metaMatch === null || metaMatch === void 0 ? void 0 : metaMatch[1]) {
+        return decodeHtmlEntities(metaMatch[1]);
+    }
+    const imageCandidates = [
+        ...html.matchAll(/https?:\/\/[^"'\s)]+cdninstagram\.com[^"'\s)]*/gi),
+    ].map((match) => decodeHtmlEntities(match[0]));
+    return imageCandidates.find((candidate) => !candidate.includes("s150x150") && !candidate.includes("profile_pic") && !candidate.includes("Audio image")) || imageCandidates[0];
+}
+function extractPlainTextMetadata(text) {
+    const normalized = decodeHtmlEntities(text).replace(/\r/g, "").trim();
+    if (!normalized)
+        return {};
+    const lines = normalized.split("\n").map((line) => line.trim());
+    const titleLineIndex = lines.findIndex((line) => /^title:\s*/i.test(line));
+    const rawTitle = titleLineIndex >= 0
+        ? lines[titleLineIndex].replace(/^title:\s*/i, "").trim()
+        : undefined;
+    let descriptionLines = titleLineIndex >= 0 ? lines.slice(titleLineIndex + 1) : lines;
+    while (descriptionLines[0] === "") {
+        descriptionLines = descriptionLines.slice(1);
+    }
+    const description = descriptionLines
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+    return {
+        title: rawTitle || undefined,
+        description: description || undefined,
+    };
+}
+function cleanInstagramDerivedTitle(input) {
+    var _a;
+    if (!input)
+        return undefined;
+    let title = decodeHtmlEntities(input).trim();
+    if (!title)
+        return undefined;
+    title = title.replace(/^.+? on instagram:\s*/i, "").trim();
+    title = title.replace(/^['"\u201c\u2018]+/, "").trim();
+    title = title.replace(/['"\u201d\u2019]+$/, "").trim();
+    title = ((_a = title.split(/\n+/)[0]) === null || _a === void 0 ? void 0 : _a.trim()) || title;
+    return title || undefined;
+}
+async function fetchJinaSnapshot(targetUrl, timeoutMs) {
+    const canonicalUrl = `${targetUrl.origin}${targetUrl.pathname.replace(/\/?$/, "/")}`;
+    const variants = Array.from(new Set([
+        `https://r.jina.ai/http://${targetUrl.hostname}${targetUrl.pathname}`,
+        `https://r.jina.ai/${canonicalUrl}`,
+        `https://r.jina.ai/http://${canonicalUrl}`,
+        `https://r.jina.ai/${targetUrl.toString()}`,
+        `https://r.jina.ai/http://${targetUrl.hostname}${targetUrl.pathname}${targetUrl.search}`,
+        `https://r.jina.ai/http://${targetUrl.toString()}`,
+    ]));
+    let bestResponse = null;
+    let bestScore = -1;
+    for (const variant of variants) {
+        try {
+            const response = await fetchTextWithTimeout(variant, {}, timeoutMs);
+            if (!response.ok || !response.text.trim()) {
+                continue;
+            }
+            const plainTextMeta = extractPlainTextMetadata(response.text);
+            const derivedTitle = cleanInstagramDerivedTitle(plainTextMeta.title);
+            const score = [
+                derivedTitle && !isGenericInstagramTitle(derivedTitle) ? 2 : 0,
+                plainTextMeta.description && !isGenericInstagramDescription(plainTextMeta.description) ? 3 : 0,
+            ].reduce((sum, value) => sum + value, 0);
+            if (score > bestScore) {
+                bestScore = score;
+                bestResponse = response;
+            }
+            if (score >= 5) {
+                return response;
+            }
+        }
+        catch (_a) {
+            // Try the next variant
+        }
+    }
+    return bestResponse || {
+        ok: false,
+        status: 0,
+        finalUrl: "",
+        text: "",
+    };
 }
 async function tryInstagramJson(targetUrl) {
     var _a, _b, _c, _d;
@@ -670,8 +905,38 @@ async function tryInstagramJson(targetUrl) {
         return null;
     }
 }
+async function tryInstagramOEmbed(targetUrl) {
+    try {
+        const canonicalUrl = `${targetUrl.origin}${targetUrl.pathname.replace(/\/?$/, "/")}`;
+        const oembedUrl = `https://www.instagram.com/api/v1/oembed/?url=${encodeURIComponent(canonicalUrl)}`;
+        const res = await nodeFetch(oembedUrl, {
+            headers: {
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                accept: "application/json,text/plain,*/*",
+                "accept-language": "en-US,en;q=0.9",
+            },
+            timeoutMs: 10000,
+        });
+        if (!res.ok)
+            return null;
+        const data = tryParseJson(await res.text());
+        if (!data)
+            return null;
+        const title = typeof data["author_name"] === "string"
+            ? `Post by @${data["author_name"]}`
+            : undefined;
+        return {
+            title,
+            description: typeof data["title"] === "string" ? data["title"] : undefined,
+            image: typeof data["thumbnail_url"] === "string" ? data["thumbnail_url"] : undefined,
+        };
+    }
+    catch (_a) {
+        return null;
+    }
+}
 function buildInstagramMediaFallbackUrl(u) {
-    const m = u.pathname.match(/\/(p|reel|tv)\/([^/?#]+)/i);
+    const m = u.pathname.match(/\/(p|reel|reels|tv)\/([^/?#]+)/i);
     if (!(m === null || m === void 0 ? void 0 : m[1]) || !(m === null || m === void 0 ? void 0 : m[2]))
         return null;
     return `https://www.instagram.com/p/${m[2]}/media/?size=l`;
@@ -880,6 +1145,14 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     };
     const facebookPreviewHeaders = Object.assign(Object.assign({}, headers), { "user-agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" });
     const isFacebook = targetUrl.hostname.includes("facebook.com") || targetUrl.hostname.includes("fb.watch");
+    if (isFacebook) {
+        try {
+            targetUrl = new url_1.URL(cleanFacebookUrl(targetUrl.toString()));
+        }
+        catch (_h) {
+            // keep original targetUrl
+        }
+    }
     const isFacebookShare = isFacebook && isFacebookShareLike(targetUrl);
     // Keep a copy of the original share URL so we can return it if resolution fails / hits a login wall
     const originalShareUrl = isFacebookShare ? targetUrl.toString() : null;
@@ -897,7 +1170,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 try {
                     targetUrl = new url_1.URL(resolved);
                 }
-                catch ( /* keep original */_h) { /* keep original */ }
+                catch ( /* keep original */_j) { /* keep original */ }
             }
         }
     }
@@ -907,7 +1180,19 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: originalShareUrl !== null && originalShareUrl !== void 0 ? originalShareUrl : targetUrl.toString(), contentType: "", status: 0, title: undefined, description: undefined, image: undefined, shareResolvedUrl: null }, (debug ? { debug: { loginWall: true } } : {})));
         return;
     }
-    const primary = await fetchTextWithTimeout(targetUrl.toString(), isFacebookShare ? facebookPreviewHeaders : headers, 10000);
+    let primary = await fetchTextWithTimeout(targetUrl.toString(), isFacebookShare ? facebookPreviewHeaders : headers, 10000);
+    if (isFacebook && !primary.ok) {
+        const cleanedFacebookUrl = cleanFacebookUrl(targetUrl.toString());
+        if (cleanedFacebookUrl !== targetUrl.toString()) {
+            try {
+                primary = await fetchTextWithTimeout(cleanedFacebookUrl, facebookPreviewHeaders, 10000);
+                targetUrl = new url_1.URL(cleanedFacebookUrl);
+            }
+            catch (_k) {
+                // keep original failed response
+            }
+        }
+    }
     let finalUrl = primary.finalUrl;
     const contentType = primary.contentType;
     const meta = extractMetadata(primary.text);
@@ -916,6 +1201,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         primary: { ok: primary.ok, status: primary.status, contentType },
         shareResolve: { attempted: isFacebookShare, url: shareResolvedUrl },
         instagramJson: { attempted: false, ok: false },
+        instagramOembed: { attempted: false, ok: false },
         jina: { attempted: false, ok: false },
         fallbackMediaUrl: { attempted: false, used: false },
         facebookJina: { attempted: false, ok: false },
@@ -926,11 +1212,15 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     };
     // Instagram
     const isInstagram = targetUrl.hostname.includes("instagram.com");
+    if (isInstagram && isInstagramLoginUrl(finalUrl)) {
+        finalUrl = targetUrl.toString();
+    }
     if (isInstagram && (isGenericInstagramTitle(meta.title) || !meta.image || !meta.description)) {
         if (!meta.description || isGenericInstagramDescription(meta.description)) {
             const fromLd = extractInstagramCaptionFromJsonLd(primary.text);
             const fromHtml = extractInstagramCaptionFromHtml(primary.text);
-            meta.description = cleanInstagramText(fromLd || fromHtml || meta.description) || meta.description;
+            const fromPageText = extractInstagramCaptionFromPageText(primary.text);
+            meta.description = cleanInstagramText(fromLd || fromHtml || fromPageText || meta.description) || meta.description;
         }
         else {
             meta.description = cleanInstagramText(meta.description) || meta.description;
@@ -943,24 +1233,48 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         }
         if ((ig === null || ig === void 0 ? void 0 : ig.image) && !meta.image)
             meta.image = ig.image;
+        attempts["instagramOembed"] = { attempted: true, ok: false };
+        const igOembed = await tryInstagramOEmbed(targetUrl);
+        attempts["instagramOembed"]["ok"] = !!igOembed;
+        if ((igOembed === null || igOembed === void 0 ? void 0 : igOembed.description) && (!meta.description || isGenericInstagramDescription(meta.description))) {
+            meta.description = cleanInstagramText(igOembed.description) || igOembed.description;
+        }
+        if ((igOembed === null || igOembed === void 0 ? void 0 : igOembed.image) && !meta.image)
+            meta.image = igOembed.image;
+        if (!meta.title && (igOembed === null || igOembed === void 0 ? void 0 : igOembed.title) && !isGenericInstagramTitle(igOembed.title)) {
+            meta.title = igOembed.title;
+        }
         if (isGenericInstagramTitle(meta.title))
             meta.title = undefined;
         if (!meta.image || !meta.description) {
-            const jinaUrl = `https://r.jina.ai/${targetUrl.toString()}`;
             attempts["jina"] = { attempted: true, ok: false };
-            const proxied = await fetchTextWithTimeout(jinaUrl, headers, 10000);
+            const proxied = await fetchJinaSnapshot(targetUrl, 10000);
             attempts["jina"]["ok"] = proxied.ok;
             const proxyMeta = extractMetadata(proxied.text);
-            if (!meta.title && proxyMeta.title && !isGenericInstagramTitle(proxyMeta.title))
+            const proxyTextMeta = extractPlainTextMetadata(proxied.text);
+            const derivedTitle = cleanInstagramDerivedTitle(proxyTextMeta.title);
+            if (!meta.title && proxyMeta.title && !isGenericInstagramTitle(proxyMeta.title)) {
                 meta.title = proxyMeta.title;
-            if (!meta.description && proxyMeta.description)
+            }
+            if (!meta.title && derivedTitle && !isGenericInstagramTitle(derivedTitle)) {
+                meta.title = derivedTitle;
+            }
+            if (!meta.description && proxyMeta.description) {
                 meta.description = cleanInstagramText(proxyMeta.description) || proxyMeta.description;
+            }
+            if (!meta.description && proxyTextMeta.description) {
+                meta.description = cleanInstagramText(proxyTextMeta.description) || proxyTextMeta.description;
+            }
             if (!meta.image && proxyMeta.image)
                 meta.image = proxyMeta.image;
             if (!meta.description) {
                 const proxyLd = extractInstagramCaptionFromJsonLd(proxied.text);
                 const proxyHtml = extractInstagramCaptionFromHtml(proxied.text);
-                meta.description = cleanInstagramText(proxyLd || proxyHtml) || meta.description;
+                const proxyPageText = extractInstagramCaptionFromPageText(proxied.text);
+                meta.description = cleanInstagramText(proxyLd || proxyHtml || proxyPageText) || meta.description;
+            }
+            if (!meta.image) {
+                meta.image = extractInstagramImageFromHtml(proxied.text) || meta.image;
             }
         }
         if (!meta.image) {
@@ -973,12 +1287,10 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         }
     }
     const isFacebookHost = targetUrl.hostname.includes("facebook.com") || targetUrl.hostname.includes("fb.watch");
-    // Facebook group posts — try mbasic
-    const isFacebookGroupPost = isFacebookHost && (() => {
-        const p = targetUrl.pathname.toLowerCase();
-        return p.includes("/groups/") && (p.includes("/posts/") || p.includes("/permalink/"));
-    })();
-    if (isFacebookGroupPost && !meta.image) {
+    // Facebook often omits `og:image` on the main desktop HTML for reels/videos.
+    // `mbasic.facebook.com` tends to expose a usable poster image more reliably,
+    // so try it for any Facebook URL when the image is still missing.
+    if (isFacebookHost && !meta.image) {
         try {
             const mbasicUrl = new url_1.URL(targetUrl.toString());
             mbasicUrl.hostname = "mbasic.facebook.com";
@@ -998,8 +1310,12 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                         if (!(srcMatch === null || srcMatch === void 0 ? void 0 : srcMatch[1]))
                             continue;
                         const src = srcMatch[1];
-                        if (src.includes("static.xx.fbcdn") || src.includes("emoji") || src.includes("reaction") || src.includes("rsrc.php"))
+                        if (src.includes("static.xx.fbcdn") ||
+                            src.includes("emoji") ||
+                            src.includes("reaction") ||
+                            src.includes("rsrc.php")) {
                             continue;
+                        }
                         if (src.startsWith("https://")) {
                             meta.image = src;
                             break;
@@ -1008,41 +1324,113 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 }
             }
         }
-        catch ( /* mbasic failed */_j) { /* mbasic failed */ }
+        catch (_l) {
+            /* mbasic failed */
+        }
     }
-    // Facebook oEmbed + Jina fallback
+    // Clear generic Facebook error titles so fallback attempts can replace them
+    if (isFacebookHost && isGenericFacebookTitle(meta.title)) {
+        meta.title = undefined;
+    }
+    // Facebook Graph API + oEmbed + Jina fallback
     if (isFacebookHost && (!meta.title || !meta.description || !meta.image)) {
         // Secrets set via: firebase functions:secrets:set FB_APP_ID and FB_APP_SECRET
         const appId = fbAppId;
         const appSecret = fbAppSecret;
         if (appId && appSecret) {
-            attempts["facebookOembed"] = { attempted: true, ok: false };
-            try {
-                const accessToken = `${appId}|${appSecret}`;
-                const oembedUrl = `https://graph.facebook.com/v19.0/oembed_post?url=${encodeURIComponent(targetUrl.toString())}&access_token=${encodeURIComponent(accessToken)}&fields=author_name,author_url,provider_name,provider_url,type,width,height,html`;
-                const oembedRes = await nodeFetch(oembedUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
-                if (oembedRes.ok) {
-                    const oembedData = tryParseJson(await oembedRes.text());
-                    if (oembedData) {
-                        attempts["facebookOembed"]["ok"] = true;
-                        if (!meta.title && oembedData["author_name"])
-                            meta.title = decodeHtmlEntities(oembedData["author_name"]);
-                        else if (!meta.title && oembedData["html"]) {
-                            const textMatch = oembedData["html"].match(/>([^<]+)</);
-                            if (textMatch === null || textMatch === void 0 ? void 0 : textMatch[1])
-                                meta.title = decodeHtmlEntities(textMatch[1].trim());
-                        }
-                        if (!meta.description && oembedData["html"]) {
-                            const descText = oembedData["html"]
-                                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-                                .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-                            if (descText)
-                                meta.description = decodeHtmlEntities(descText);
+            const accessToken = `${appId}|${appSecret}`;
+            // --- 1) Graph API /{video-id}?fields=picture for reel/video thumbnails ---
+            const fbVideoId = extractFacebookVideoId(targetUrl.toString());
+            if (fbVideoId && !meta.image) {
+                attempts["facebookGraphVideo"] = { attempted: true, ok: false, videoId: fbVideoId };
+                try {
+                    const graphUrl = `https://graph.facebook.com/v19.0/${fbVideoId}?fields=picture,description,from{name}&access_token=${encodeURIComponent(accessToken)}`;
+                    const graphRes = await nodeFetch(graphUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
+                    if (graphRes.ok) {
+                        const graphData = tryParseJson(await graphRes.text());
+                        if (graphData) {
+                            attempts["facebookGraphVideo"]["ok"] = true;
+                            if (graphData["picture"] && typeof graphData["picture"] === "string") {
+                                meta.image = graphData["picture"];
+                            }
+                            if (!meta.description && graphData["description"] && typeof graphData["description"] === "string") {
+                                meta.description = graphData["description"];
+                            }
+                            const from = graphData["from"];
+                            if (!meta.title && (from === null || from === void 0 ? void 0 : from["name"]) && typeof from["name"] === "string") {
+                                meta.title = from["name"];
+                            }
                         }
                     }
                 }
+                catch ( /* Graph API failed */_m) { /* Graph API failed */ }
             }
-            catch ( /* ignore oEmbed errors */_k) { /* ignore oEmbed errors */ }
+            // --- 2) oEmbed (try oembed_video for video/reel URLs, then oembed_post) ---
+            const isVideoUrl = isFacebookVideoUrl(targetUrl.toString());
+            const oembedEndpoints = isVideoUrl
+                ? ["oembed_video", "oembed_post"]
+                : ["oembed_post"];
+            for (const endpoint of oembedEndpoints) {
+                if (meta.title && meta.description && meta.image)
+                    break;
+                const attemptKey = endpoint === "oembed_video" ? "facebookOembedVideo" : "facebookOembed";
+                attempts[attemptKey] = { attempted: true, ok: false };
+                try {
+                    const oembedUrl = `https://graph.facebook.com/v19.0/${endpoint}?url=${encodeURIComponent(targetUrl.toString())}&access_token=${encodeURIComponent(accessToken)}&fields=author_name,author_url,provider_name,provider_url,type,width,height,html,thumbnail_url,thumbnail_width,thumbnail_height`;
+                    const oembedRes = await nodeFetch(oembedUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
+                    if (oembedRes.ok) {
+                        const oembedData = tryParseJson(await oembedRes.text());
+                        if (oembedData) {
+                            attempts[attemptKey]["ok"] = true;
+                            if (!meta.image && oembedData["thumbnail_url"] && typeof oembedData["thumbnail_url"] === "string") {
+                                meta.image = oembedData["thumbnail_url"];
+                            }
+                            if (!meta.title && oembedData["author_name"])
+                                meta.title = decodeHtmlEntities(oembedData["author_name"]);
+                            else if (!meta.title && oembedData["html"]) {
+                                const textMatch = oembedData["html"].match(/>([^<]+)</);
+                                if (textMatch === null || textMatch === void 0 ? void 0 : textMatch[1])
+                                    meta.title = decodeHtmlEntities(textMatch[1].trim());
+                            }
+                            if (!meta.description && oembedData["html"]) {
+                                const descText = oembedData["html"]
+                                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+                                    .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                                if (descText)
+                                    meta.description = decodeHtmlEntities(descText);
+                            }
+                        }
+                    }
+                }
+                catch ( /* ignore oEmbed errors */_o) { /* ignore oEmbed errors */ }
+            }
+            // --- 3) Video embed page — fetch the plugins/video.php page for og:image ---
+            if (!meta.image && isVideoUrl) {
+                attempts["facebookEmbedPage"] = { attempted: true, ok: false };
+                try {
+                    const embedPageUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(targetUrl.toString())}`;
+                    const embedRes = await fetchTextWithTimeout(embedPageUrl, facebookPreviewHeaders, 8000);
+                    if (embedRes.ok) {
+                        attempts["facebookEmbedPage"]["ok"] = true;
+                        const embedMeta = extractMetadata(embedRes.text);
+                        if (embedMeta.image)
+                            meta.image = embedMeta.image;
+                        // Also try to find poster/thumbnail in the HTML
+                        if (!meta.image) {
+                            // Look for background-image or poster attributes in the embed HTML
+                            const posterMatch = embedRes.text.match(/poster=["']([^"']+)["']/i);
+                            if (posterMatch === null || posterMatch === void 0 ? void 0 : posterMatch[1])
+                                meta.image = decodeHtmlEntities(posterMatch[1]);
+                        }
+                        if (!meta.image) {
+                            const bgImgMatch = embedRes.text.match(/background-image:\s*url\(['"]?([^'")\s]+)['"]?\)/i);
+                            if (bgImgMatch === null || bgImgMatch === void 0 ? void 0 : bgImgMatch[1])
+                                meta.image = decodeHtmlEntities(bgImgMatch[1]);
+                        }
+                    }
+                }
+                catch ( /* embed page failed */_p) { /* embed page failed */ }
+            }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["facebookJina"] = { attempted: true, ok: false };
@@ -1058,12 +1446,17 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 if (!meta.image && fbMeta.image)
                     meta.image = fbMeta.image;
             }
-            catch ( /* ignore */_l) { /* ignore */ }
+            catch ( /* ignore */_q) { /* ignore */ }
         }
+    }
+    // Replace generic Facebook error titles with meaningful fallback
+    if (isFacebookHost && isGenericFacebookTitle(meta.title)) {
+        meta.title = getFacebookFallbackTitle(targetUrl.toString());
     }
     // Early return if Facebook still has nothing
     if (isFacebookHost && !meta.title && !meta.description && !meta.image) {
-        res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: targetUrl.toString(), contentType, status: primary.status, title: undefined, description: undefined, image: undefined, shareResolvedUrl }, (debug ? { debug: { attempts } } : {})));
+        const fallbackTitle = getFacebookFallbackTitle(targetUrl.toString());
+        res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: targetUrl.toString(), contentType, status: primary.status, title: fallbackTitle, description: undefined, image: undefined, shareResolvedUrl }, (debug ? { debug: { attempts } } : {})));
         return;
     }
     // Reddit
@@ -1087,7 +1480,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     steps: redditResolveResult.debugAttempts,
                 };
             }
-            catch (_m) {
+            catch (_r) {
                 // keep original targetUrl
             }
         }
@@ -1145,7 +1538,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 }
             }
         }
-        catch ( /* Reddit JSON failed */_o) { /* Reddit JSON failed */ }
+        catch ( /* Reddit JSON failed */_s) { /* Reddit JSON failed */ }
         // Reddit oEmbed — works server-side and returns the real post title.
         // Try this before Jina since it's more reliable.
         if (!meta.title) {
@@ -1166,7 +1559,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     }
                 }
             }
-            catch ( /* ignore */_p) { /* ignore */ }
+            catch ( /* ignore */_t) { /* ignore */ }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["redditJina"] = { attempted: true, ok: false };
@@ -1182,7 +1575,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 if (!meta.image && redditMeta.image)
                     meta.image = redditMeta.image;
             }
-            catch ( /* ignore */_q) { /* ignore */ }
+            catch ( /* ignore */_u) { /* ignore */ }
         }
         // If title is still a generic error string (e.g. "403" from the error page HTML),
         // clear it so the client falls back to its own "Reddit Post in r/..." label.
@@ -1211,7 +1604,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     meta.image = threadsMeta.image;
             }
         }
-        catch ( /* ignore */_r) { /* ignore */ }
+        catch ( /* ignore */_v) { /* ignore */ }
     }
     const image = meta.image ? new url_1.URL(meta.image, finalUrl).toString() : undefined;
     const proxiedImage = (() => {

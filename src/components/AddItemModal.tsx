@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useData } from "@/contexts/DataContext";
 import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
+import { categorizeContent } from "@/services/AutoCategorizationService";
 import TweetEmbed from "@/components/TweetEmbed";
 import "./Modal.css";
 
@@ -50,6 +51,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
+  const [manualTagsInput, setManualTagsInput] = useState("");
 
   const sourceConfig: Record<string, { emoji: string; label: string }> = {
     facebook: { emoji: "📘", label: "Facebook" },
@@ -265,6 +267,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     };
 
     fetchInitialMetadata();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   const normalizeUrl = (urlStr: string): string | null => {
@@ -635,7 +638,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return { url: resolvedTikTokUrl, title: "TikTok Video" };
       }
 
-      // For Twitter/X — try unfurl first for real metadata, fall back to username
+      // For Twitter/X — use oEmbed to get the actual tweet text for categorization,
+      // then supplement with unfurl for thumbnail/metadata.
       if (
         url.hostname.includes("twitter.com") ||
         url.hostname.includes("x.com")
@@ -643,20 +647,49 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         const pathParts = url.pathname.split("/").filter((p) => p);
         const fallbackTitle =
           pathParts.length >= 1 ? `Tweet by @${pathParts[0]}` : "Tweet";
+
+        let tweetText: string | undefined;
+        let oembedTitle: string | undefined;
+
+        // Twitter oEmbed returns the tweet HTML which contains the full tweet text
+        try {
+          const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(fullUrl)}&omit_script=true`;
+          const oembedRes = await fetch(oembedUrl);
+          if (oembedRes.ok) {
+            const oembedData = await oembedRes.json();
+            // Extract plain text from oEmbed HTML (strip tags)
+            if (typeof oembedData.html === "string") {
+              const stripped = oembedData.html
+                .replace(/<[^>]+>/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+              tweetText = stripped || undefined;
+            }
+            if (typeof oembedData.author_name === "string") {
+              oembedTitle = `Tweet by @${oembedData.author_name}`;
+            }
+          }
+        } catch {
+          // oEmbed failed — fall through
+        }
+
+        // Try unfurl for thumbnail
+        let thumbnail: string | undefined;
+        let unfurlUrl: string | undefined;
         try {
           const meta = await fetchUnfurl(fullUrl);
-          if (meta?.title || meta?.description || meta?.image) {
-            return {
-              title: meta.title || fallbackTitle,
-              description: meta.description,
-              thumbnail: meta.image,
-              url: meta.url,
-            };
-          }
-        } catch (err) {
-          console.error("[AddItemModal] Twitter metadata fetch failed:", err);
+          thumbnail = meta?.image || undefined;
+          unfurlUrl = meta?.url || undefined;
+        } catch {
+          // unfurl failed — fine
         }
-        return { title: fallbackTitle };
+
+        return {
+          title: oembedTitle || fallbackTitle,
+          description: tweetText,
+          thumbnail,
+          url: unfurlUrl,
+        };
       }
 
       // For Facebook - simplified approach
@@ -994,14 +1027,47 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
       const finalSource = finalUrl ? detectSource(finalUrl)?.source : undefined;
 
+      // Auto-generate tags and detect categories
+      const categorizationResult = categorizeContent({
+        title: finalTitle,
+        content: finalContent,
+        url: finalUrl,
+        source: finalSource,
+      });
+
+      const manualTags = Array.from(
+        new Set(
+          manualTagsInput
+            .split(",")
+            .map((tag) => tag.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+      const autoTags = categorizationResult.tags;
+      const finalTags = Array.from(new Set([...autoTags, ...manualTags]));
+
+      // Auto-add to matching lists based on category detection
+      const autoListIds = [...listIds];
+      if (categorizationResult.autoCategories.length > 0) {
+        for (const category of categorizationResult.autoCategories) {
+          const matchingList = lists.find(
+            (l) => l.name.toLowerCase() === category.name.toLowerCase(),
+          );
+          if (matchingList && !autoListIds.includes(matchingList.id)) {
+            autoListIds.push(matchingList.id);
+          }
+        }
+      }
+
       await createItem({
         title: finalTitle,
         url: finalUrl,
         content: finalContent,
         thumbnail: finalThumbnail,
-        listIds,
+        listIds: autoListIds,
         type: url ? "link" : "text",
         source: finalSource,
+        tags: finalTags,
         nsfw: nsfw || undefined,
       });
 
@@ -1156,6 +1222,18 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
               onChange={(e) => setContent(e.target.value)}
               placeholder="Add any notes or description..."
               rows={4}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="tags">Tags (optional)</label>
+            <input
+              id="tags"
+              type="text"
+              value={manualTagsInput}
+              onChange={(e) => setManualTagsInput(e.target.value)}
+              placeholder="e.g. meal prep, protein, quick recipe"
               disabled={loading}
             />
           </div>

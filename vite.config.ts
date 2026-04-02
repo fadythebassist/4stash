@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
+import type { IncomingMessage, ServerResponse } from "http";
 
 function decodeHtmlEntities(input: string): string {
   return input
@@ -338,7 +339,7 @@ async function resolveRedditShortUrl(
   return null;
 }
 
-function tryParseJson(text: string): any | null {
+function tryParseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
@@ -346,7 +347,7 @@ function tryParseJson(text: string): any | null {
   }
 }
 
-function* walkJson(node: any): Generator<any> {
+function* walkJson(node: unknown): Generator<unknown> {
   if (node === null || node === undefined) return;
   yield node;
   if (Array.isArray(node)) {
@@ -370,14 +371,15 @@ function extractInstagramCaptionFromJsonLd(html: string): string | undefined {
 
     for (const node of walkJson(parsed)) {
       if (!node || typeof node !== "object") continue;
+      const obj = node as Record<string, unknown>;
 
       const candidates = [
-        node.caption,
-        node.articleBody,
-        node.description,
-        node.text,
-        node.headline,
-        node.name,
+        obj.caption,
+        obj.articleBody,
+        obj.description,
+        obj.text,
+        obj.headline,
+        obj.name,
       ].filter((v) => typeof v === "string") as string[];
 
       for (const c of candidates) {
@@ -432,7 +434,8 @@ async function tryInstagramJson(
     clearTimeout(timeoutId);
     if (!res.ok) return null;
 
-    const data: any = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await res.json() as Record<string, any>;
 
     // Common shapes observed historically
     const media = data?.graphql?.shortcode_media ?? data?.items?.[0];
@@ -629,7 +632,7 @@ async function resolveFacebookShareUrlWithTimeout(
 }
 
 function unfurlPlugin(): Plugin {
-  const handler = async (req: any, res: any) => {
+  const handler = async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url ?? "", "http://localhost");
       if (url.pathname !== "/api/unfurl" && url.pathname !== "/api/proxy-image")
@@ -754,7 +757,7 @@ function unfurlPlugin(): Plugin {
 
         res.statusCode = 200;
         res.setHeader("Content-Type", contentType);
-        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
         res.end(buf);
         return true;
       }
@@ -859,7 +862,7 @@ function unfurlPlugin(): Plugin {
       const meta = extractMetadata(primary.text);
       let redditShortUnresolved = false;
 
-      const attempts: Record<string, any> = {
+      const attempts: Record<string, Record<string, unknown>> = {
         primary: { ok: primary.ok, status: primary.status, contentType },
         shareResolve: { attempted: isFacebookShare, url: shareResolvedUrl },
         instagramJson: { attempted: false, ok: false },
@@ -1026,7 +1029,8 @@ function unfurlPlugin(): Plugin {
             clearTimeout(timeoutId);
 
             if (oembedRes.ok) {
-              const oembedData: any = await oembedRes.json();
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const oembedData: Record<string, any> = await oembedRes.json();
               attempts.facebookOembed.ok = true;
 
               // Extract metadata from oEmbed response with proper HTML entity decoding
@@ -1320,7 +1324,7 @@ function unfurlPlugin(): Plugin {
 
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
-      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
       res.end(
         JSON.stringify({
           url: finalUrl,
@@ -1346,14 +1350,14 @@ function unfurlPlugin(): Plugin {
         }),
       );
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Cache-Control", "no-store");
       res.end(
         JSON.stringify({
           error:
-            err?.name === "AbortError" ? "Upstream timeout" : "Unfurl failed",
+            err instanceof Error && err.name === "AbortError" ? "Upstream timeout" : "Unfurl failed",
         }),
       );
       return true;
@@ -1421,6 +1425,22 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split vendor libraries into separate cacheable chunks.
+        // Firebase alone is ~400 KB gzip — separating it means users
+        // only re-download it when Firebase itself updates.
+        manualChunks(id: string) {
+          if (id.includes("node_modules/firebase")) return "vendor-firebase";
+          if (id.includes("node_modules/react-dom")) return "vendor-react";
+          if (id.includes("node_modules/react-router")) return "vendor-router";
+          if (id.includes("node_modules/react-masonry-css")) return "vendor-masonry";
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
   },
   server: {
     port: 5173,
