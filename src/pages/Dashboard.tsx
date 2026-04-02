@@ -31,6 +31,8 @@ const Dashboard: React.FC = () => {
     archiveItem,
   } = useData();
   const navigate = useNavigate();
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadingMoreRef = useRef(false);
 
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddList, setShowAddList] = useState(false);
@@ -113,6 +115,36 @@ const Dashboard: React.FC = () => {
   const handleArchiveItem = async (itemId: string) => {
     await archiveItem(itemId);
   };
+
+  useEffect(() => {
+    if (selectedTags.length > 0 || !hasMoreItems) return;
+
+    const node = loadMoreSentinelRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry?.isIntersecting) return;
+        if (loadingMoreRef.current) return;
+
+        loadingMoreRef.current = true;
+        void loadMoreItems().finally(() => {
+          loadingMoreRef.current = false;
+        });
+      },
+      {
+        root: null,
+        rootMargin: "200px 0px",
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMoreItems, loadMoreItems, selectedTags.length]);
 
   return (
     <div className="dashboard">
@@ -252,15 +284,8 @@ const Dashboard: React.FC = () => {
           )}
 
           {selectedTags.length === 0 && hasMoreItems && (
-            <div className="load-more-wrap">
-              <button
-                className="load-more-btn"
-                onClick={() => {
-                  void loadMoreItems();
-                }}
-              >
-                Load 20 more
-              </button>
+            <div className="load-more-sentinel" ref={loadMoreSentinelRef}>
+              Loading more...
             </div>
           )}
         </div>

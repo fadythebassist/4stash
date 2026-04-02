@@ -218,26 +218,14 @@
   color: white;
 }
 
-.load-more-wrap {
+.load-more-sentinel {
   display: flex;
   justify-content: center;
+  align-items: center;
+  min-height: 3rem;
   margin-top: var(--spacing-lg);
-}
-
-.load-more-btn {
-  padding: 0.625rem 1.25rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  color: var(--text-tertiary);
   font-size: var(--font-sm);
-  font-weight: 600;
-  transition: all 200ms var(--ease-out-expo);
-}
-
-.load-more-btn:hover {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
 }
 
 /* ── Staggered card animations ── */
