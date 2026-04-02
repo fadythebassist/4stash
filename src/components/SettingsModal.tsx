@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { setStoredAnalyticsConsent } from '@/services/AnalyticsService';
 import { threadsAuthService } from '@/services/ThreadsAuthService';
+import './Modal.css';
 import './SettingsModal.css';
 
 interface SettingsModalProps {
