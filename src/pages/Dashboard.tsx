@@ -124,8 +124,10 @@ const Dashboard: React.FC = () => {
     await archiveItem(itemId);
   };
 
+  const isFilteringByTags = selectedTags.length > 0;
+
   useEffect(() => {
-    if (selectedTags.length > 0 || !hasMoreItems) return;
+    if (isFilteringByTags || !hasMoreItems) return;
 
     const node = loadMoreSentinelRef.current;
     if (!node) return;
@@ -152,7 +154,23 @@ const Dashboard: React.FC = () => {
     return () => {
       observer.disconnect();
     };
-  }, [hasMoreItems, loadMoreItems, selectedTags.length]);
+  }, [hasMoreItems, isFilteringByTags, loadMoreItems]);
+
+  useEffect(() => {
+    if (!isFilteringByTags || !hasMoreItems) return;
+    if (loadingMoreRef.current) return;
+
+    loadingMoreRef.current = true;
+    const timer = window.setTimeout(() => {
+      void loadMoreItems().finally(() => {
+        loadingMoreRef.current = false;
+      });
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [hasMoreItems, isFilteringByTags, items.length, loadMoreItems]);
 
   return (
     <div className="dashboard">
@@ -291,9 +309,15 @@ const Dashboard: React.FC = () => {
             </Masonry>
           )}
 
-          {selectedTags.length === 0 && hasMoreItems && (
+          {!isFilteringByTags && hasMoreItems && (
             <div className="load-more-sentinel" ref={loadMoreSentinelRef}>
               Loading more...
+            </div>
+          )}
+
+          {isFilteringByTags && hasMoreItems && (
+            <div className="load-more-sentinel">
+              Searching more posts for selected tags...
             </div>
           )}
         </div>
