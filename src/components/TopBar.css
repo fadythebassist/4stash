@@ -18,9 +18,12 @@
   display: flex;
   gap: var(--spacing-xs);
   overflow-x: auto;
+  overflow-y: hidden;
   scroll-snap-type: x mandatory;
   padding: 0 var(--spacing-md);
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
 }
 
 .topbar-scroll::-webkit-scrollbar {

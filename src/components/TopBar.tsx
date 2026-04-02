@@ -25,6 +25,8 @@ const TopBar: React.FC<TopBarProps> = ({
   onAddList,
   onDeleteList,
 }) => {
+  const tagsScrollRef = React.useRef<HTMLDivElement | null>(null);
+
   const handleDelete = (
     e: React.MouseEvent,
     listId: string,
@@ -34,6 +36,22 @@ const TopBar: React.FC<TopBarProps> = ({
     if (window.confirm(`Delete "${listName}" and all its items?`)) {
       onDeleteList(listId, listName);
     }
+  };
+
+  const orderedTags = React.useMemo(() => {
+    const selectedSet = new Set(selectedTags);
+    const selectedFirst = availableTags.filter((tag) => selectedSet.has(tag));
+    const remaining = availableTags.filter((tag) => !selectedSet.has(tag));
+    return [...selectedFirst, ...remaining];
+  }, [availableTags, selectedTags]);
+
+  const handleTagsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const node = tagsScrollRef.current;
+    if (!node) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+
+    e.preventDefault();
+    node.scrollLeft += e.deltaY;
   };
 
   return (
@@ -83,7 +101,11 @@ const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="topbar-group topbar-group-tags">
-        <div className="topbar-scroll topbar-scroll-tags">
+        <div
+          className="topbar-scroll topbar-scroll-tags"
+          ref={tagsScrollRef}
+          onWheel={handleTagsWheel}
+        >
           <button
             className={`topbar-chip topbar-chip-tag ${selectedTags.length === 0 ? "active" : ""}`}
             onClick={onClearTags}
@@ -91,7 +113,7 @@ const TopBar: React.FC<TopBarProps> = ({
             <span>All Tags</span>
           </button>
 
-          {availableTags.map((tag) => (
+          {orderedTags.map((tag) => (
             <button
               key={tag}
               className={`topbar-chip topbar-chip-tag ${selectedTags.includes(tag) ? "active" : ""}`}
