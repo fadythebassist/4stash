@@ -26,6 +26,10 @@ import {
   query,
   where,
   orderBy,
+  limit as limitTo,
+  startAfter,
+  increment,
+  Timestamp,
   serverTimestamp,
 } from "firebase/firestore";
 import {
@@ -418,18 +422,10 @@ export class FirebaseStorageService implements StorageService {
         async (firebaseUser) => {
           unsubscribe();
           if (firebaseUser) {
-            // Get user preferences (avatar style)
-            const prefs = await this.getUserPreferences(firebaseUser.uid);
-
-            // Get social connections (with fallback if collection doesn't exist yet)
-            let socialConnections: import("@/types").SocialConnection[] = [];
-            try {
-              socialConnections = await this.getSocialConnections(firebaseUser.uid);
-            } catch (error) {
-              // If socialConnections collection doesn't exist or has permission issues,
-              // just continue with empty array. User can set up connections later.
-              console.warn("⚠️ Could not load social connections (this is normal if not set up yet):", error instanceof Error ? error.message : error);
-            }
+            const [prefs, socialConnections] = await Promise.all([
+              this.getUserPreferences(firebaseUser.uid),
+              this.getSocialConnections(firebaseUser.uid),
+            ]);
 
             // If user has chosen a DiceBear style, use that; otherwise use social photo or default
             const photoURL = prefs.avatarStyle
@@ -644,16 +640,40 @@ export class FirebaseStorageService implements StorageService {
         updatedAt: doc.data().updatedAt.toDate(),
       })) as List[];
 
-      // Get item counts
+      let hasMissingCounts = false;
       for (const list of lists) {
+        if (typeof list.itemCount !== "number") {
+          hasMissingCounts = true;
+          list.itemCount = 0;
+        }
+      }
+
+      if (hasMissingCounts) {
         const itemsQuery = query(
           collection(this.db, "items"),
           where("userId", "==", userId),
-          where("listIds", "array-contains", list.id),
           where("archived", "==", false),
         );
         const itemsSnapshot = await getDocs(itemsQuery);
-        list.itemCount = itemsSnapshot.size;
+        const counts = new Map<string, number>();
+        for (const itemDoc of itemsSnapshot.docs) {
+          const listIds = itemDoc.data().listIds as string[] | undefined;
+          if (!Array.isArray(listIds)) continue;
+          for (const listId of listIds) {
+            counts.set(listId, (counts.get(listId) ?? 0) + 1);
+          }
+        }
+
+        await Promise.all(
+          lists.map(async (list) => {
+            const count = counts.get(list.id) ?? 0;
+            list.itemCount = count;
+            await updateDoc(doc(this.db, "lists", list.id), {
+              itemCount: count,
+              updatedAt: serverTimestamp(),
+            });
+          }),
+        );
       }
 
       console.log("✅ Returning lists:", lists);
@@ -687,6 +707,7 @@ export class FirebaseStorageService implements StorageService {
       const listData: any = {
         name: data.name,
         userId,
+        itemCount: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -772,12 +793,18 @@ export class FirebaseStorageService implements StorageService {
   }
 
   // Items Methods
-  async getItems(userId: string, listId?: string): Promise<Item[]> {
+  async getItems(
+    userId: string,
+    listId?: string,
+    options?: { limit?: number; cursorDate?: Date | null },
+  ): Promise<{ items: Item[]; hasMore: boolean; nextCursorDate: Date | null }> {
+    const pageLimit = options?.limit ?? 20;
     let q = query(
       collection(this.db, "items"),
       where("userId", "==", userId),
       where("archived", "==", false),
       orderBy("createdAt", "desc"),
+      limitTo(pageLimit + 1),
     );
 
     if (listId) {
@@ -787,16 +814,31 @@ export class FirebaseStorageService implements StorageService {
         where("listIds", "array-contains", listId),
         where("archived", "==", false),
         orderBy("createdAt", "desc"),
+        limitTo(pageLimit + 1),
       );
     }
 
+    if (options?.cursorDate) {
+      q = query(q, startAfter(Timestamp.fromDate(options.cursorDate)));
+    }
+
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((doc) => ({
+    const docs = snapshot.docs;
+    const hasMore = docs.length > pageLimit;
+    const pageDocs = hasMore ? docs.slice(0, pageLimit) : docs;
+    const items = pageDocs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
       createdAt: doc.data().createdAt.toDate(),
       updatedAt: doc.data().updatedAt.toDate(),
     })) as Item[];
+    const nextCursorDate = items.length > 0 ? items[items.length - 1].createdAt : null;
+
+    return {
+      items,
+      hasMore,
+      nextCursorDate,
+    };
   }
 
   async getItem(itemId: string): Promise<Item | null> {
@@ -871,6 +913,15 @@ export class FirebaseStorageService implements StorageService {
     const docSnap = await getDoc(docRef);
     const savedData = docSnap.data()!;
 
+    await Promise.all(
+      data.listIds.map(async (listId) => {
+        await updateDoc(doc(this.db, "lists", listId), {
+          itemCount: increment(1),
+          updatedAt: serverTimestamp(),
+        });
+      }),
+    );
+
     return {
       id: docRef.id,
       ...savedData,
@@ -881,18 +932,94 @@ export class FirebaseStorageService implements StorageService {
 
   async updateItem(data: UpdateItemDTO): Promise<void> {
     const docRef = doc(this.db, "items", data.id);
+    const existingSnap = await getDoc(docRef);
+    const existing = existingSnap.exists() ? existingSnap.data() : null;
+
+    const prevListIds = Array.isArray(existing?.listIds)
+      ? (existing.listIds as string[])
+      : [];
+    const nextListIds = Array.isArray(data.listIds)
+      ? data.listIds
+      : prevListIds;
+    const toIncrement: string[] = [];
+    const toDecrement: string[] = [];
+    const isArchived = existing?.archived === true;
+    if (!isArchived) {
+      for (const listId of nextListIds) {
+        if (!prevListIds.includes(listId)) {
+          toIncrement.push(listId);
+        }
+      }
+      for (const listId of prevListIds) {
+        if (!nextListIds.includes(listId)) {
+          toDecrement.push(listId);
+        }
+      }
+    }
+
     await updateDoc(docRef, {
       ...data,
       updatedAt: serverTimestamp(),
     });
+
+    await Promise.all([
+      ...toIncrement.map(async (listId) =>
+        updateDoc(doc(this.db, "lists", listId), {
+          itemCount: increment(1),
+          updatedAt: serverTimestamp(),
+        }),
+      ),
+      ...toDecrement.map(async (listId) =>
+        updateDoc(doc(this.db, "lists", listId), {
+          itemCount: increment(-1),
+          updatedAt: serverTimestamp(),
+        }),
+      ),
+    ]);
   }
 
   async deleteItem(itemId: string): Promise<void> {
+    const docRef = doc(this.db, "items", itemId);
+    const existingSnap = await getDoc(docRef);
+    if (existingSnap.exists()) {
+      const existing = existingSnap.data();
+      const listIds = Array.isArray(existing.listIds)
+        ? (existing.listIds as string[])
+        : [];
+      const archived = existing.archived === true;
+      if (!archived && listIds.length > 0) {
+        await Promise.all(
+          listIds.map(async (listId) =>
+            updateDoc(doc(this.db, "lists", listId), {
+              itemCount: increment(-1),
+              updatedAt: serverTimestamp(),
+            }),
+          ),
+        );
+      }
+    }
     await deleteDoc(doc(this.db, "items", itemId));
   }
 
   async archiveItem(itemId: string): Promise<void> {
     const docRef = doc(this.db, "items", itemId);
+    const existingSnap = await getDoc(docRef);
+    if (existingSnap.exists()) {
+      const existing = existingSnap.data();
+      if (existing.archived !== true) {
+        const listIds = Array.isArray(existing.listIds)
+          ? (existing.listIds as string[])
+          : [];
+        await Promise.all(
+          listIds.map(async (listId) =>
+            updateDoc(doc(this.db, "lists", listId), {
+              itemCount: increment(-1),
+              updatedAt: serverTimestamp(),
+            }),
+          ),
+        );
+      }
+    }
     await updateDoc(docRef, {
       archived: true,
       updatedAt: serverTimestamp(),

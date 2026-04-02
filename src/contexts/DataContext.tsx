@@ -45,6 +45,8 @@ interface DataContextType {
 
   // Refresh data
   refreshData: () => Promise<void>;
+  hasMoreItems: boolean;
+  loadMoreItems: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -60,12 +62,16 @@ interface DataProviderProps {
 }
 
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [lists, setLists] = useState<List[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMoreItems, setHasMoreItems] = useState(false);
+  const [cursorDate, setCursorDate] = useState<Date | null>(null);
+
+  const PAGE_LIMIT = 20;
 
   // Use a ref so refreshData always reads the latest selectedListId
   // without needing to be re-created when it changes.
@@ -87,6 +93,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       console.log("⚠️ No user, clearing lists and items");
       setLists([]);
       setItems([]);
+      setHasMoreItems(false);
+      setCursorDate(null);
       return;
     }
 
@@ -94,14 +102,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setError(null);
     try {
       console.log("📡 Fetching lists and items for user:", currentUser.id);
-      const [fetchedLists, fetchedItems] = await Promise.all([
+      const [fetchedLists, fetchedPage] = await Promise.all([
         storageService.getLists(currentUser.id),
-        storageService.getItems(currentUser.id, selectedListIdRef.current || undefined),
+        storageService.getItems(
+          currentUser.id,
+          selectedListIdRef.current || undefined,
+          { limit: PAGE_LIMIT },
+        ),
       ]);
       console.log("✅ Fetched lists:", fetchedLists);
-      console.log("✅ Fetched items:", fetchedItems);
+      console.log("✅ Fetched items:", fetchedPage.items);
       setLists(fetchedLists);
-      setItems(fetchedItems);
+      setItems(fetchedPage.items);
+      setHasMoreItems(fetchedPage.hasMore);
+      setCursorDate(fetchedPage.nextCursorDate);
     } catch (err) {
       console.error("❌ Error in refreshData:", err);
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -109,6 +123,29 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setLoading(false);
     }
   }, []); // stable — reads user and selectedListId via refs
+
+  const loadMoreItems = useCallback(async () => {
+    const currentUser = userRef.current;
+    if (!currentUser || !hasMoreItems || !cursorDate) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const nextPage = await storageService.getItems(
+        currentUser.id,
+        selectedListIdRef.current || undefined,
+        { limit: PAGE_LIMIT, cursorDate },
+      );
+      setItems((prev) => [...prev, ...nextPage.items]);
+      setHasMoreItems(nextPage.hasMore);
+      setCursorDate(nextPage.nextCursorDate);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load more items");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [cursorDate, hasMoreItems]);
 
   useEffect(() => {
     refreshData();
@@ -131,8 +168,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     try {
       console.log("📤 Calling storageService.createList with userId:", currentUser.id);
       const newList = await storageService.createList(currentUser.id, data);
-      console.log("✅ List created, refreshing data...");
-      await refreshData();
+      setLists((prev) => [...prev, newList]);
       return newList;
     } catch (err) {
       console.error("❌ Error in DataContext.createList:", err);
@@ -141,20 +177,30 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, []);
 
   const updateList = useCallback(async (data: UpdateListDTO): Promise<void> => {
     setError(null);
     try {
       await storageService.updateList(data);
-      await refreshData();
+      setLists((prev) =>
+        prev.map((list) =>
+          list.id === data.id
+            ? {
+                ...list,
+                ...data,
+                updatedAt: new Date(),
+              }
+            : list,
+        ),
+      );
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : "Failed to update list";
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, []);
 
   const createItem = useCallback(async (data: CreateItemDTO): Promise<Item> => {
     const currentUser = userRef.current;
@@ -163,7 +209,18 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setError(null);
     try {
       const newItem = await storageService.createItem(currentUser.id, data);
-      await refreshData();
+      setItems((prev) => {
+        const selected = selectedListIdRef.current;
+        if (selected && !newItem.listIds.includes(selected)) return prev;
+        return [newItem, ...prev];
+      });
+      setLists((prev) =>
+        prev.map((list) =>
+          newItem.listIds.includes(list.id)
+            ? { ...list, itemCount: (list.itemCount ?? 0) + 1 }
+            : list,
+        ),
+      );
       return newItem;
     } catch (err) {
       const errorMsg =
@@ -171,33 +228,77 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, []);
 
   const updateItem = useCallback(async (data: UpdateItemDTO): Promise<void> => {
     setError(null);
     try {
+      const current = items.find((item) => item.id === data.id);
       await storageService.updateItem(data);
-      await refreshData();
+
+      setItems((prev) =>
+        prev
+          .map((item) =>
+            item.id === data.id
+              ? {
+                  ...item,
+                  ...data,
+                  updatedAt: new Date(),
+                }
+              : item,
+          )
+          .filter((item) => {
+            const selected = selectedListIdRef.current;
+            if (!selected) return true;
+            return item.listIds.includes(selected);
+          }),
+      );
+
+      if (current && Array.isArray(data.listIds)) {
+        const prevIds = current.listIds;
+        const nextIds = data.listIds;
+        setLists((prev) =>
+          prev.map((list) => {
+            const wasIn = prevIds.includes(list.id);
+            const isIn = nextIds.includes(list.id);
+            if (wasIn === isIn) return list;
+            return {
+              ...list,
+              itemCount: (list.itemCount ?? 0) + (isIn ? 1 : -1),
+            };
+          }),
+        );
+      }
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : "Failed to update item";
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, [items]);
 
   const deleteItem = useCallback(async (itemId: string): Promise<void> => {
     setError(null);
     try {
+      const target = items.find((item) => item.id === itemId);
       await storageService.deleteItem(itemId);
-      await refreshData();
+      setItems((prev) => prev.filter((item) => item.id !== itemId));
+      if (target) {
+        setLists((prev) =>
+          prev.map((list) =>
+            target.listIds.includes(list.id)
+              ? { ...list, itemCount: Math.max(0, (list.itemCount ?? 0) - 1) }
+              : list,
+          ),
+        );
+      }
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : "Failed to delete item";
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, [items]);
 
   const deleteList = useCallback(async (listId: string): Promise<void> => {
     const currentUser = userRef.current;
@@ -212,8 +313,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     try {
       console.log("📤 Calling storageService.deleteList with userId:", currentUser.id);
       await storageService.deleteList(listId, currentUser.id);
-      console.log("✅ List deleted, refreshing data...");
-      await refreshData();
+      setLists((prev) => prev.filter((list) => list.id !== listId));
+      setItems((prev) =>
+        prev
+          .map((item) => ({
+            ...item,
+            listIds: item.listIds.filter((id) => id !== listId),
+          }))
+          .filter((item) => item.listIds.length > 0),
+      );
     } catch (err) {
       console.error("❌ Error in DataContext.deleteList:", err);
       const errorMsg =
@@ -221,11 +329,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, []);
 
   const archiveItem = useCallback(async (itemId: string): Promise<void> => {
     setError(null);
     try {
+      const target = items.find((item) => item.id === itemId);
       await storageService.archiveItem(itemId);
 
       // Haptic feedback if available
@@ -233,14 +342,23 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         navigator.vibrate(50);
       }
 
-      await refreshData();
+      setItems((prev) => prev.filter((item) => item.id !== itemId));
+      if (target) {
+        setLists((prev) =>
+          prev.map((list) =>
+            target.listIds.includes(list.id)
+              ? { ...list, itemCount: Math.max(0, (list.itemCount ?? 0) - 1) }
+              : list,
+          ),
+        );
+      }
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : "Failed to archive item";
       setError(errorMsg);
       throw err;
     }
-  }, [refreshData]);
+  }, [items]);
 
   const updateAvatarStyle = useCallback(async (style: string): Promise<void> => {
     const currentUser = userRef.current;
@@ -252,9 +370,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       console.log(`🎨 Updating avatar style to: ${style}`);
       await storageService.updateAvatarStyle(currentUser.id, style);
       console.log("✅ Avatar style updated successfully");
-
-      // Refresh auth context to get updated user
-      window.location.reload();
+      await refreshUser();
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : "Failed to update avatar style";
@@ -262,7 +378,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError(errorMsg);
       throw err;
     }
-  }, []);
+  }, [refreshUser]);
 
   const contextValue = useMemo(() => ({
     lists,
@@ -280,6 +396,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     archiveItem,
     updateAvatarStyle,
     refreshData,
+    hasMoreItems,
+    loadMoreItems,
   }), [
     lists,
     items,
@@ -296,6 +414,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     archiveItem,
     updateAvatarStyle,
     refreshData,
+    hasMoreItems,
+    loadMoreItems,
   ]);
 
   return (

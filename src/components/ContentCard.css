@@ -374,8 +374,8 @@
 /* ── Card Footer ── */
 .card-footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
   padding-top: var(--spacing-sm);
 }
@@ -383,12 +383,14 @@
 .card-date {
   color: var(--text-tertiary);
   font-size: var(--font-xs);
+  margin-right: auto;
 }
 
 .card-tags {
   display: flex;
   gap: var(--spacing-xs);
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .card-tag {

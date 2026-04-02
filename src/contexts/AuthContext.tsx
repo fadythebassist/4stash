@@ -30,9 +30,72 @@ interface AuthContextType {
   addSocialConnection: (connection: Omit<SocialConnection, 'id' | 'userId'>) => Promise<void>;
   removeSocialConnection: (platform: string) => Promise<void>;
   hasThreadsConnection: () => boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const AUTH_CACHE_KEY = "4later_cached_user";
+
+function serializeCachedUser(user: User): string {
+  return JSON.stringify({
+    ...user,
+    createdAt: user.createdAt.toISOString(),
+    socialConnections: user.socialConnections?.map((connection) => ({
+      ...connection,
+      connectedAt: connection.connectedAt.toISOString(),
+      expiresAt: connection.expiresAt?.toISOString(),
+      lastRefreshed: connection.lastRefreshed?.toISOString(),
+    })),
+  });
+}
+
+function parseCachedUser(raw: string): User | null {
+  try {
+    const parsed = JSON.parse(raw) as Omit<User, "createdAt"> & {
+      createdAt: string;
+      socialConnections?: Array<
+        Omit<SocialConnection, "connectedAt" | "expiresAt" | "lastRefreshed"> & {
+          connectedAt: string;
+          expiresAt?: string;
+          lastRefreshed?: string;
+        }
+      >;
+    };
+    return {
+      ...parsed,
+      createdAt: new Date(parsed.createdAt),
+      socialConnections: parsed.socialConnections?.map((connection) => ({
+        ...connection,
+        connectedAt: new Date(connection.connectedAt),
+        expiresAt: connection.expiresAt ? new Date(connection.expiresAt) : undefined,
+        lastRefreshed: connection.lastRefreshed
+          ? new Date(connection.lastRefreshed)
+          : undefined,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readCachedUser(): User | null {
+  const cached = localStorage.getItem(AUTH_CACHE_KEY);
+  if (!cached) return null;
+  const user = parseCachedUser(cached);
+  if (!user) {
+    localStorage.removeItem(AUTH_CACHE_KEY);
+  }
+  return user;
+}
+
+function writeCachedUser(user: User | null): void {
+  if (!user) {
+    localStorage.removeItem(AUTH_CACHE_KEY);
+    return;
+  }
+  localStorage.setItem(AUTH_CACHE_KEY, serializeCachedUser(user));
+}
 
 // Service instance — swap to mock when VITE_USE_MOCK is set (e.g. in Playwright tests)
 const storageService: StorageService =
@@ -50,20 +113,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is already logged in
+    const cachedUser = readCachedUser();
+    if (cachedUser) {
+      setUser(cachedUser);
+      setLoading(false);
+    }
+
+    let cancelled = false;
+
     const checkAuth = async () => {
       try {
         const currentUser = await storageService.getCurrentUser();
+        if (cancelled) return;
         setUser(currentUser);
+        writeCachedUser(currentUser);
       } catch (err) {
         console.error("Auth check failed:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     checkAuth();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const refreshUser = async () => {
+    const refreshedUser = await storageService.getCurrentUser();
+    setUser(refreshedUser);
+    writeCachedUser(refreshedUser);
+  };
 
   const signInWithGoogle = async () => {
     setLoading(true);
@@ -71,6 +155,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const user = await storageService.signInWithGoogle();
       setUser(user);
+      writeCachedUser(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign in");
       throw err;
@@ -85,6 +170,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const user = await storageService.signInWithFacebook();
       setUser(user);
+      writeCachedUser(user);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to sign in with Facebook",
@@ -101,6 +187,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const user = await storageService.signInWithTwitter();
       setUser(user);
+      writeCachedUser(user);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to sign in with Twitter",
@@ -117,6 +204,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const user = await storageService.signInWithEmail(email, password);
       setUser(user);
+      writeCachedUser(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign in");
       throw err;
@@ -139,6 +227,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         displayName,
       );
       setUser(user);
+      writeCachedUser(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign up");
       throw err;
@@ -153,6 +242,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await storageService.signOut();
       setUser(null);
+      writeCachedUser(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign out");
       throw err;
@@ -167,7 +257,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     try {
       await storageService.updateUserSettings(user.id, settings);
-      setUser({ ...user, settings });
+      const updatedUser = { ...user, settings };
+      setUser(updatedUser);
+      writeCachedUser(updatedUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update settings");
       throw err;
@@ -187,7 +279,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const newConnection = await storageService.addSocialConnection(user.id, connection);
       const updatedConnections = [...(user.socialConnections || []), newConnection];
-      setUser({ ...user, socialConnections: updatedConnections });
+      const updatedUser = { ...user, socialConnections: updatedConnections };
+      setUser(updatedUser);
+      writeCachedUser(updatedUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add social connection");
       throw err;
@@ -205,7 +299,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       await storageService.removeSocialConnection(connection.id);
       const updatedConnections = user.socialConnections.filter(conn => conn.platform !== platform);
-      setUser({ ...user, socialConnections: updatedConnections });
+      const updatedUser = { ...user, socialConnections: updatedConnections };
+      setUser(updatedUser);
+      writeCachedUser(updatedUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove social connection");
       throw err;
@@ -233,6 +329,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         addSocialConnection,
         removeSocialConnection,
         hasThreadsConnection,
+        refreshUser,
       }}
     >
       {children}

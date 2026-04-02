@@ -42,7 +42,11 @@ export interface StorageService {
   deleteList(listId: string, userId: string): Promise<void>;
 
   // Items
-  getItems(userId: string, listId?: string): Promise<Item[]>;
+  getItems(
+    userId: string,
+    listId?: string,
+    options?: { limit?: number; cursorDate?: Date | null },
+  ): Promise<{ items: Item[]; hasMore: boolean; nextCursorDate: Date | null }>;
   getItem(itemId: string): Promise<Item | null>;
   createItem(userId: string, data: CreateItemDTO): Promise<Item>;
   updateItem(data: UpdateItemDTO): Promise<void>;

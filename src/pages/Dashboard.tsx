@@ -22,6 +22,8 @@ const Dashboard: React.FC = () => {
   const {
     lists,
     items,
+    hasMoreItems,
+    loadMoreItems,
     selectedListId,
     selectList,
     deleteList,
@@ -247,6 +249,19 @@ const Dashboard: React.FC = () => {
                 />
               ))}
             </Masonry>
+          )}
+
+          {selectedTags.length === 0 && hasMoreItems && (
+            <div className="load-more-wrap">
+              <button
+                className="load-more-btn"
+                onClick={() => {
+                  void loadMoreItems();
+                }}
+              >
+                Load 20 more
+              </button>
+            </div>
           )}
         </div>
       </main>

@@ -685,9 +685,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
           {item.tags && item.tags.length > 0 && (
             <div className="card-tags">
-              {item.tags.slice(0, 2).map((tag, idx) => (
+              {item.tags.map((tag, idx) => (
                 <span key={idx} className="card-tag">
-                  {tag}
+                  #{tag}
                 </span>
               ))}
             </div>

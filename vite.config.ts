@@ -1389,6 +1389,32 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname === "/api/unfurl",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "unfurl-cache",
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname === "/api/proxy-image",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "proxy-image-cache",
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+            },
+          },
+        ],
+      },
       manifest: {
         name: "4Later",
         short_name: "4Later",
@@ -1406,6 +1432,7 @@ export default defineConfig({
             src: "pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any maskable",
           },
         ],
         share_target: {

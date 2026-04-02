@@ -96,6 +96,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const [oembedData, setOembedData] = useState<ThreadsOEmbedData | null>(null);
   const [oembedLoading, setOembedLoading] = useState(true);
   const [oembedError, setOembedError] = useState(false);
+  const [viewInline, setViewInline] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
 
   const embedUrl = normalizeThreadsUrl(url);
@@ -136,13 +137,13 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   }, [url, threadsConnection]);
 
   useEffect(() => {
-    if (oembedData?.html) {
+    if (oembedData?.html && viewInline) {
       loadThreadsEmbedScript();
     }
-  }, [oembedData]);
+  }, [oembedData, viewInline]);
 
   useEffect(() => {
-    if (!embedUrl) return;
+    if (!embedUrl || !viewInline) return;
     if (threadsConnection && oembedData?.html && !oembedError) return;
     const node = blockquoteRef.current;
     if (!node) return;
@@ -152,7 +153,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       void node;
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [threadsConnection, embedUrl, oembedData, oembedError]);
+  }, [threadsConnection, embedUrl, oembedData, oembedError, viewInline]);
 
   const handleClick = () => {
     window.open(embedUrl, "_blank", "noopener,noreferrer");
@@ -179,10 +180,25 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           <ThreadsLogo />
           <span className="social-card-header-text">Threads</span>
         </div>
-        <div
-          className="social-card-embed-wrap"
-          dangerouslySetInnerHTML={{ __html: oembedData.html }}
-        />
+        {viewInline ? (
+          <div
+            className="social-card-embed-wrap"
+            dangerouslySetInnerHTML={{ __html: oembedData.html }}
+          />
+        ) : (
+          <div className="social-card-body">
+            <button
+              type="button"
+              className="social-card-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewInline(true);
+              }}
+            >
+              View Thread Here
+            </button>
+          </div>
+        )}
         <a
           href={embedUrl}
           target="_blank"
@@ -222,18 +238,35 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           <ThreadsLogo />
           <span className="social-card-header-text">Threads</span>
         </div>
-        <div className="social-card-embed-wrap" ref={blockquoteRef}>
-          <blockquote
-            className="text-post-media"
-            data-text-post-permalink={embedUrl}
-            data-text-post-version="0"
-            data-theme={theme}
-          >
-            <a href={embedUrl} target="_blank" rel="noopener noreferrer">
-              View on Threads
-            </a>
-          </blockquote>
-        </div>
+        {viewInline && (
+          <div className="social-card-embed-wrap" ref={blockquoteRef}>
+            <blockquote
+              className="text-post-media"
+              data-text-post-permalink={embedUrl}
+              data-text-post-version="0"
+              data-theme={theme}
+            >
+              <a href={embedUrl} target="_blank" rel="noopener noreferrer">
+                View on Threads
+              </a>
+            </blockquote>
+          </div>
+        )}
+
+        {!viewInline && (
+          <div className="social-card-body">
+            <button
+              type="button"
+              className="social-card-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewInline(true);
+              }}
+            >
+              View Thread Here
+            </button>
+          </div>
+        )}
 
         {shouldShowThumbnail && (
           <div className="social-card-thumbnail">

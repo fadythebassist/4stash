@@ -562,8 +562,13 @@ export class MockStorageService implements StorageService {
   }
 
   // Items Methods
-  async getItems(userId: string, listId?: string): Promise<Item[]> {
+  async getItems(
+    userId: string,
+    listId?: string,
+    options?: { limit?: number; cursorDate?: Date | null },
+  ): Promise<{ items: Item[]; hasMore: boolean; nextCursorDate: Date | null }> {
     await this.delay(200);
+    const pageLimit = options?.limit ?? 20;
     let items = this.data.items.filter(
       (i) => i.userId === userId && !i.archived,
     );
@@ -630,9 +635,24 @@ export class MockStorageService implements StorageService {
       this.saveToStorage();
     }
 
-    return enrichedItems.sort(
+    const sortedItems = enrichedItems.sort(
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
     );
+
+    const pagedItems = options?.cursorDate
+      ? sortedItems.filter((item) => item.createdAt < options.cursorDate!)
+      : sortedItems;
+
+    const hasMore = pagedItems.length > pageLimit;
+    const pageItems = hasMore ? pagedItems.slice(0, pageLimit) : pagedItems;
+    const nextCursorDate =
+      pageItems.length > 0 ? pageItems[pageItems.length - 1].createdAt : null;
+
+    return {
+      items: pageItems,
+      hasMore,
+      nextCursorDate,
+    };
   }
 
   async getItem(itemId: string): Promise<Item | null> {
