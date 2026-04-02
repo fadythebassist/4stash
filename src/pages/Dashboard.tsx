@@ -6,6 +6,7 @@ import { useData } from "@/contexts/DataContext";
 import TopBar from "@/components/TopBar";
 import ContentCard from "@/components/ContentCard";
 import FAB from "@/components/FAB";
+import SettingsModal from "@/components/SettingsModal";
 import { Item } from "@/types";
 import "./Dashboard.css";
 
@@ -15,7 +16,6 @@ const AddListModal = React.lazy(() => import("@/components/AddListModal"));
 const ItemDetailModal = React.lazy(() => import("@/components/ItemDetailModal"));
 const EditItemModal = React.lazy(() => import("@/components/EditItemModal"));
 const AvatarPickerModal = React.lazy(() => import("@/components/AvatarPickerModal"));
-const SettingsModal = React.lazy(() => import("@/components/SettingsModal"));
 
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
