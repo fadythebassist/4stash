@@ -75,6 +75,19 @@
   display: block;
 }
 
+.social-card-embed-anghami {
+  width: 100%;
+  min-height: 310px;
+  background: #111;
+}
+
+.social-card-embed-anghami iframe {
+  width: 100%;
+  min-height: 310px;
+  border: 0;
+  display: block;
+}
+
 /* 16:9 aspect ratio container for YouTube / Vimeo iframes */
 .social-card-embed-16x9 {
   position: relative;
@@ -376,6 +389,23 @@
   background: linear-gradient(135deg, #1db954 0%, #159443 100%);
 }
 
+/* ── Anghami (#6B2EFF) ─────────────────────────────────────────────── */
+.social-card--anghami:hover {
+  box-shadow: 0 12px 32px rgba(107, 46, 255, 0.3);
+}
+.social-card--anghami {
+  border-color: #d4c2ff;
+}
+.social-card--anghami .social-card-header {
+  background: linear-gradient(135deg, #6b2eff 0%, #4a19cc 100%);
+}
+.social-card--anghami .social-card-body {
+  background: linear-gradient(180deg, #f2edff 0%, #faf8ff 100%);
+}
+.social-card--anghami .social-card-button {
+  background: linear-gradient(135deg, #6b2eff 0%, #4a19cc 100%);
+}
+
 /* ── LinkedIn (#0A66C2) ───────────────────────────────────────────── */
 .social-card--linkedin:hover {
   box-shadow: 0 12px 32px rgba(10, 102, 194, 0.25);
@@ -437,6 +467,9 @@
 }
 [data-theme="dark"] .social-card--spotify .social-card-body {
   background: linear-gradient(180deg, rgba(20, 80, 40, 0.35) 0%, var(--bg-secondary) 100%);
+}
+[data-theme="dark"] .social-card--anghami .social-card-body {
+  background: linear-gradient(180deg, rgba(60, 30, 120, 0.35) 0%, var(--bg-secondary) 100%);
 }
 [data-theme="dark"] .social-card--linkedin .social-card-body {
   background: linear-gradient(180deg, rgba(10, 50, 90, 0.3) 0%, var(--bg-secondary) 100%);
