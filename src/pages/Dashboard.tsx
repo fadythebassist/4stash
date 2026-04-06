@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Masonry from "react-masonry-css";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
-import TopBar from "@/components/TopBar";
+import TopBar, { SourceOption } from "@/components/TopBar";
 import ContentCard from "@/components/ContentCard";
 import FAB from "@/components/FAB";
 import SettingsModal from "@/components/SettingsModal";
@@ -41,6 +41,8 @@ const Dashboard: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSourceFilter, setSelectedSourceFilter] = useState<string | null>(null);
 
   // Track item count to detect when a new post is added
   const prevItemCountRef = useRef(items.length);
@@ -72,13 +74,50 @@ const Dashboard: React.FC = () => {
     return Array.from(tagSet).sort();
   }, [items]);
 
-  // Filter items by selected tags (items must have ALL selected tags)
+  // Build source filter options from loaded items
+  const sourceOptions = useMemo<SourceOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      if (item.source) {
+        counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([id, count]) => ({
+        id,
+        label: id.charAt(0).toUpperCase() + id.slice(1),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [items]);
+
+  // Filter items by selected tags (AND), search query, and source filter
   const filteredItems = useMemo(() => {
-    if (selectedTags.length === 0) return items;
-    return items.filter((item) =>
-      selectedTags.every((tag) => item.tags?.includes(tag)),
-    );
-  }, [items, selectedTags]);
+    let result = items;
+
+    if (selectedTags.length > 0) {
+      result = result.filter((item) =>
+        selectedTags.every((tag) => item.tags?.includes(tag)),
+      );
+    }
+
+    if (selectedSourceFilter !== null) {
+      result = result.filter((item) => item.source === selectedSourceFilter);
+    }
+
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((item) => {
+        const inTitle = item.title?.toLowerCase().includes(q) ?? false;
+        const inUrl = item.url?.toLowerCase().includes(q) ?? false;
+        const inContent = item.content?.toLowerCase().includes(q) ?? false;
+        const inTags = item.tags?.some((t) => t.toLowerCase().includes(q)) ?? false;
+        return inTitle || inUrl || inContent || inTags;
+      });
+    }
+
+    return result;
+  }, [items, selectedTags, selectedSourceFilter, searchQuery]);
 
   const handleToggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -125,9 +164,11 @@ const Dashboard: React.FC = () => {
   };
 
   const isFilteringByTags = selectedTags.length > 0;
+  const isActiveFilter =
+    isFilteringByTags || selectedSourceFilter !== null || searchQuery.trim() !== "";
 
   useEffect(() => {
-    if (isFilteringByTags || !hasMoreItems) return;
+    if (isActiveFilter || !hasMoreItems) return;
 
     const node = loadMoreSentinelRef.current;
     if (!node) return;
@@ -154,10 +195,10 @@ const Dashboard: React.FC = () => {
     return () => {
       observer.disconnect();
     };
-  }, [hasMoreItems, isFilteringByTags, loadMoreItems]);
+  }, [hasMoreItems, isActiveFilter, loadMoreItems]);
 
   useEffect(() => {
-    if (!isFilteringByTags || !hasMoreItems) return;
+    if (!isActiveFilter || !hasMoreItems) return;
     if (loadingMoreRef.current) return;
 
     loadingMoreRef.current = true;
@@ -170,7 +211,7 @@ const Dashboard: React.FC = () => {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [hasMoreItems, isFilteringByTags, items.length, loadMoreItems]);
+  }, [hasMoreItems, isActiveFilter, items.length, loadMoreItems]);
 
   return (
     <div className="dashboard">
@@ -247,9 +288,14 @@ const Dashboard: React.FC = () => {
         selectedListId={selectedListId}
         availableTags={availableTags}
         selectedTags={selectedTags}
+        sourceOptions={sourceOptions}
+        selectedSourceFilter={selectedSourceFilter}
+        searchQuery={searchQuery}
         onSelectList={selectList}
         onToggleTag={handleToggleTag}
         onClearTags={handleClearTags}
+        onSourceFilterChange={setSelectedSourceFilter}
+        onSearchChange={setSearchQuery}
         onAddList={() => setShowAddList(true)}
         onDeleteList={handleDeleteList}
       />
@@ -260,20 +306,24 @@ const Dashboard: React.FC = () => {
           {filteredItems.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon-wrapper">
-                <div className="empty-icon">📭</div>
+                <div className="empty-icon">{isActiveFilter ? "🔍" : "📭"}</div>
               </div>
-              <h2>No items yet</h2>
+              <h2>{isActiveFilter ? "No results" : "No items yet"}</h2>
               <p>
-                {selectedListId
-                  ? "This list is empty. Add your first item!"
-                  : "Start saving content by clicking the + button"}
+                {isActiveFilter
+                  ? "Nothing matches your current search or filters."
+                  : selectedListId
+                    ? "This list is empty. Add your first item!"
+                    : "Start saving content by clicking the + button"}
               </p>
-              <button
-                className="empty-cta"
-                onClick={() => setShowAddItem(true)}
-              >
-                Save your first item
-              </button>
+              {!isActiveFilter && (
+                <button
+                  className="empty-cta"
+                  onClick={() => setShowAddItem(true)}
+                >
+                  Save your first item
+                </button>
+              )}
             </div>
           ) : user?.settings?.layoutMode === 'list' ? (
             <div
@@ -309,15 +359,15 @@ const Dashboard: React.FC = () => {
             </Masonry>
           )}
 
-          {!isFilteringByTags && hasMoreItems && (
+          {!isActiveFilter && hasMoreItems && (
             <div className="load-more-sentinel" ref={loadMoreSentinelRef}>
               Loading more...
             </div>
           )}
 
-          {isFilteringByTags && hasMoreItems && (
+          {isActiveFilter && hasMoreItems && (
             <div className="load-more-sentinel">
-              Searching more posts for selected tags...
+              Loading more results...
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
 import { categorizeContent } from "@/services/AutoCategorizationService";
 import TweetEmbed from "@/components/TweetEmbed";
+import HashtagInput from "@/components/HashtagInput";
 import "./Modal.css";
 
 interface AddItemModalProps {
@@ -51,7 +52,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
-  const [manualTagsInput, setManualTagsInput] = useState("");
+  const [manualTags, setManualTags] = useState<string[]>([]);
 
   const sourceConfig: Record<string, { emoji: string; label: string }> = {
     facebook: { emoji: "📘", label: "Facebook" },
@@ -1035,16 +1036,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         source: finalSource,
       });
 
-      const manualTags = Array.from(
-        new Set(
-          manualTagsInput
-            .split(",")
-            .map((tag) => tag.trim().toLowerCase())
-            .filter(Boolean),
-        ),
-      );
       const autoTags = categorizationResult.tags;
-      const finalTags = Array.from(new Set([...autoTags, ...manualTags]));
+      const finalTags = Array.from(new Set([...autoTags, ...manualTags.map((t) => t.trim().toLowerCase()).filter(Boolean)]));
 
       // Auto-add to matching lists based on category detection
       const autoListIds = [...listIds];
@@ -1228,13 +1221,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
           <div className="form-group">
             <label htmlFor="tags">Tags (optional)</label>
-            <input
-              id="tags"
-              type="text"
-              value={manualTagsInput}
-              onChange={(e) => setManualTagsInput(e.target.value)}
+            <HashtagInput
+              tags={manualTags}
+              onChange={setManualTags}
               placeholder="e.g. meal prep, protein, quick recipe"
-              disabled={loading}
             />
           </div>
 
