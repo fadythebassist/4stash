@@ -669,6 +669,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           <AnghamiEmbed
             key={`ag-${item.id}`}
             url={item.url}
+            thumbnail={displayThumbnail}
             title={item.title}
             description={displayContent}
           />

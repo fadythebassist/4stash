@@ -40,19 +40,20 @@ const AnghamiLogo: React.FC = () => (
 
 export interface AnghamiEmbedProps {
   url: string;
+  thumbnail?: string;
   title?: string;
   description?: string;
 }
 
-const AnghamiEmbed: React.FC<AnghamiEmbedProps> = ({ url, title, description }) => {
+const AnghamiEmbed: React.FC<AnghamiEmbedProps> = ({
+  url,
+  thumbnail,
+  title,
+  description,
+}) => {
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
   const songId = useMemo(() => extractAnghamiSongId(url), [url]);
-  const [failed, setFailed] = useState(false);
-
-  const embedUrl = useMemo(() => {
-    if (!songId) return null;
-    return `https://widget.anghami.com/song/${songId}`;
-  }, [songId]);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
 
   const handleClick = useCallback(() => {
     if (normalizedUrl) {
@@ -74,14 +75,20 @@ const AnghamiEmbed: React.FC<AnghamiEmbedProps> = ({ url, title, description }) 
         <span className="social-card-header-text">Anghami</span>
       </div>
 
-      {embedUrl && !failed ? (
-        <div className="social-card-embed-wrap social-card-embed-anghami">
-          <iframe
-            src={embedUrl}
-            title={displayTitle || "Anghami embed"}
+      {thumbnail && !thumbnailFailed ? (
+        <div
+          className="social-card-thumbnail"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleClick();
+          }}
+          style={{ cursor: "pointer" }}
+        >
+          <img
+            src={thumbnail}
+            alt={displayTitle || "Anghami track"}
+            onError={() => setThumbnailFailed(true)}
             loading="lazy"
-            allow="autoplay; encrypted-media"
-            onError={() => setFailed(true)}
           />
         </div>
       ) : (
@@ -114,7 +121,7 @@ const AnghamiEmbed: React.FC<AnghamiEmbedProps> = ({ url, title, description }) 
         className="social-card-button"
         onClick={(e) => e.stopPropagation()}
       >
-        Open in Anghami
+        {songId ? "Open in Anghami" : "Open Link"}
       </a>
     </div>
   );
