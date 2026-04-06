@@ -44,7 +44,7 @@ interface DataContextType {
   updateAvatarStyle: (style: string) => Promise<void>;
 
   // Refresh data
-  refreshData: () => Promise<void>;
+  refreshData: (listId?: string | null) => Promise<void>;
   hasMoreItems: boolean;
   loadMoreItems: () => Promise<void>;
 }
@@ -85,9 +85,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     userRef.current = user;
   }, [user]);
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (listId?: string | null) => {
     const currentUser = userRef.current;
-    console.log("🔄 refreshData called, user:", currentUser);
+    // If listId is explicitly passed, use it; otherwise fall back to the ref
+    const effectiveListId = listId !== undefined ? listId : selectedListIdRef.current;
+    console.log("🔄 refreshData called, user:", currentUser, "listId:", effectiveListId);
 
     if (!currentUser) {
       console.log("⚠️ No user, clearing lists and items");
@@ -106,7 +108,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         storageService.getLists(currentUser.id),
         storageService.getItems(
           currentUser.id,
-          selectedListIdRef.current || undefined,
+          effectiveListId || undefined,
           { limit: PAGE_LIMIT },
         ),
       ]);
@@ -122,7 +124,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []); // stable — reads user and selectedListId via refs
+  }, []); // stable — reads user via ref; listId passed explicitly or read from ref
 
   const loadMoreItems = useCallback(async () => {
     const currentUser = userRef.current;
@@ -149,11 +151,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
   useEffect(() => {
     refreshData();
-  }, [user, selectedListId, refreshData]);
+  }, [user, refreshData]); // selectedListId removed — selectList calls refreshData directly
 
   const selectList = useCallback((listId: string | null) => {
+    // Update ref synchronously so loadMoreItems reads the correct value immediately
+    selectedListIdRef.current = listId;
     setSelectedListId(listId);
-  }, []);
+    // Pass listId explicitly to avoid the ref-vs-state race condition
+    void refreshData(listId);
+  }, [refreshData]);
 
   const createList = useCallback(async (data: CreateListDTO): Promise<List> => {
     const currentUser = userRef.current;
