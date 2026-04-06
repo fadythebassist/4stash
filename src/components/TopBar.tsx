@@ -159,7 +159,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 onClick={() => onSourceFilterChange(opt.id)}
               >
                 <span>{opt.label}</span>
-                <span className="chip-count">{opt.count}</span>
               </button>
             ))}
           </div>
