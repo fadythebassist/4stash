@@ -64,6 +64,17 @@
   display: block;
 }
 
+.social-card-embed-spotify {
+  width: 100%;
+  background: #121212;
+}
+
+.social-card-embed-spotify iframe {
+  width: 100%;
+  border: 0;
+  display: block;
+}
+
 /* 16:9 aspect ratio container for YouTube / Vimeo iframes */
 .social-card-embed-16x9 {
   position: relative;
@@ -348,6 +359,23 @@
   background: #1AB7EA;
 }
 
+/* ── Spotify (#1DB954) ─────────────────────────────────────────────── */
+.social-card--spotify:hover {
+  box-shadow: 0 12px 32px rgba(29, 185, 84, 0.28);
+}
+.social-card--spotify {
+  border-color: #b8e7cb;
+}
+.social-card--spotify .social-card-header {
+  background: linear-gradient(135deg, #1db954 0%, #159443 100%);
+}
+.social-card--spotify .social-card-body {
+  background: linear-gradient(180deg, #e9f9ef 0%, #f7fbf8 100%);
+}
+.social-card--spotify .social-card-button {
+  background: linear-gradient(135deg, #1db954 0%, #159443 100%);
+}
+
 /* ── LinkedIn (#0A66C2) ───────────────────────────────────────────── */
 .social-card--linkedin:hover {
   box-shadow: 0 12px 32px rgba(10, 102, 194, 0.25);
@@ -406,6 +434,9 @@
 }
 [data-theme="dark"] .social-card--vimeo .social-card-body {
   background: linear-gradient(180deg, rgba(20, 60, 80, 0.3) 0%, var(--bg-secondary) 100%);
+}
+[data-theme="dark"] .social-card--spotify .social-card-body {
+  background: linear-gradient(180deg, rgba(20, 80, 40, 0.35) 0%, var(--bg-secondary) 100%);
 }
 [data-theme="dark"] .social-card--linkedin .social-card-body {
   background: linear-gradient(180deg, rgba(10, 50, 90, 0.3) 0%, var(--bg-secondary) 100%);

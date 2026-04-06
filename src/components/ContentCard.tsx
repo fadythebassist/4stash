@@ -14,6 +14,7 @@ const TweetEmbed = React.lazy(() => import("./TweetEmbed"));
 const ThreadsEmbed = React.lazy(() => import("./ThreadsEmbed"));
 const YouTubeEmbed = React.lazy(() => import("./YouTubeEmbed"));
 const VimeoEmbed = React.lazy(() => import("./VimeoEmbed"));
+const SpotifyEmbed = React.lazy(() => import("./SpotifyEmbed"));
 
 // Decode HTML entities for proper display
 function decodeHtmlEntities(text: string): string {
@@ -151,6 +152,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         if (hostname.includes("youtube.com") || hostname.includes("youtu.be"))
           return "youtube";
         if (hostname.includes("vimeo.com")) return "vimeo";
+        if (hostname.includes("spotify.com")) return "spotify";
         if (hostname.includes("threads.net") || hostname.includes("threads.com")) return "threads";
         
         // Extract domain name for other sources
@@ -182,6 +184,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     tumblr: { emoji: "📱", color: "#35465c", name: "Tumblr" },
     github: { emoji: "💻", color: "#181717", name: "GitHub" },
     vimeo: { emoji: "▶️", color: "#1ab7ea", name: "Vimeo" },
+    spotify: { emoji: "🎧", color: "#1DB954", name: "Spotify" },
   };
 
   const getSourceBadge = () => {
@@ -256,6 +259,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   const shouldShowThreadsPreview = derivedSource === "threads" && !!item.url;
   const shouldShowYouTubeEmbed = derivedSource === "youtube" && !!item.url;
   const shouldShowVimeoEmbed = derivedSource === "vimeo" && !!item.url;
+  const shouldShowSpotifyEmbed = derivedSource === "spotify" && !!item.url;
 
   // Suppress top media for embeds that show their own preview
   const suppressTopMedia =
@@ -265,7 +269,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
     shouldShowFacebookPreview ||
     shouldShowThreadsPreview ||
     shouldShowYouTubeEmbed ||
-    shouldShowVimeoEmbed;
+    shouldShowVimeoEmbed ||
+    shouldShowSpotifyEmbed;
 
   const hostname = useMemo(() => {
     if (!item.url) return "";
@@ -646,6 +651,15 @@ const ContentCard: React.FC<ContentCardProps> = ({
           />
         )}
 
+        {shouldShowSpotifyEmbed && item.url && (
+          <SpotifyEmbed
+            key={`sp-${item.id}`}
+            url={item.url}
+            title={item.title}
+            description={displayContent}
+          />
+        )}
+
         {item.url && derivedSource === "twitter" && (
           <TweetEmbed url={item.url} />
         )}
@@ -658,6 +672,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           derivedSource !== "facebook" &&
           derivedSource !== "threads" &&
           derivedSource !== "youtube" &&
+          derivedSource !== "spotify" &&
           derivedSource !== "vimeo" &&
           !displayThumbnail && (
             <a
