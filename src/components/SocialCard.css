@@ -51,6 +51,19 @@
   overflow: hidden;
 }
 
+.social-card-embed-tiktok {
+  position: relative;
+  width: 100%;
+  min-height: 540px;
+}
+
+.social-card-embed-tiktok iframe {
+  width: 100%;
+  min-height: 540px;
+  border: 0;
+  display: block;
+}
+
 /* 16:9 aspect ratio container for YouTube / Vimeo iframes */
 .social-card-embed-16x9 {
   position: relative;

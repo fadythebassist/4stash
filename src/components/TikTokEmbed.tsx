@@ -1,7 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import "./SocialCard.css";
-
-const TIKTOK_EMBED_SRC = "https://www.tiktok.com/embed.js";
 
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
@@ -9,23 +7,6 @@ function normalizeUrl(urlStr: string): string | null {
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
     return trimmed;
   return `https://${trimmed}`;
-}
-
-/**
- * Return a canonical TikTok URL with tracking/share params stripped.
- * TikTok's embed.js rejects blockquotes whose `cite` contains query params
- * like ?_r=1&_t=... — only the clean path form is reliably accepted.
- */
-function cleanTikTokUrl(urlStr: string): string {
-  const normalized = normalizeUrl(urlStr);
-  if (!normalized) return urlStr;
-  try {
-    const u = new URL(normalized);
-    // Keep only the origin + pathname — drop all query params and hash
-    return u.origin + u.pathname;
-  } catch {
-    return urlStr;
-  }
 }
 
 function extractTikTokVideoId(urlStr: string): string | null {
@@ -41,70 +22,6 @@ function extractTikTokVideoId(urlStr: string): string | null {
     const match = urlStr.match(/\/video\/(\d+)/);
     return match?.[1] ?? null;
   }
-}
-
-// Module-level singleton — the TikTok embed script is loaded once and reused.
-let tikTokEmbedPromise: Promise<void> | null = null;
-let reloadScheduled = false;
-
-/**
- * Schedule a single debounced reload() after all pending React useEffect
- * callbacks have fired. Multiple cards mounting in the same render batch all
- * call this; the actual reload() fires once via setTimeout(0) after the
- * synchronous storm of calls is over, by which point every blockquote is in
- * the DOM.
- */
-function scheduleReload(): void {
-  if (reloadScheduled) return;
-  reloadScheduled = true;
-  setTimeout(() => {
-    reloadScheduled = false;
-    const win = window as unknown as { tiktokEmbed?: { reload?: () => void } };
-    win.tiktokEmbed?.reload?.();
-  }, 0);
-}
-
-/**
- * Ensure embed.js is loaded, then schedule a reload so embed.js scans the
- * DOM after all cards in this render batch have appended their blockquotes.
- */
-function withTikTokSDK(): void {
-  if (typeof window === "undefined") return;
-
-  const win = window as unknown as {
-    tiktokEmbed?: { reload?: () => void };
-  };
-
-  // SDK already available — schedule a debounced reload
-  if (win.tiktokEmbed?.reload) {
-    scheduleReload();
-    return;
-  }
-
-  // Script not yet injected — inject it; it will auto-scan the DOM on load
-  if (!tikTokEmbedPromise) {
-    tikTokEmbedPromise = new Promise<void>((resolve) => {
-      const existing = document.querySelector<HTMLScriptElement>(
-        `script[src="${TIKTOK_EMBED_SRC}"]`,
-      );
-      if (existing) {
-        resolve();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = TIKTOK_EMBED_SRC;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => { tikTokEmbedPromise = null; resolve(); };
-      document.head.appendChild(script);
-    });
-  }
-
-  // Script is loading — after it resolves, schedule a reload for any cards
-  // that mounted after the initial auto-scan
-  tikTokEmbedPromise.then(() => {
-    scheduleReload();
-  }).catch(() => { /* ignore */ });
 }
 
 const TikTokLogo: React.FC = () => (
@@ -131,63 +48,13 @@ export interface TikTokEmbedProps {
 }
 
 const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, description }) => {
-  const embedRef = useRef<HTMLDivElement | null>(null);
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
-  // Clean URL (no tracking params) — required for TikTok embed.js to accept the blockquote
-  const cleanUrl = useMemo(() => (normalizedUrl ? cleanTikTokUrl(normalizedUrl) : null), [normalizedUrl]);
   const videoId = useMemo(() => extractTikTokVideoId(url), [url]);
-  const [failed, setFailed] = useState(false);
+  const embedSrc = useMemo(
+    () => (videoId ? `https://www.tiktok.com/embed/v2/${videoId}` : null),
+    [videoId],
+  );
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
-
-  useEffect(() => {
-    if (!cleanUrl || !videoId || !embedRef.current) return;
-
-    setFailed(false);
-    let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    embedRef.current.innerHTML = "";
-
-    const blockquote = document.createElement("blockquote");
-    blockquote.className = "tiktok-embed";
-    blockquote.setAttribute("cite", cleanUrl);
-    blockquote.setAttribute("data-video-id", videoId);
-    blockquote.setAttribute("data-embed-from", "oembed");
-    blockquote.style.maxWidth = "605px";
-    blockquote.style.minWidth = "325px";
-
-    const section = document.createElement("section");
-    const link = document.createElement("a");
-    link.href = cleanUrl;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = "View on TikTok";
-    section.appendChild(link);
-    blockquote.appendChild(section);
-    embedRef.current.appendChild(blockquote);
-
-    // Tell the SDK about this new blockquote. All cards in the same render
-    // batch call this; the actual reload() is debounced via setTimeout(0) so
-    // it fires once after every blockquote is in the DOM.
-    withTikTokSDK();
-
-    timeoutId = setTimeout(() => {
-      if (cancelled) return;
-      const iframe = embedRef.current?.querySelector("iframe");
-      if (!iframe) {
-        setFailed(true);
-      }
-    }, 10000);
-
-    return () => {
-      cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
-      if (embedRef.current) {
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- ref cleanup is intentional
-        embedRef.current.innerHTML = "";
-      }
-    };
-  }, [cleanUrl, videoId]);
 
   const handleClick = useCallback(() => {
     if (normalizedUrl) {
@@ -254,8 +121,17 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
         <span className="social-card-header-text">TikTok</span>
       </div>
 
-      {!failed ? (
-        <div ref={embedRef} className="social-card-embed-wrap" />
+      {embedSrc ? (
+        <div className="social-card-embed-wrap social-card-embed-tiktok">
+          <iframe
+            src={embedSrc}
+            title={displayTitle || "TikTok embed"}
+            loading="lazy"
+            allow="encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        </div>
       ) : thumbnail && !thumbnailFailed ? (
         <div
           className="social-card-thumbnail"
