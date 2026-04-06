@@ -45,22 +45,39 @@ function extractTikTokVideoId(urlStr: string): string | null {
 
 // Module-level singleton — the TikTok embed script is loaded once and reused.
 let tikTokEmbedPromise: Promise<void> | null = null;
+let reloadScheduled = false;
 
 /**
- * Ensure embed.js is loaded, then call the callback once the SDK is ready.
- * Each card calls this independently so it gets its own reload() after its
- * blockquote is already in the DOM.
+ * Schedule a single debounced reload() after all pending React useEffect
+ * callbacks have fired. Multiple cards mounting in the same render batch all
+ * call this; the actual reload() fires once via setTimeout(0) after the
+ * synchronous storm of calls is over, by which point every blockquote is in
+ * the DOM.
  */
-function withTikTokSDK(callback: () => void): void {
+function scheduleReload(): void {
+  if (reloadScheduled) return;
+  reloadScheduled = true;
+  setTimeout(() => {
+    reloadScheduled = false;
+    const win = window as unknown as { tiktokEmbed?: { reload?: () => void } };
+    win.tiktokEmbed?.reload?.();
+  }, 0);
+}
+
+/**
+ * Ensure embed.js is loaded, then schedule a reload so embed.js scans the
+ * DOM after all cards in this render batch have appended their blockquotes.
+ */
+function withTikTokSDK(): void {
   if (typeof window === "undefined") return;
 
   const win = window as unknown as {
     tiktokEmbed?: { reload?: () => void };
   };
 
-  // SDK already available — just run the callback (blockquote is already in DOM at this point)
+  // SDK already available — schedule a debounced reload
   if (win.tiktokEmbed?.reload) {
-    callback();
+    scheduleReload();
     return;
   }
 
@@ -83,10 +100,10 @@ function withTikTokSDK(callback: () => void): void {
     });
   }
 
-  // Script is loading — run callback after it resolves (it will auto-scan on load,
-  // but we still call reload() for cards that mount after the initial scan)
+  // Script is loading — after it resolves, schedule a reload for any cards
+  // that mounted after the initial auto-scan
   tikTokEmbedPromise.then(() => {
-    callback();
+    scheduleReload();
   }).catch(() => { /* ignore */ });
 }
 
@@ -149,14 +166,10 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
     blockquote.appendChild(section);
     embedRef.current.appendChild(blockquote);
 
-    // Tell the SDK about this new blockquote. The callback runs either:
-    // a) immediately (SDK already loaded) — blockquote is in DOM ✓
-    // b) after script.onload (SDK just loading) — blockquote is in DOM ✓
-    // In case (a) we call reload(); the script's initial scan already handled (b).
-    withTikTokSDK(() => {
-      const win = window as unknown as { tiktokEmbed?: { reload?: () => void } };
-      win.tiktokEmbed?.reload?.();
-    });
+    // Tell the SDK about this new blockquote. All cards in the same render
+    // batch call this; the actual reload() is debounced via setTimeout(0) so
+    // it fires once after every blockquote is in the DOM.
+    withTikTokSDK();
 
     timeoutId = setTimeout(() => {
       if (cancelled) return;
