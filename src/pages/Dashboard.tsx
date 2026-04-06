@@ -213,26 +213,6 @@ const Dashboard: React.FC = () => {
       <header className="dashboard-header glass">
         <div className="header-content">
           <h1 className="dashboard-logo">4Later</h1>
-          <div className="header-search">
-            <input
-              type="search"
-              className="header-search-input"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Escape") setSearchQuery(""); }}
-              aria-label="Search saved items"
-            />
-            {searchQuery && (
-              <button
-                className="header-search-clear"
-                onClick={() => setSearchQuery("")}
-                aria-label="Clear search"
-              >
-                ×
-              </button>
-            )}
-          </div>
           <div className="header-actions">
             <div className="user-info">
               <button
@@ -258,7 +238,7 @@ const Dashboard: React.FC = () => {
             </div>
             <button
               onClick={() => setShowSettings(true)}
-              className="btn-icon"
+              className="btn-icon header-settings-btn"
               title="Settings"
             >
               <svg
@@ -274,9 +254,29 @@ const Dashboard: React.FC = () => {
                 <path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M19.07 4.93l-4.24 4.24M9.17 14.83l-4.24 4.24" />
               </svg>
             </button>
+            <div className="header-search header-search-inline">
+              <input
+                type="search"
+                className="header-search-input"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setSearchQuery(""); }}
+                aria-label="Search saved items"
+              />
+              {searchQuery && (
+                <button
+                  className="header-search-clear"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <button
               onClick={handleSignOut}
-              className="btn-icon"
+              className="btn-icon header-logout-btn"
               title="Sign out"
             >
               <svg

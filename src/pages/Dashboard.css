@@ -18,6 +18,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-md);
   max-width: 2000px;
   margin: 0 auto;
 }
@@ -33,9 +34,12 @@
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1;
-  max-width: 220px;
-  margin: 0 var(--spacing-sm);
+  width: 220px;
+  flex: 0 0 220px;
+}
+
+.header-search-inline {
+  margin: 0;
 }
 
 .header-search-input {
@@ -82,16 +86,18 @@
   color: var(--text-primary);
 }
 
-
+.header-actions {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  margin-left: auto;
 }
 
 .user-info {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  margin-right: var(--spacing-xs);
 }
 
 .avatar-button {
@@ -302,6 +308,78 @@
 @media (min-width: 640px) {
   .user-name {
     display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .header-content {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .header-actions {
+    margin-left: 0;
+    gap: var(--spacing-xs);
+  }
+
+  .user-info {
+    gap: var(--spacing-xs);
+    margin-right: 0;
+  }
+
+  .header-search {
+    width: 100%;
+    min-width: 120px;
+    max-width: 420px;
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-content {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "logo search avatar"
+      "logo search actions";
+    align-items: center;
+    row-gap: var(--spacing-xs);
+    column-gap: var(--spacing-sm);
+  }
+
+  .dashboard-logo {
+    grid-area: logo;
+  }
+
+  .header-actions {
+    grid-area: actions;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  .user-info {
+    grid-area: avatar;
+    justify-self: end;
+  }
+
+  .header-search {
+    grid-area: search;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .header-search-input {
+    height: 40px;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: var(--font-base);
+  }
+
+  .btn-icon {
+    padding: 0.45rem;
   }
 }
 
