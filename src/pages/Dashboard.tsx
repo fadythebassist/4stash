@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Masonry from "react-masonry-css";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
-import TopBar, { SourceOption } from "@/components/TopBar";
+import TopBar, { type SourceOption } from "@/components/TopBar";
 import ContentCard from "@/components/ContentCard";
 import FAB from "@/components/FAB";
 import SettingsModal from "@/components/SettingsModal";
@@ -61,7 +61,7 @@ const Dashboard: React.FC = () => {
 
     prevItemCountRef.current = items.length;
     prevFirstItemIdRef.current = currentFirstItemId;
-  }, [items.length]);
+  }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally tracks length only; items[0] read inside is stable
 
   // Collect all unique tags from items for the TopBar filter
   const availableTags = useMemo(() => {
@@ -74,63 +74,46 @@ const Dashboard: React.FC = () => {
     return Array.from(tagSet).sort();
   }, [items]);
 
-  // Build source filter options — count from items after tag+search filters but before source filter,
-  // so the counts reflect items that would appear when you pick each source.
-  const sourceOptions = useMemo<SourceOption[]>(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      // Apply tag filter
-      if (selectedTags.length > 0 && !selectedTags.every((tag) => item.tags?.includes(tag))) continue;
-      // Apply search filter
-      if (searchQuery.trim() !== "") {
-        const q = searchQuery.trim().toLowerCase();
-        const matches =
-          (item.title?.toLowerCase().includes(q) ?? false) ||
-          (item.url?.toLowerCase().includes(q) ?? false) ||
-          (item.content?.toLowerCase().includes(q) ?? false) ||
-          (item.tags?.some((t) => t.toLowerCase().includes(q)) ?? false);
-        if (!matches) continue;
-      }
-      if (item.source) {
-        counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
-      }
-    }
-    return Array.from(counts.entries())
-      .map(([id, count]) => ({
-        id,
-        label: id.charAt(0).toUpperCase() + id.slice(1),
-        count,
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [items, selectedTags, searchQuery]);
-
-  // Filter items by selected tags (AND), search query, and source filter
-  const filteredItems = useMemo(() => {
+  // Items after applying tag + search filters (but before source filter)
+  // Used as the base for source option counts so each chip shows accurate counts.
+  const tagAndSearchFilteredItems = useMemo(() => {
     let result = items;
-
     if (selectedTags.length > 0) {
       result = result.filter((item) =>
         selectedTags.every((tag) => item.tags?.includes(tag)),
       );
     }
-
-    if (selectedSourceFilter !== null) {
-      result = result.filter((item) => item.source === selectedSourceFilter);
-    }
-
-    if (searchQuery.trim() !== "") {
+    if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter((item) => {
-        const inTitle = item.title?.toLowerCase().includes(q) ?? false;
-        const inUrl = item.url?.toLowerCase().includes(q) ?? false;
-        const inContent = item.content?.toLowerCase().includes(q) ?? false;
-        const inTags = item.tags?.some((t) => t.toLowerCase().includes(q)) ?? false;
-        return inTitle || inUrl || inContent || inTags;
-      });
+      result = result.filter(
+        (item) =>
+          item.title?.toLowerCase().includes(q) ||
+          item.url?.toLowerCase().includes(q) ||
+          item.content?.toLowerCase().includes(q) ||
+          item.tags?.some((t) => t.toLowerCase().includes(q)),
+      );
     }
-
     return result;
-  }, [items, selectedTags, selectedSourceFilter, searchQuery]);
+  }, [items, selectedTags, searchQuery]);
+
+  // Source filter options derived from tag+search-filtered items
+  const sourceOptions = useMemo<SourceOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const item of tagAndSearchFilteredItems) {
+      if (item.source) {
+        counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([id, count]) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1), count }))
+      .sort((a, b) => b.count - a.count);
+  }, [tagAndSearchFilteredItems]);
+
+  // Final filtered items (all three filters combined)
+  const filteredItems = useMemo(() => {
+    if (!selectedSourceFilter) return tagAndSearchFilteredItems;
+    return tagAndSearchFilteredItems.filter((item) => item.source === selectedSourceFilter);
+  }, [tagAndSearchFilteredItems, selectedSourceFilter]);
 
   const handleToggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -176,9 +159,7 @@ const Dashboard: React.FC = () => {
     await archiveItem(itemId);
   };
 
-  const isFilteringByTags = selectedTags.length > 0;
-  const isActiveFilter =
-    isFilteringByTags || selectedSourceFilter !== null || searchQuery.trim() !== "";
+  const isActiveFilter = selectedTags.length > 0 || searchQuery.trim() !== "" || selectedSourceFilter !== null;
 
   useEffect(() => {
     if (isActiveFilter || !hasMoreItems) return;
@@ -232,6 +213,26 @@ const Dashboard: React.FC = () => {
       <header className="dashboard-header glass">
         <div className="header-content">
           <h1 className="dashboard-logo">4Later</h1>
+          <div className="header-search">
+            <input
+              type="search"
+              className="header-search-input"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") setSearchQuery(""); }}
+              aria-label="Search saved items"
+            />
+            {searchQuery && (
+              <button
+                className="header-search-clear"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <div className="header-actions">
             <div className="user-info">
               <button
@@ -254,48 +255,6 @@ const Dashboard: React.FC = () => {
               <span className="user-name">
                 {user?.displayName || user?.email}
               </span>
-            </div>
-            {/* Search — compact, lives between user info and icon buttons */}
-            <div className="header-search-wrap">
-              <svg
-                className="header-search-icon"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                className="header-search-input"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setSearchQuery("");
-                    (e.target as HTMLInputElement).blur();
-                  }
-                }}
-                placeholder="Search…"
-                aria-label="Search saved items"
-              />
-              {searchQuery && (
-                <button
-                  className="header-search-clear"
-                  onClick={() => setSearchQuery("")}
-                  aria-label="Clear search"
-                  type="button"
-                >
-                  ×
-                </button>
-              )}
             </div>
             <button
               onClick={() => setShowSettings(true)}
@@ -359,24 +318,20 @@ const Dashboard: React.FC = () => {
           {filteredItems.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon-wrapper">
-                <div className="empty-icon">{isActiveFilter ? "🔍" : "📭"}</div>
+                <div className="empty-icon">📭</div>
               </div>
-              <h2>{isActiveFilter ? "No results" : "No items yet"}</h2>
+              <h2>No items yet</h2>
               <p>
-                {isActiveFilter
-                  ? "Nothing matches your current search or filters."
-                  : selectedListId
-                    ? "This list is empty. Add your first item!"
-                    : "Start saving content by clicking the + button"}
+                {selectedListId
+                  ? "This list is empty. Add your first item!"
+                  : "Start saving content by clicking the + button"}
               </p>
-              {!isActiveFilter && (
-                <button
-                  className="empty-cta"
-                  onClick={() => setShowAddItem(true)}
-                >
-                  Save your first item
-                </button>
-              )}
+              <button
+                className="empty-cta"
+                onClick={() => setShowAddItem(true)}
+              >
+                Save your first item
+              </button>
             </div>
           ) : user?.settings?.layoutMode === 'list' ? (
             <div
@@ -420,7 +375,7 @@ const Dashboard: React.FC = () => {
 
           {isActiveFilter && hasMoreItems && (
             <div className="load-more-sentinel">
-              Loading more results...
+              Searching all items...
             </div>
           )}
         </div>

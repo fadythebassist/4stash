@@ -11,6 +11,23 @@ function normalizeUrl(urlStr: string): string | null {
   return `https://${trimmed}`;
 }
 
+/**
+ * Return a canonical TikTok URL with tracking/share params stripped.
+ * TikTok's embed.js rejects blockquotes whose `cite` contains query params
+ * like ?_r=1&_t=... — only the clean path form is reliably accepted.
+ */
+function cleanTikTokUrl(urlStr: string): string {
+  const normalized = normalizeUrl(urlStr);
+  if (!normalized) return urlStr;
+  try {
+    const u = new URL(normalized);
+    // Keep only the origin + pathname — drop all query params and hash
+    return u.origin + u.pathname;
+  } catch {
+    return urlStr;
+  }
+}
+
 function extractTikTokVideoId(urlStr: string): string | null {
   const normalized = normalizeUrl(urlStr);
   if (!normalized) return null;
@@ -34,12 +51,15 @@ let tikTokEmbedPromise: Promise<void> | null = null;
 function triggerTikTokEmbed(): void {
   if (typeof window === "undefined") return;
 
-  // If the script already ran and the SDK is available, just call reload().
+  // If the script already ran and the SDK is available, defer reload() by one
+  // animation frame so the blockquote is committed to the DOM before the SDK scans.
   const win = window as unknown as {
     tiktokEmbed?: { reload?: () => void };
   };
   if (win.tiktokEmbed?.reload) {
-    win.tiktokEmbed.reload();
+    requestAnimationFrame(() => {
+      win.tiktokEmbed?.reload?.();
+    });
     return;
   }
 
@@ -91,12 +111,14 @@ export interface TikTokEmbedProps {
 const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, description }) => {
   const embedRef = useRef<HTMLDivElement | null>(null);
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
+  // Clean URL (no tracking params) — required for TikTok embed.js to accept the blockquote
+  const cleanUrl = useMemo(() => (normalizedUrl ? cleanTikTokUrl(normalizedUrl) : null), [normalizedUrl]);
   const videoId = useMemo(() => extractTikTokVideoId(url), [url]);
   const [failed, setFailed] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
 
   useEffect(() => {
-    if (!normalizedUrl || !videoId || !embedRef.current) return;
+    if (!cleanUrl || !videoId || !embedRef.current) return;
 
     setFailed(false);
     let cancelled = false;
@@ -106,14 +128,15 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
 
     const blockquote = document.createElement("blockquote");
     blockquote.className = "tiktok-embed";
-    blockquote.setAttribute("cite", normalizedUrl);
+    blockquote.setAttribute("cite", cleanUrl);
     blockquote.setAttribute("data-video-id", videoId);
-    blockquote.style.maxWidth = "100%";
-    blockquote.style.minWidth = "0";
+    blockquote.setAttribute("data-embed-from", "oembed");
+    blockquote.style.maxWidth = "605px";
+    blockquote.style.minWidth = "325px";
 
     const section = document.createElement("section");
     const link = document.createElement("a");
-    link.href = normalizedUrl;
+    link.href = cleanUrl;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = "View on TikTok";
@@ -139,7 +162,7 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
         embedRef.current.innerHTML = "";
       }
     };
-  }, [normalizedUrl, videoId]);
+  }, [cleanUrl, videoId]);
 
   const handleClick = useCallback(() => {
     if (normalizedUrl) {
