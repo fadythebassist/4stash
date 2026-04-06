@@ -146,6 +146,16 @@ const Dashboard: React.FC = () => {
     setSelectedTags([]);
   };
 
+  const handleSelectList = (listId: string | null) => {
+    // Clicking the already-active list deselects it (back to All)
+    selectList(selectedListId === listId ? null : listId);
+  };
+
+  const handleSourceFilterChange = (source: string | null) => {
+    // Clicking the already-active source deselects it (back to All Sources)
+    setSelectedSourceFilter(selectedSourceFilter === source ? null : source);
+  };
+
   // Apply theme from user settings
   useEffect(() => {
     const theme = user?.settings?.theme || 'light';
@@ -182,16 +192,18 @@ const Dashboard: React.FC = () => {
 
   const isActiveFilter = selectedTags.length > 0 || searchQuery.trim() !== "" || selectedSourceFilter !== null;
 
-  // Eagerly load all remaining pages in the background on mount so that
-  // source filter chips always reflect the full dataset, not just the first page.
+  // Eagerly load all remaining pages in the background — only when viewing "All"
+  // (no list selected), so list-scoped fetches aren't polluted with cross-list items.
+  // This ensures source chips reflect the full dataset on first load.
   useEffect(() => {
+    if (selectedListId !== null) return;
     if (!hasMoreItems) return;
     if (loadingMoreRef.current) return;
     loadingMoreRef.current = true;
     void loadMoreItems().finally(() => {
       loadingMoreRef.current = false;
     });
-  }, [hasMoreItems, loadMoreItems]);
+  }, [hasMoreItems, loadMoreItems, selectedListId]);
 
   useEffect(() => {
     if (isActiveFilter || !hasMoreItems) return;
@@ -336,10 +348,10 @@ const Dashboard: React.FC = () => {
         selectedTags={selectedTags}
         sourceOptions={sourceOptions}
         selectedSourceFilter={selectedSourceFilter}
-        onSelectList={selectList}
+        onSelectList={handleSelectList}
         onToggleTag={handleToggleTag}
         onClearTags={handleClearTags}
-        onSourceFilterChange={setSelectedSourceFilter}
+        onSourceFilterChange={handleSourceFilterChange}
         onAddList={() => setShowAddList(true)}
         onDeleteList={handleDeleteList}
       />
