@@ -17,6 +17,23 @@ const ItemDetailModal = React.lazy(() => import("@/components/ItemDetailModal"))
 const EditItemModal = React.lazy(() => import("@/components/EditItemModal"));
 const AvatarPickerModal = React.lazy(() => import("@/components/AvatarPickerModal"));
 
+const SOURCE_LABELS: Record<string, string> = {
+  twitter: "X",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  reddit: "Reddit",
+  threads: "Threads",
+  vimeo: "Vimeo",
+  spotify: "Spotify",
+  github: "GitHub",
+  medium: "Medium",
+  linkedin: "LinkedIn",
+  anghami: "Anghami",
+  pinterest: "Pinterest",
+};
+
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
   const {
@@ -105,7 +122,11 @@ const Dashboard: React.FC = () => {
       }
     }
     return Array.from(counts.entries())
-      .map(([id, count]) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1), count }))
+      .map(([id, count]) => ({
+        id,
+        label: SOURCE_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1),
+        count,
+      }))
       .sort((a, b) => b.count - a.count);
   }, [tagAndSearchFilteredItems]);
 
