@@ -23,6 +23,61 @@ interface TopBarProps {
   onDeleteList: (listId: string, listName: string) => void;
 }
 
+// Returns wheel + mouse-drag handlers for a horizontally scrollable ref.
+function useHorizontalScroll() {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const isDragging = React.useRef(false);
+  const startX = React.useRef(0);
+  const scrollLeft = React.useRef(0);
+
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const node = ref.current;
+    if (!node) return;
+    // Only hijack vertical wheel; horizontal wheel (trackpad) already works natively.
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    node.scrollLeft += e.deltaY;
+  };
+
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const node = ref.current;
+    if (!node) return;
+    isDragging.current = true;
+    startX.current = e.pageX - node.offsetLeft;
+    scrollLeft.current = node.scrollLeft;
+    node.style.cursor = "grabbing";
+    node.style.userSelect = "none";
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    const node = ref.current;
+    if (!node) return;
+    const x = e.pageX - node.offsetLeft;
+    const walk = (x - startX.current) * 1.2;
+    node.scrollLeft = scrollLeft.current - walk;
+  };
+
+  const onMouseUp = () => {
+    isDragging.current = false;
+    const node = ref.current;
+    if (!node) return;
+    node.style.cursor = "grab";
+    node.style.userSelect = "";
+  };
+
+  const onMouseLeave = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const node = ref.current;
+    if (!node) return;
+    node.style.cursor = "grab";
+    node.style.userSelect = "";
+  };
+
+  return { ref, onWheel, onMouseDown, onMouseMove, onMouseUp, onMouseLeave };
+}
+
 const TopBar: React.FC<TopBarProps> = ({
   lists,
   selectedListId,
@@ -37,14 +92,16 @@ const TopBar: React.FC<TopBarProps> = ({
   onAddList,
   onDeleteList,
 }) => {
-  const tagsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const listsScroll = useHorizontalScroll();
+  const tagsScroll = useHorizontalScroll();
+  const sourcesScroll = useHorizontalScroll();
 
   const handleDelete = (
     e: React.MouseEvent,
     listId: string,
     listName: string,
   ) => {
-    e.stopPropagation(); // Prevent selecting the list
+    e.stopPropagation();
     if (window.confirm(`Delete "${listName}" and all its items?`)) {
       onDeleteList(listId, listName);
     }
@@ -57,22 +114,21 @@ const TopBar: React.FC<TopBarProps> = ({
     return [...selectedFirst, ...remaining];
   }, [availableTags, selectedTags]);
 
-  const handleTagsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const node = tagsScrollRef.current;
-    if (!node) return;
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-
-    e.preventDefault();
-    node.scrollLeft += e.deltaY;
-  };
-
   const hasSourceOptions = sourceOptions.length > 0;
 
   return (
     <div className="topbar glass">
       {/* Lists row */}
       <div className="topbar-group">
-        <div className="topbar-scroll">
+        <div
+          className="topbar-scroll topbar-scroll-grabbable"
+          ref={listsScroll.ref}
+          onWheel={listsScroll.onWheel}
+          onMouseDown={listsScroll.onMouseDown}
+          onMouseMove={listsScroll.onMouseMove}
+          onMouseUp={listsScroll.onMouseUp}
+          onMouseLeave={listsScroll.onMouseLeave}
+        >
           <button
             className={`topbar-chip ${selectedListId === null ? "active" : ""}`}
             onClick={() => onSelectList(null)}
@@ -118,9 +174,13 @@ const TopBar: React.FC<TopBarProps> = ({
       {/* Tags row */}
       <div className="topbar-group topbar-group-tags">
         <div
-          className="topbar-scroll topbar-scroll-tags"
-          ref={tagsScrollRef}
-          onWheel={handleTagsWheel}
+          className="topbar-scroll topbar-scroll-tags topbar-scroll-grabbable"
+          ref={tagsScroll.ref}
+          onWheel={tagsScroll.onWheel}
+          onMouseDown={tagsScroll.onMouseDown}
+          onMouseMove={tagsScroll.onMouseMove}
+          onMouseUp={tagsScroll.onMouseUp}
+          onMouseLeave={tagsScroll.onMouseLeave}
         >
           <button
             className={`topbar-chip topbar-chip-tag ${selectedTags.length === 0 ? "active" : ""}`}
@@ -144,7 +204,15 @@ const TopBar: React.FC<TopBarProps> = ({
       {/* Source filter row */}
       {hasSourceOptions && (
         <div className="topbar-group topbar-group-sources">
-          <div className="topbar-scroll topbar-scroll-sources">
+          <div
+            className="topbar-scroll topbar-scroll-sources topbar-scroll-grabbable"
+            ref={sourcesScroll.ref}
+            onWheel={sourcesScroll.onWheel}
+            onMouseDown={sourcesScroll.onMouseDown}
+            onMouseMove={sourcesScroll.onMouseMove}
+            onMouseUp={sourcesScroll.onMouseUp}
+            onMouseLeave={sourcesScroll.onMouseLeave}
+          >
             <button
               className={`topbar-chip topbar-chip-source ${selectedSourceFilter === null ? "active" : ""}`}
               onClick={() => onSourceFilterChange(null)}

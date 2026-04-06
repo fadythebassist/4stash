@@ -138,4 +138,12 @@
   .topbar-scroll {
     padding: 0 var(--spacing-xl);
   }
+
+  .topbar-scroll-grabbable {
+    cursor: grab;
+  }
+
+  .topbar-scroll-grabbable:active {
+    cursor: grabbing;
+  }
 }
