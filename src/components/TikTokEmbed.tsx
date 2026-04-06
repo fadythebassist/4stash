@@ -44,45 +44,50 @@ function extractTikTokVideoId(urlStr: string): string | null {
 }
 
 // Module-level singleton — the TikTok embed script is loaded once and reused.
-// Calling triggerTikTokEmbed() on subsequent cards reuses the already-loaded script
-// instead of re-injecting a new <script> tag on every render.
 let tikTokEmbedPromise: Promise<void> | null = null;
 
-function triggerTikTokEmbed(): void {
+/**
+ * Ensure embed.js is loaded, then call the callback once the SDK is ready.
+ * Each card calls this independently so it gets its own reload() after its
+ * blockquote is already in the DOM.
+ */
+function withTikTokSDK(callback: () => void): void {
   if (typeof window === "undefined") return;
 
-  // If the script already ran and the SDK is available, defer reload() by one
-  // animation frame so the blockquote is committed to the DOM before the SDK scans.
   const win = window as unknown as {
     tiktokEmbed?: { reload?: () => void };
   };
+
+  // SDK already available — just run the callback (blockquote is already in DOM at this point)
   if (win.tiktokEmbed?.reload) {
-    requestAnimationFrame(() => {
-      win.tiktokEmbed?.reload?.();
-    });
+    callback();
     return;
   }
 
-  // Script is already loading — nothing more to do; it will process the
-  // blockquote once it fires its load event.
-  if (tikTokEmbedPromise) return;
+  // Script not yet injected — inject it; it will auto-scan the DOM on load
+  if (!tikTokEmbedPromise) {
+    tikTokEmbedPromise = new Promise<void>((resolve) => {
+      const existing = document.querySelector<HTMLScriptElement>(
+        `script[src="${TIKTOK_EMBED_SRC}"]`,
+      );
+      if (existing) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = TIKTOK_EMBED_SRC;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => { tikTokEmbedPromise = null; resolve(); };
+      document.head.appendChild(script);
+    });
+  }
 
-  tikTokEmbedPromise = new Promise<void>((resolve) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${TIKTOK_EMBED_SRC}"]`,
-    );
-    if (existing) {
-      // Already in DOM from a previous module evaluation (e.g. HMR) — reuse.
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = TIKTOK_EMBED_SRC;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => { tikTokEmbedPromise = null; resolve(); };
-    document.head.appendChild(script);
-  });
+  // Script is loading — run callback after it resolves (it will auto-scan on load,
+  // but we still call reload() for cards that mount after the initial scan)
+  tikTokEmbedPromise.then(() => {
+    callback();
+  }).catch(() => { /* ignore */ });
 }
 
 const TikTokLogo: React.FC = () => (
@@ -144,7 +149,14 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
     blockquote.appendChild(section);
     embedRef.current.appendChild(blockquote);
 
-    triggerTikTokEmbed();
+    // Tell the SDK about this new blockquote. The callback runs either:
+    // a) immediately (SDK already loaded) — blockquote is in DOM ✓
+    // b) after script.onload (SDK just loading) — blockquote is in DOM ✓
+    // In case (a) we call reload(); the script's initial scan already handled (b).
+    withTikTokSDK(() => {
+      const win = window as unknown as { tiktokEmbed?: { reload?: () => void } };
+      win.tiktokEmbed?.reload?.();
+    });
 
     timeoutId = setTimeout(() => {
       if (cancelled) return;
