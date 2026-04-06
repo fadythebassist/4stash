@@ -182,6 +182,17 @@ const Dashboard: React.FC = () => {
 
   const isActiveFilter = selectedTags.length > 0 || searchQuery.trim() !== "" || selectedSourceFilter !== null;
 
+  // Eagerly load all remaining pages in the background on mount so that
+  // source filter chips always reflect the full dataset, not just the first page.
+  useEffect(() => {
+    if (!hasMoreItems) return;
+    if (loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    void loadMoreItems().finally(() => {
+      loadingMoreRef.current = false;
+    });
+  }, [hasMoreItems, loadMoreItems]);
+
   useEffect(() => {
     if (isActiveFilter || !hasMoreItems) return;
 
