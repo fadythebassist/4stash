@@ -23,21 +23,28 @@ interface TopBarProps {
   onDeleteList: (listId: string, listName: string) => void;
 }
 
-// Returns wheel + mouse-drag handlers for a horizontally scrollable ref.
+// Returns mouse-drag handlers and a ref for a horizontally scrollable element.
+// Wheel-to-scroll is attached as a non-passive native listener so preventDefault works.
 function useHorizontalScroll() {
   const ref = React.useRef<HTMLDivElement | null>(null);
   const isDragging = React.useRef(false);
   const startX = React.useRef(0);
   const scrollLeft = React.useRef(0);
 
-  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+  // Attach a non-passive wheel listener so we can call preventDefault() and
+  // convert vertical wheel delta into horizontal scroll on desktop.
+  React.useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    // Only hijack vertical wheel; horizontal wheel (trackpad) already works natively.
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    e.preventDefault();
-    node.scrollLeft += e.deltaY;
-  };
+    const handleWheel = (e: WheelEvent) => {
+      // Only hijack vertical wheel; horizontal wheel (trackpad) works natively.
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      node.scrollLeft += e.deltaY;
+    };
+    node.addEventListener("wheel", handleWheel, { passive: false });
+    return () => node.removeEventListener("wheel", handleWheel);
+  }, []);
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const node = ref.current;
@@ -75,7 +82,7 @@ function useHorizontalScroll() {
     node.style.userSelect = "";
   };
 
-  return { ref, onWheel, onMouseDown, onMouseMove, onMouseUp, onMouseLeave };
+  return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave };
 }
 
 const TopBar: React.FC<TopBarProps> = ({
@@ -123,7 +130,6 @@ const TopBar: React.FC<TopBarProps> = ({
         <div
           className="topbar-scroll topbar-scroll-grabbable"
           ref={listsScroll.ref}
-          onWheel={listsScroll.onWheel}
           onMouseDown={listsScroll.onMouseDown}
           onMouseMove={listsScroll.onMouseMove}
           onMouseUp={listsScroll.onMouseUp}
@@ -176,7 +182,6 @@ const TopBar: React.FC<TopBarProps> = ({
         <div
           className="topbar-scroll topbar-scroll-tags topbar-scroll-grabbable"
           ref={tagsScroll.ref}
-          onWheel={tagsScroll.onWheel}
           onMouseDown={tagsScroll.onMouseDown}
           onMouseMove={tagsScroll.onMouseMove}
           onMouseUp={tagsScroll.onMouseUp}
@@ -205,10 +210,9 @@ const TopBar: React.FC<TopBarProps> = ({
       {hasSourceOptions && (
         <div className="topbar-group topbar-group-sources">
           <div
-            className="topbar-scroll topbar-scroll-sources topbar-scroll-grabbable"
-            ref={sourcesScroll.ref}
-            onWheel={sourcesScroll.onWheel}
-            onMouseDown={sourcesScroll.onMouseDown}
+          className="topbar-scroll topbar-scroll-sources topbar-scroll-grabbable"
+          ref={sourcesScroll.ref}
+          onMouseDown={sourcesScroll.onMouseDown}
             onMouseMove={sourcesScroll.onMouseMove}
             onMouseUp={sourcesScroll.onMouseUp}
             onMouseLeave={sourcesScroll.onMouseLeave}
