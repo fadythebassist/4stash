@@ -69,7 +69,7 @@ function extractYouTubeThumbnail(url: string): string | undefined {
 
     if (videoId) {
       // Return high-quality thumbnail
-      return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+      return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
     }
   } catch (err) {
     console.error("Failed to extract YouTube thumbnail:", err);
