@@ -74,10 +74,23 @@ const Dashboard: React.FC = () => {
     return Array.from(tagSet).sort();
   }, [items]);
 
-  // Build source filter options from loaded items
+  // Build source filter options — count from items after tag+search filters but before source filter,
+  // so the counts reflect items that would appear when you pick each source.
   const sourceOptions = useMemo<SourceOption[]>(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
+      // Apply tag filter
+      if (selectedTags.length > 0 && !selectedTags.every((tag) => item.tags?.includes(tag))) continue;
+      // Apply search filter
+      if (searchQuery.trim() !== "") {
+        const q = searchQuery.trim().toLowerCase();
+        const matches =
+          (item.title?.toLowerCase().includes(q) ?? false) ||
+          (item.url?.toLowerCase().includes(q) ?? false) ||
+          (item.content?.toLowerCase().includes(q) ?? false) ||
+          (item.tags?.some((t) => t.toLowerCase().includes(q)) ?? false);
+        if (!matches) continue;
+      }
       if (item.source) {
         counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
       }
@@ -89,7 +102,7 @@ const Dashboard: React.FC = () => {
         count,
       }))
       .sort((a, b) => b.count - a.count);
-  }, [items]);
+  }, [items, selectedTags, searchQuery]);
 
   // Filter items by selected tags (AND), search query, and source filter
   const filteredItems = useMemo(() => {
@@ -242,6 +255,48 @@ const Dashboard: React.FC = () => {
                 {user?.displayName || user?.email}
               </span>
             </div>
+            {/* Search — compact, lives between user info and icon buttons */}
+            <div className="header-search-wrap">
+              <svg
+                className="header-search-icon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                className="header-search-input"
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearchQuery("");
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                placeholder="Search…"
+                aria-label="Search saved items"
+              />
+              {searchQuery && (
+                <button
+                  className="header-search-clear"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                  type="button"
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setShowSettings(true)}
               className="btn-icon"
@@ -290,12 +345,10 @@ const Dashboard: React.FC = () => {
         selectedTags={selectedTags}
         sourceOptions={sourceOptions}
         selectedSourceFilter={selectedSourceFilter}
-        searchQuery={searchQuery}
         onSelectList={selectList}
         onToggleTag={handleToggleTag}
         onClearTags={handleClearTags}
         onSourceFilterChange={setSelectedSourceFilter}
-        onSearchChange={setSearchQuery}
         onAddList={() => setShowAddList(true)}
         onDeleteList={handleDeleteList}
       />
