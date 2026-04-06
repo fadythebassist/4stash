@@ -313,12 +313,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
     };
 
     const unfurl = async () => {
-      // Only attempt unfurl for Instagram, Facebook, Threads, and Reddit (with bad URLs)
+      // Only attempt unfurl for platforms where metadata materially improves rendering.
       if (
         derivedSource !== "instagram" &&
         derivedSource !== "facebook" &&
         derivedSource !== "threads" &&
-        derivedSource !== "reddit"
+        derivedSource !== "reddit" &&
+        derivedSource !== "anghami"
       )
         return;
       if (!item.url) return;
