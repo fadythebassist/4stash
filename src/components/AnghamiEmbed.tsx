@@ -8,21 +8,6 @@ function normalizeUrl(urlStr: string): string | null {
   return `https://${trimmed}`;
 }
 
-function extractAnghamiSongId(urlStr: string): string | null {
-  const normalized = normalizeUrl(urlStr);
-  if (!normalized) return null;
-
-  try {
-    const url = new URL(normalized);
-    const match = url.pathname.match(/\/song\/(\d+)/i);
-    if (match?.[1]) return match[1];
-    return null;
-  } catch {
-    const match = urlStr.match(/\/song\/(\d+)/i);
-    return match?.[1] ?? null;
-  }
-}
-
 const AnghamiLogo: React.FC = () => (
   <svg
     className="social-card-logo"
@@ -52,7 +37,6 @@ const AnghamiEmbed: React.FC<AnghamiEmbedProps> = ({
   description,
 }) => {
   const normalizedUrl = useMemo(() => normalizeUrl(url), [url]);
-  const songId = useMemo(() => extractAnghamiSongId(url), [url]);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
 
   const handleClick = useCallback(() => {
@@ -121,7 +105,7 @@ const AnghamiEmbed: React.FC<AnghamiEmbedProps> = ({
         className="social-card-button"
         onClick={(e) => e.stopPropagation()}
       >
-        {songId ? "Open in Anghami" : "Open Link"}
+        Open in Anghami
       </a>
     </div>
   );
