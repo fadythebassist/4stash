@@ -122,6 +122,41 @@ function detectContentType(url: string): { type: string; source?: string } {
     return { type: isVideo ? "video" : "link", source: "facebook" };
   }
 
+  // Vimeo
+  if (urlLower.includes("vimeo.com")) {
+    return { type: "video", source: "vimeo" };
+  }
+
+  // Spotify
+  if (urlLower.includes("spotify.com") || urlLower.includes("open.spotify.com")) {
+    return { type: "link", source: "spotify" };
+  }
+
+  // GitHub
+  if (urlLower.includes("github.com")) {
+    return { type: "link", source: "github" };
+  }
+
+  // Medium
+  if (urlLower.includes("medium.com")) {
+    return { type: "link", source: "medium" };
+  }
+
+  // LinkedIn
+  if (urlLower.includes("linkedin.com")) {
+    return { type: "link", source: "linkedin" };
+  }
+
+  // Anghami
+  if (urlLower.includes("anghami.com")) {
+    return { type: "link", source: "anghami" };
+  }
+
+  // Pinterest
+  if (urlLower.includes("pinterest.com") || urlLower.includes("pin.it")) {
+    return { type: "image", source: "pinterest" };
+  }
+
   // Image extensions
   if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url)) {
     return { type: "image" };
@@ -826,12 +861,24 @@ export class FirebaseStorageService implements StorageService {
     const docs = snapshot.docs;
     const hasMore = docs.length > pageLimit;
     const pageDocs = hasMore ? docs.slice(0, pageLimit) : docs;
-    const items = pageDocs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt.toDate(),
-      updatedAt: doc.data().updatedAt.toDate(),
-    })) as Item[];
+    const items = pageDocs.map((doc) => {
+      const data = doc.data();
+      const item = {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+        updatedAt: data.updatedAt.toDate(),
+      } as Item;
+      // Re-detect source for items stored as "other" — covers platforms added
+      // after initial save (Vimeo, Spotify, GitHub, Medium, LinkedIn, etc.)
+      if ((item.source === "other" || !item.source) && item.url) {
+        const detected = detectContentType(item.url);
+        if (detected.source && detected.source !== "other") {
+          item.source = detected.source as Item["source"];
+        }
+      }
+      return item;
+    }) as Item[];
     const nextCursorDate = items.length > 0 ? items[items.length - 1].createdAt : null;
 
     return {
