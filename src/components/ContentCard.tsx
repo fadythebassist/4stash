@@ -44,6 +44,27 @@ function toProxyThumbnail(thumbnail: string): string {
   return `/api/proxy-image?url=${encodeURIComponent(thumbnail)}`;
 }
 
+function cleanAnghamiUrl(urlStr: string): string {
+  try {
+    const normalized =
+      urlStr.startsWith("http://") || urlStr.startsWith("https://")
+        ? urlStr
+        : `https://${urlStr}`;
+    const parsed = new URL(normalized);
+    if (!parsed.hostname.toLowerCase().includes("anghami.com")) return normalized;
+
+    parsed.search = "";
+    parsed.hash = "";
+    parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    if (/^\/song\/\d+$/i.test(parsed.pathname)) {
+      parsed.hostname = "play.anghami.com";
+    }
+    return parsed.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
 interface ContentCardProps {
   item: Item;
   onDelete: () => void;
@@ -409,6 +430,20 @@ const ContentCard: React.FC<ContentCardProps> = ({
             } catch { /* Non-critical */ }
           }
           return; // Done for Reddit
+        }
+
+        // For Anghami: convert share links to stable canonical URL and persist once.
+        if (derivedSource === "anghami") {
+          const canonicalAnghamiUrl = cleanAnghamiUrl(
+            (typeof data.url === "string" && data.url) ? data.url : fullUrl,
+          );
+          if (canonicalAnghamiUrl && canonicalAnghamiUrl !== fullUrl) {
+            try {
+              await updateItemRef.current({ id: item.id, url: canonicalAnghamiUrl });
+            } catch {
+              // Non-critical
+            }
+          }
         }
 
         // Update thumbnail if missing or failed

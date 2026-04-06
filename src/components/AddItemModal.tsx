@@ -4,7 +4,6 @@ import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
 import { categorizeContent } from "@/services/AutoCategorizationService";
 import TweetEmbed from "@/components/TweetEmbed";
-import HashtagInput from "@/components/HashtagInput";
 import "./Modal.css";
 
 interface AddItemModalProps {
@@ -52,7 +51,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
-  const [manualTags, setManualTags] = useState<string[]>([]);
+  const [manualTagsInput, setManualTagsInput] = useState("");
 
   const sourceConfig: Record<string, { emoji: string; label: string }> = {
     facebook: { emoji: "📘", label: "Facebook" },
@@ -356,6 +355,44 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       parsed.search = "";
       parsed.hash = "";
       parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+      return parsed.toString();
+    } catch {
+      return urlStr;
+    }
+  };
+
+  const isAnghamiUrl = (urlStr: string): boolean => {
+    try {
+      const fullUrl = normalizeUrl(urlStr);
+      if (!fullUrl) return false;
+      const parsed = new URL(fullUrl);
+      const host = parsed.hostname.toLowerCase();
+      return host.includes("anghami.com");
+    } catch {
+      return false;
+    }
+  };
+
+  const cleanAnghamiUrl = (urlStr: string): string => {
+    try {
+      const fullUrl = normalizeUrl(urlStr);
+      if (!fullUrl) return urlStr;
+      const parsed = new URL(fullUrl);
+
+      // Share links include highly volatile branch/utm params that change on each copy.
+      // Keep only stable canonical path.
+      parsed.search = "";
+      parsed.hash = "";
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+
+      // If we already resolved to play/song/<id>, keep that canonical form.
+      if (
+        parsed.hostname.toLowerCase().includes("anghami.com") &&
+        /^\/song\/\d+$/i.test(parsed.pathname)
+      ) {
+        parsed.hostname = "play.anghami.com";
+      }
+
       return parsed.toString();
     } catch {
       return urlStr;
@@ -803,6 +840,19 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         };
       }
 
+      // For Anghami URLs, resolve open.anghami short links once and strip volatile tracking params.
+      if (url.hostname.includes("anghami.com")) {
+        const meta = await fetchUnfurl(fullUrl);
+        const resolved = cleanAnghamiUrl(meta?.url || fullUrl);
+        const fallbackTitle = "Anghami Track";
+        return {
+          title: meta?.title || fallbackTitle,
+          description: meta?.description,
+          thumbnail: meta?.image,
+          url: resolved,
+        };
+      }
+
       // For other URLs, try unfurl then fall back to domain
       const meta = await fetchUnfurl(fullUrl);
       if (meta?.title || meta?.description || meta?.image) {
@@ -858,6 +908,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         !existingTitle ||
         source?.source === "twitter" ||
         source?.source === "reddit" ||
+        source?.source === "anghami" ||
         (source?.source === "facebook" &&
           isGenericFacebookTitle(existingTitle)) ||
         (source?.source === "instagram" &&
@@ -886,9 +937,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           (source?.source === "tiktok" && isTikTokShortUrl(trimmedUrl)) ||
           trimmedUrl.includes("fb.watch") ||
           trimmedUrl.includes("facebook.com/share/") ||
+          (source?.source === "anghami" && isAnghamiUrl(trimmedUrl)) ||
           (source?.source === "reddit" && isRedditShortOrDirtyUrl(trimmedUrl));
         if (fetched?.url && fetched.url !== trimmedUrl && isShortOrShareUrl) {
-          updateUrl(fetched.url);
+          updateUrl(source?.source === "anghami" ? cleanAnghamiUrl(fetched.url) : fetched.url);
         }
 
         const shouldUpdateTitle =
@@ -980,6 +1032,24 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       }
     }
 
+    // Final guard: canonicalize Anghami URLs and strip branch/utm parameters before save.
+    if (finalUrl && isAnghamiUrl(finalUrl)) {
+      try {
+        const resolved = await fetchUnfurl(finalUrl);
+        const cleanUrl = cleanAnghamiUrl(resolved?.url || finalUrl);
+        if (cleanUrl !== finalUrl) {
+          finalUrl = cleanUrl;
+          updateUrl(cleanUrl);
+        }
+      } catch {
+        const cleanUrl = cleanAnghamiUrl(finalUrl);
+        if (cleanUrl !== finalUrl) {
+          finalUrl = cleanUrl;
+          updateUrl(cleanUrl);
+        }
+      }
+    }
+
     if (!finalTitle && hasUrl) {
       const meta = await fetchUrlMetadata(currentUrl.trim());
       const resolvedUrl = meta?.url || currentUrl.trim();
@@ -1036,8 +1106,16 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         source: finalSource,
       });
 
+      const manualTags = Array.from(
+        new Set(
+          manualTagsInput
+            .split(",")
+            .map((tag) => tag.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
       const autoTags = categorizationResult.tags;
-      const finalTags = Array.from(new Set([...autoTags, ...manualTags.map((t) => t.trim().toLowerCase()).filter(Boolean)]));
+      const finalTags = Array.from(new Set([...autoTags, ...manualTags]));
 
       // Auto-add to matching lists based on category detection
       const autoListIds = [...listIds];
@@ -1221,10 +1299,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
           <div className="form-group">
             <label htmlFor="tags">Tags (optional)</label>
-            <HashtagInput
-              tags={manualTags}
-              onChange={setManualTags}
+            <input
+              id="tags"
+              type="text"
+              value={manualTagsInput}
+              onChange={(e) => setManualTagsInput(e.target.value)}
               placeholder="e.g. meal prep, protein, quick recipe"
+              disabled={loading}
             />
           </div>
 
