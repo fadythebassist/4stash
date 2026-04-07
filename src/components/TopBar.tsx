@@ -8,7 +8,7 @@ export interface SourceOption {
   count: number;
 }
 
-const LEFT_ARROW_THRESHOLD_PX = 12;
+const FIRST_CHIP_VISIBLE_TOLERANCE_PX = 1;
 
 interface TopBarProps {
   lists: List[];
@@ -39,23 +39,31 @@ function useHorizontalScroll() {
   // Only update canScrollRight from ResizeObserver (content width changed).
   // canScrollLeft is ONLY updated from real scroll events to avoid false positives
   // caused by the browser drifting scrollLeft during layout reflows.
+  const isFirstChipFullyVisible = React.useCallback((node: HTMLDivElement) => {
+    const first = node.firstElementChild as HTMLElement | null;
+    if (!first) return true;
+    const nodeRect = node.getBoundingClientRect();
+    const firstRect = first.getBoundingClientRect();
+    return firstRect.left >= nodeRect.left - FIRST_CHIP_VISIBLE_TOLERANCE_PX;
+  }, []);
+
   const updateRight = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    if (node.scrollLeft <= LEFT_ARROW_THRESHOLD_PX) {
+    if (isFirstChipFullyVisible(node)) {
       setCanScrollLeft(false);
     }
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
-  }, []);
+  }, [isFirstChipFullyVisible]);
 
   const updateBoth = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
     setCanScrollLeft(
-      hasUserInteracted.current && node.scrollLeft > LEFT_ARROW_THRESHOLD_PX,
+      hasUserInteracted.current && !isFirstChipFullyVisible(node),
     );
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
-  }, []);
+  }, [isFirstChipFullyVisible]);
 
   React.useEffect(() => {
     const node = ref.current;
