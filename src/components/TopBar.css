@@ -138,13 +138,6 @@
 /* ── Scroll row wrapper (arrows + scroll track) ─────────── */
 .topbar-row {
   position: relative;
-  display: flex;
-  align-items: stretch;
-}
-
-.topbar-row .topbar-scroll {
-  flex: 1;
-  min-width: 0;
 }
 
 /* Arrow buttons — hidden on mobile, shown on desktop only */
@@ -166,33 +159,39 @@
     cursor: grabbing;
   }
 
+  /* Arrows are absolutely positioned so they never affect the scroll container's
+     clientWidth — which would cause scrollLeft drift via scroll anchoring. */
   .topbar-arrow {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    width: 2rem;
-    background: var(--bg-primary);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2.5rem;
+    background: transparent;
     border: none;
     color: var(--text-secondary);
     font-size: 1.5rem;
     line-height: 1;
     cursor: pointer;
     z-index: 2;
-    transition: color var(--transition-fast), background var(--transition-fast);
+    transition: color var(--transition-fast);
     padding: 0;
+    pointer-events: all;
   }
 
   .topbar-arrow:hover {
     color: var(--accent-primary);
-    background: var(--bg-secondary);
   }
 
   .topbar-arrow-left {
-    box-shadow: 4px 0 8px var(--bg-primary);
+    left: 0;
+    background: linear-gradient(to right, var(--bg-primary) 60%, transparent);
   }
 
   .topbar-arrow-right {
-    box-shadow: -4px 0 8px var(--bg-primary);
+    right: 0;
+    background: linear-gradient(to left, var(--bg-primary) 60%, transparent);
   }
 }

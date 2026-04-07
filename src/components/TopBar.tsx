@@ -36,7 +36,6 @@ function useHorizontalScroll() {
   const updateArrows = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    console.log(`[TopBar] scrollLeft=${node.scrollLeft} clientWidth=${node.clientWidth} scrollWidth=${node.scrollWidth}`);
     setCanScrollLeft(node.scrollLeft > 0);
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
@@ -125,15 +124,6 @@ interface ScrollRowProps {
 
 const ScrollRow: React.FC<ScrollRowProps> = ({ scroll, className, children }) => (
   <div className="topbar-row">
-    {scroll.canScrollLeft && (
-      <button
-        className="topbar-arrow topbar-arrow-left"
-        onClick={() => scroll.scrollBy(-240)}
-        aria-label="Scroll left"
-      >
-        ‹
-      </button>
-    )}
     <div
       className={`topbar-scroll topbar-scroll-grabbable${className ? ` ${className}` : ""}`}
       ref={scroll.ref}
@@ -144,6 +134,15 @@ const ScrollRow: React.FC<ScrollRowProps> = ({ scroll, className, children }) =>
     >
       {children}
     </div>
+    {scroll.canScrollLeft && (
+      <button
+        className="topbar-arrow topbar-arrow-left"
+        onClick={() => scroll.scrollBy(-240)}
+        aria-label="Scroll left"
+      >
+        ‹
+      </button>
+    )}
     {scroll.canScrollRight && (
       <button
         className="topbar-arrow topbar-arrow-right"
