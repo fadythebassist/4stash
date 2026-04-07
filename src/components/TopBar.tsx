@@ -30,21 +30,13 @@ function useHorizontalScroll() {
   const isDragging = React.useRef(false);
   const startX = React.useRef(0);
   const scrollLeftRef = React.useRef(0);
-  // Tracks whether the user has intentionally scrolled right at any point.
-  // The ResizeObserver can momentarily push scrollLeft > 0 during layout;
-  // we guard against that by only showing the left arrow after a real scroll event.
-  const hasScrolled = React.useRef(false);
   const [canScrollLeft, setCanScrollLeft] = React.useState(false);
   const [canScrollRight, setCanScrollRight] = React.useState(false);
 
-  const updateArrows = React.useCallback((fromScroll = false) => {
+  const updateArrows = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    if (fromScroll) hasScrolled.current = true;
-    // Left arrow: only show if user has actually scrolled and scrollLeft > 0.
-    const atLeft = Math.round(node.scrollLeft) === 0;
-    if (atLeft) hasScrolled.current = false; // reset when back at origin
-    setCanScrollLeft(hasScrolled.current && !atLeft);
+    setCanScrollLeft(node.scrollLeft > 0);
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
 
@@ -57,23 +49,22 @@ function useHorizontalScroll() {
       e.preventDefault();
       node.scrollLeft += e.deltaY;
     };
-    const handleScroll = () => updateArrows(true);
     node.addEventListener("wheel", handleWheel, { passive: false });
-    node.addEventListener("scroll", handleScroll, { passive: true });
+    node.addEventListener("scroll", updateArrows, { passive: true });
 
     // Debounce ResizeObserver so we read arrow state after layout fully settles.
     let rafId: number;
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => updateArrows(false));
+      rafId = requestAnimationFrame(updateArrows);
     });
     ro.observe(node);
 
-    updateArrows(false);
+    updateArrows();
 
     return () => {
       node.removeEventListener("wheel", handleWheel);
-      node.removeEventListener("scroll", handleScroll);
+      node.removeEventListener("scroll", updateArrows);
       cancelAnimationFrame(rafId);
       ro.disconnect();
     };

@@ -24,6 +24,8 @@
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
   overscroll-behavior-x: contain;
+  /* Prevent browser scroll anchoring from drifting scrollLeft when chips load */
+  overflow-anchor: none;
 }
 
 .topbar-scroll::-webkit-scrollbar {
