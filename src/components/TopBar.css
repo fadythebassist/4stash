@@ -133,6 +133,23 @@
   padding-bottom: var(--spacing-xs);
 }
 
+/* ── Scroll row wrapper (arrows + scroll track) ─────────── */
+.topbar-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.topbar-row .topbar-scroll {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Arrow buttons — hidden on mobile, shown on desktop only */
+.topbar-arrow {
+  display: none;
+}
+
 /* ── Responsive ─────────────────────────────────────────── */
 @media (min-width: 768px) {
   .topbar-scroll {
@@ -145,5 +162,35 @@
 
   .topbar-scroll-grabbable:active {
     cursor: grabbing;
+  }
+
+  .topbar-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2rem;
+    background: var(--bg-primary);
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+    transition: color var(--transition-fast), background var(--transition-fast);
+    padding: 0;
+  }
+
+  .topbar-arrow:hover {
+    color: var(--accent-primary);
+    background: var(--bg-secondary);
+  }
+
+  .topbar-arrow-left {
+    box-shadow: 4px 0 8px var(--bg-primary);
+  }
+
+  .topbar-arrow-right {
+    box-shadow: -4px 0 8px var(--bg-primary);
   }
 }

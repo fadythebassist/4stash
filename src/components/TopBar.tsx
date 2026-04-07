@@ -23,35 +23,59 @@ interface TopBarProps {
   onDeleteList: (listId: string, listName: string) => void;
 }
 
-// Returns mouse-drag handlers and a ref for a horizontally scrollable element.
+// Returns mouse-drag handlers, a scroll ref, and canScrollLeft/Right state.
 // Wheel-to-scroll is attached as a non-passive native listener so preventDefault works.
 function useHorizontalScroll() {
   const ref = React.useRef<HTMLDivElement | null>(null);
   const isDragging = React.useRef(false);
   const startX = React.useRef(0);
-  const scrollLeft = React.useRef(0);
+  const scrollLeftRef = React.useRef(0);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(false);
 
-  // Attach a non-passive wheel listener so we can call preventDefault() and
-  // convert vertical wheel delta into horizontal scroll on desktop.
+  const updateArrows = React.useCallback(() => {
+    const node = ref.current;
+    if (!node) return;
+    setCanScrollLeft(node.scrollLeft > 4);
+    setCanScrollRight(node.scrollLeft + node.clientWidth < node.scrollWidth - 4);
+  }, []);
+
   React.useEffect(() => {
     const node = ref.current;
     if (!node) return;
+
     const handleWheel = (e: WheelEvent) => {
-      // Only hijack vertical wheel; horizontal wheel (trackpad) works natively.
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
       e.preventDefault();
       node.scrollLeft += e.deltaY;
     };
     node.addEventListener("wheel", handleWheel, { passive: false });
-    return () => node.removeEventListener("wheel", handleWheel);
-  }, []);
+    node.addEventListener("scroll", updateArrows, { passive: true });
+
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(node);
+
+    updateArrows();
+
+    return () => {
+      node.removeEventListener("wheel", handleWheel);
+      node.removeEventListener("scroll", updateArrows);
+      ro.disconnect();
+    };
+  }, [updateArrows]);
+
+  const scrollBy = (delta: number) => {
+    const node = ref.current;
+    if (!node) return;
+    node.scrollBy({ left: delta, behavior: "smooth" });
+  };
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const node = ref.current;
     if (!node) return;
     isDragging.current = true;
     startX.current = e.pageX - node.offsetLeft;
-    scrollLeft.current = node.scrollLeft;
+    scrollLeftRef.current = node.scrollLeft;
     node.style.cursor = "grabbing";
     node.style.userSelect = "none";
   };
@@ -62,7 +86,7 @@ function useHorizontalScroll() {
     if (!node) return;
     const x = e.pageX - node.offsetLeft;
     const walk = (x - startX.current) * 1.2;
-    node.scrollLeft = scrollLeft.current - walk;
+    node.scrollLeft = scrollLeftRef.current - walk;
   };
 
   const onMouseUp = () => {
@@ -82,8 +106,48 @@ function useHorizontalScroll() {
     node.style.userSelect = "";
   };
 
-  return { ref, onMouseDown, onMouseMove, onMouseUp, onMouseLeave };
+  return { ref, canScrollLeft, canScrollRight, scrollBy, onMouseDown, onMouseMove, onMouseUp, onMouseLeave };
 }
+
+// Wraps a scroll row with left/right arrow buttons shown only when overflow exists.
+interface ScrollRowProps {
+  scroll: ReturnType<typeof useHorizontalScroll>;
+  className?: string;
+  children: React.ReactNode;
+}
+
+const ScrollRow: React.FC<ScrollRowProps> = ({ scroll, className, children }) => (
+  <div className="topbar-row">
+    {scroll.canScrollLeft && (
+      <button
+        className="topbar-arrow topbar-arrow-left"
+        onClick={() => scroll.scrollBy(-240)}
+        aria-label="Scroll left"
+      >
+        ‹
+      </button>
+    )}
+    <div
+      className={`topbar-scroll topbar-scroll-grabbable${className ? ` ${className}` : ""}`}
+      ref={scroll.ref}
+      onMouseDown={scroll.onMouseDown}
+      onMouseMove={scroll.onMouseMove}
+      onMouseUp={scroll.onMouseUp}
+      onMouseLeave={scroll.onMouseLeave}
+    >
+      {children}
+    </div>
+    {scroll.canScrollRight && (
+      <button
+        className="topbar-arrow topbar-arrow-right"
+        onClick={() => scroll.scrollBy(240)}
+        aria-label="Scroll right"
+      >
+        ›
+      </button>
+    )}
+  </div>
+);
 
 const TopBar: React.FC<TopBarProps> = ({
   lists,
@@ -127,14 +191,7 @@ const TopBar: React.FC<TopBarProps> = ({
     <div className="topbar glass">
       {/* Lists row */}
       <div className="topbar-group">
-        <div
-          className="topbar-scroll topbar-scroll-grabbable"
-          ref={listsScroll.ref}
-          onMouseDown={listsScroll.onMouseDown}
-          onMouseMove={listsScroll.onMouseMove}
-          onMouseUp={listsScroll.onMouseUp}
-          onMouseLeave={listsScroll.onMouseLeave}
-        >
+        <ScrollRow scroll={listsScroll}>
           <button
             className={`topbar-chip ${selectedListId === null ? "active" : ""}`}
             onClick={() => onSelectList(null)}
@@ -174,19 +231,12 @@ const TopBar: React.FC<TopBarProps> = ({
           <button className="topbar-chip add-chip" onClick={onAddList}>
             <span>+</span>
           </button>
-        </div>
+        </ScrollRow>
       </div>
 
       {/* Tags row */}
       <div className="topbar-group topbar-group-tags">
-        <div
-          className="topbar-scroll topbar-scroll-tags topbar-scroll-grabbable"
-          ref={tagsScroll.ref}
-          onMouseDown={tagsScroll.onMouseDown}
-          onMouseMove={tagsScroll.onMouseMove}
-          onMouseUp={tagsScroll.onMouseUp}
-          onMouseLeave={tagsScroll.onMouseLeave}
-        >
+        <ScrollRow scroll={tagsScroll} className="topbar-scroll-tags">
           <button
             className={`topbar-chip topbar-chip-tag ${selectedTags.length === 0 ? "active" : ""}`}
             onClick={onClearTags}
@@ -203,20 +253,13 @@ const TopBar: React.FC<TopBarProps> = ({
               <span>#{tag}</span>
             </button>
           ))}
-        </div>
+        </ScrollRow>
       </div>
 
       {/* Source filter row */}
       {hasSourceOptions && (
         <div className="topbar-group topbar-group-sources">
-          <div
-          className="topbar-scroll topbar-scroll-sources topbar-scroll-grabbable"
-          ref={sourcesScroll.ref}
-          onMouseDown={sourcesScroll.onMouseDown}
-            onMouseMove={sourcesScroll.onMouseMove}
-            onMouseUp={sourcesScroll.onMouseUp}
-            onMouseLeave={sourcesScroll.onMouseLeave}
-          >
+          <ScrollRow scroll={sourcesScroll} className="topbar-scroll-sources">
             <button
               className={`topbar-chip topbar-chip-source ${selectedSourceFilter === null ? "active" : ""}`}
               onClick={() => onSourceFilterChange(null)}
@@ -233,7 +276,7 @@ const TopBar: React.FC<TopBarProps> = ({
                 <span>{opt.label}</span>
               </button>
             ))}
-          </div>
+          </ScrollRow>
         </div>
       )}
     </div>
