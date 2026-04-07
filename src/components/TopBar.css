@@ -148,7 +148,8 @@
 /* ── Responsive ─────────────────────────────────────────── */
 @media (min-width: 768px) {
   .topbar-scroll {
-    padding: 0 var(--spacing-xl);
+    /* Extra horizontal padding reserves space so chips are never hidden under arrows */
+    padding: 0 calc(var(--spacing-xl) + 2rem);
   }
 
   .topbar-scroll-grabbable {
@@ -169,7 +170,6 @@
     top: 0;
     bottom: 0;
     width: 2.5rem;
-    background: transparent;
     border: none;
     color: var(--text-secondary);
     font-size: 1.5rem;
@@ -187,11 +187,11 @@
 
   .topbar-arrow-left {
     left: 0;
-    background: linear-gradient(to right, var(--bg-primary) 60%, transparent);
+    background: linear-gradient(to right, var(--bg-primary) 70%, transparent);
   }
 
   .topbar-arrow-right {
     right: 0;
-    background: linear-gradient(to left, var(--bg-primary) 60%, transparent);
+    background: linear-gradient(to left, var(--bg-primary) 70%, transparent);
   }
 }

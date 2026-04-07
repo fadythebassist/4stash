@@ -33,7 +33,16 @@ function useHorizontalScroll() {
   const [canScrollLeft, setCanScrollLeft] = React.useState(false);
   const [canScrollRight, setCanScrollRight] = React.useState(false);
 
-  const updateArrows = React.useCallback(() => {
+  // Only update canScrollRight from ResizeObserver (content width changed).
+  // canScrollLeft is ONLY updated from real scroll events to avoid false positives
+  // caused by the browser drifting scrollLeft during layout reflows.
+  const updateRight = React.useCallback(() => {
+    const node = ref.current;
+    if (!node) return;
+    setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
+  }, []);
+
+  const updateBoth = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
     setCanScrollLeft(node.scrollLeft > 0);
@@ -49,26 +58,28 @@ function useHorizontalScroll() {
       e.preventDefault();
       node.scrollLeft += e.deltaY;
     };
+    // scroll events = user initiated → update both arrows
     node.addEventListener("wheel", handleWheel, { passive: false });
-    node.addEventListener("scroll", updateArrows, { passive: true });
+    node.addEventListener("scroll", updateBoth, { passive: true });
 
-    // Debounce ResizeObserver so we read arrow state after layout fully settles.
+    // ResizeObserver fires when chips load → only update right arrow,
+    // never touch canScrollLeft to avoid layout-drift false positives.
     let rafId: number;
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(updateArrows);
+      rafId = requestAnimationFrame(updateRight);
     });
     ro.observe(node);
 
-    updateArrows();
+    updateRight();
 
     return () => {
       node.removeEventListener("wheel", handleWheel);
-      node.removeEventListener("scroll", updateArrows);
+      node.removeEventListener("scroll", updateBoth);
       cancelAnimationFrame(rafId);
       ro.disconnect();
     };
-  }, [updateArrows]);
+  }, [updateBoth, updateRight]);
 
   const scrollBy = (delta: number) => {
     const node = ref.current;
