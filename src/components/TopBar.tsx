@@ -8,6 +8,8 @@ export interface SourceOption {
   count: number;
 }
 
+const LEFT_ARROW_THRESHOLD_PX = 12;
+
 interface TopBarProps {
   lists: List[];
   selectedListId: string | null;
@@ -45,13 +47,17 @@ function useHorizontalScroll() {
   const updateBoth = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    setCanScrollLeft(node.scrollLeft > 0);
+    setCanScrollLeft(node.scrollLeft > LEFT_ARROW_THRESHOLD_PX);
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
 
   React.useEffect(() => {
     const node = ref.current;
     if (!node) return;
+
+    // Always start rows at the true left edge.
+    node.scrollLeft = 0;
+    setCanScrollLeft(false);
 
     const handleWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
