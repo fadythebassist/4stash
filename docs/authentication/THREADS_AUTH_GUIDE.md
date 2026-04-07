@@ -24,7 +24,7 @@ The Threads integration allows users to:
 2. Click "Create App"
 3. Select "Business" type (or appropriate for your use case)
 4. Fill in app details:
-   - App Name: `4Later` (or your app name)
+   - App Name: `4Stash` (or your app name)
    - App Contact Email: Your email
    - Business Account: (optional)
 

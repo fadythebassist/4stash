@@ -3,7 +3,7 @@ import { Analytics, getAnalytics, isSupported, logEvent } from "firebase/analyti
 
 export type AnalyticsConsent = "granted" | "denied";
 
-const ANALYTICS_CONSENT_KEY = "4later_analytics_consent";
+const ANALYTICS_CONSENT_KEY = "4stash_analytics_consent";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,

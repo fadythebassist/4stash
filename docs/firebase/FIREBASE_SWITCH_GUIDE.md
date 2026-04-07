@@ -129,7 +129,7 @@ This will:
 If you want to start with a clean slate:
 ```javascript
 // Just delete the localStorage data
-localStorage.removeItem('4later_mock_data');
+localStorage.removeItem('4stash_mock_data');
 ```
 
 ---
@@ -184,7 +184,7 @@ Your localStorage data will still be there!
 ## After Successful Migration
 
 ### Clean Up:
-1. ✅ Remove old localStorage data: `localStorage.removeItem('4later_mock_data')`
+1. ✅ Remove old localStorage data: `localStorage.removeItem('4stash_mock_data')`
 2. ✅ Update README.md to mention Firebase requirement
 3. ✅ Remove Recovery page (no longer needed since no localStorage)
 4. ✅ Update documentation

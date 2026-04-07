@@ -159,7 +159,7 @@
 ### Local Testing (Mock Storage):
 
 Since you're currently using `MockStorageService`, the Facebook and Twitter buttons will work in **mock mode**:
-- They'll create a demo user (`demo@4later.app`)
+- They'll create a demo user (`demo@4stash.com`)
 - No real OAuth will happen
 - Perfect for UI testing before Firebase migration
 

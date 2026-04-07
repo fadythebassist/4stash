@@ -98,7 +98,7 @@ const Register: React.FC = () => {
       {/* Brand panel — visible on tablet+ */}
       <div className="auth-brand">
         <div className="auth-brand-inner">
-          <div className="auth-brand-logo">4Later</div>
+          <div className="auth-brand-logo">4Stash</div>
           <p className="auth-brand-tagline">Save it. Find it. Later.</p>
         </div>
         <div className="auth-brand-decor auth-brand-decor-1" />
@@ -110,7 +110,7 @@ const Register: React.FC = () => {
       <div className="auth-panel">
         <div className="auth-card">
           <div className="auth-header">
-            <h1 className="auth-logo">4Later</h1>
+            <h1 className="auth-logo">4Stash</h1>
             <p className="auth-subtitle">Create your account</p>
           </div>
 

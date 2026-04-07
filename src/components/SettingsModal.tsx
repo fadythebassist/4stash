@@ -41,7 +41,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           '⚠️ Threads API Not Configured\n\n' +
           'To connect your Threads account, set VITE_FACEBOOK_APP_ID (or VITE_THREADS_APP_ID) in your .env file.\n\n' +
           'The app uses the same Meta/Facebook app for Threads OAuth.\n' +
-          'Make sure the redirect URI https://4later.xyz/threads-oauth-callback.html is added in the Facebook Developer Portal.'
+          'Make sure the redirect URI https://4stash.com/threads-oauth-callback.html is added in the Facebook Developer Portal.'
         );
         return;
       }

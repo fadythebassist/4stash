@@ -22,7 +22,7 @@ No test runner is configured. The app runs in **Mock Mode** by default (localSto
 
 The core abstraction is `StorageService` (src/services/StorageService.ts), an interface implemented by:
 
-- **MockStorageService** — uses localStorage with `4later_` prefix, simulates API delays. Default for development.
+- **MockStorageService** — uses localStorage with `4stash_` prefix, simulates API delays. Default for development.
 - **FirebaseStorageService** — uses Firebase Auth + Cloud Firestore for production.
 
 Switching between them is done by changing the import in `AuthContext.tsx` and `DataContext.tsx`.
@@ -47,7 +47,7 @@ This file is unusually large because it contains a **custom unfurl plugin** that
 
 - `GET /api/unfurl?url=<URL>` — extracts metadata (title, description, image) with platform-specific handlers for Instagram, Facebook, Reddit, Threads, YouTube
 - `GET /api/proxy-image?url=<URL>` — proxies images to avoid CORS issues
-- PWA configuration with Web Share Target support (users can share content from other apps directly to 4Later)
+- PWA configuration with Web Share Target support (users can share content from other apps directly to 4Stash)
 
 ### Styling
 

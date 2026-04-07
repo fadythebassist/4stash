@@ -1,11 +1,11 @@
-# Quick Start Guide - 4Later
+# Quick Start Guide - 4Stash
 
 Get up and running in 5 minutes!
 
 ## Step 1: Install Dependencies
 
 ```bash
-cd c:\Users\Fady\GitHub\4later
+cd c:\Users\Fady\GitHub\4stash
 npm install
 ```
 
@@ -24,7 +24,7 @@ The app will open at `http://localhost:5173`
 ### Create an Account (Mock Mode)
 
 1. Click **"Continue with Google"** or **"Sign up"**
-   - Google: Creates demo user `demo@4later.app` instantly
+   - Google: Creates demo user `demo@4stash.com` instantly
    - Email: Use any email/password (stored locally)
 
 2. You'll see the dashboard with two default lists:
@@ -128,7 +128,7 @@ npm run dev -- --port 3000
 ### Module Not Found
 ```bash
 # Make sure you're in the right directory:
-cd c:\Users\Fady\GitHub\4later
+cd c:\Users\Fady\GitHub\4stash
 
 # Reinstall dependencies:
 rm -rf node_modules package-lock.json

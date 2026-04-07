@@ -6,7 +6,7 @@ const Privacy: React.FC = () => {
     <div className="privacy-page">
       <div className="privacy-container">
         <header className="privacy-header">
-          <div className="privacy-logo">4Later</div>
+          <div className="privacy-logo">4Stash</div>
           <h1>Privacy Policy</h1>
           <p className="privacy-effective">Effective date: March 18, 2026</p>
         </header>
@@ -14,7 +14,7 @@ const Privacy: React.FC = () => {
         <section>
           <h2>1. Introduction</h2>
           <p>
-            Welcome to 4Later ("we", "our", or "us"). 4Later is a personal
+            Welcome to 4Stash ("we", "our", or "us"). 4Stash is a personal
             content-saving app that lets you save links, tweets, TikToks,
             Instagram posts, Reddit threads, Threads posts, and other media so
             you can revisit them later. This Privacy Policy explains what data
@@ -142,7 +142,7 @@ const Privacy: React.FC = () => {
         <section>
           <h2>7. Children's Privacy</h2>
           <p>
-            4Later is not directed at children under 13. We do not knowingly
+            4Stash is not directed at children under 13. We do not knowingly
             collect personal information from children under 13.
           </p>
         </section>
@@ -173,7 +173,7 @@ const Privacy: React.FC = () => {
         </section>
 
         <footer className="privacy-footer">
-          <a href="/login">Back to 4Later</a>
+          <a href="/login">Back to 4Stash</a>
         </footer>
       </div>
     </div>

@@ -1,4 +1,4 @@
-# Testing Guide for 4Later
+# Testing Guide for 4Stash
 
 ## Testing in Mock Mode
 
@@ -8,7 +8,7 @@ The app runs in Mock Mode by default, which simulates Firebase using localStorag
 
 #### Test Google Sign-In (Mock)
 1. Click "Continue with Google"
-2. Automatically creates demo user: `demo@4later.app`
+2. Automatically creates demo user: `demo@4stash.com`
 3. Redirects to dashboard
 4. Data persists across page refreshes
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>4Later User Debug Tool</title>
+    <title>4Stash User Debug Tool</title>
     <style>
         body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; }
         .user { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; }
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>🔍 4Later User Debug Tool</h1>
+    <h1>🔍 4Stash User Debug Tool</h1>
     <div class="stats" id="stats"></div>
     <div id="users"></div>
     <div style="margin-top: 20px;">
@@ -26,12 +26,12 @@
 
     <script>
         function loadData() {
-            const data = JSON.parse(localStorage.getItem('4later_mock_data') || '{"users":[],"lists":[],"items":[],"currentUserId":null}');
+            const data = JSON.parse(localStorage.getItem('4stash_mock_data') || '{"users":[],"lists":[],"items":[],"currentUserId":null}');
             return data;
         }
 
         function saveData(data) {
-            localStorage.setItem('4later_mock_data', JSON.stringify(data));
+            localStorage.setItem('4stash_mock_data', JSON.stringify(data));
         }
 
         function displayUsers() {
@@ -78,7 +78,7 @@
             const data = loadData();
             data.currentUserId = userId;
             saveData(data);
-            alert('✅ Switched to user! Refresh the 4Later app to see changes.');
+            alert('✅ Switched to user! Refresh the 4Stash app to see changes.');
             displayUsers();
         }
 
@@ -119,7 +119,7 @@
             if (!confirm('⚠️ This will DELETE ALL DATA including all users, lists, and items. Are you absolutely sure?')) return;
             if (!confirm('⚠️ FINAL WARNING: This cannot be undone!')) return;
             
-            localStorage.removeItem('4later_mock_data');
+            localStorage.removeItem('4stash_mock_data');
             alert('✅ All data cleared!');
             displayUsers();
         }
@@ -130,7 +130,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `4later-backup-${Date.now()}.json`;
+            a.download = `4stash-backup-${Date.now()}.json`;
             a.click();
             alert('✅ Data exported!');
         }

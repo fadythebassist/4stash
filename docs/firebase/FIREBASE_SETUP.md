@@ -4,7 +4,7 @@
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Click "Add Project" or "Create a project"
-3. Enter project name: `4later` (or your preferred name)
+3. Enter project name: `4stash` (or your preferred name)
 4. Disable Google Analytics (optional for this project)
 5. Click "Create Project"
 

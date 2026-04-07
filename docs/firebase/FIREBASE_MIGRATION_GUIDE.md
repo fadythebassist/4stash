@@ -20,7 +20,7 @@ After completing this migration, you can add social login providers by following
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Click **"Add Project"** or **"Create a project"**
-3. Enter project name: `4later-production`
+3. Enter project name: `4stash-production`
 4. **Disable** Google Analytics (not needed for now)
 5. Click **"Create Project"** and wait for setup to complete
 6. Click **"Continue"** when done
@@ -194,7 +194,7 @@ After you complete Phase 1 and Phase 2 above, let me know and I'll:
 
 ### 🔄 Changes:
 
-- Users must sign up/login (no more automatic demo@4later.app)
+- Users must sign up/login (no more automatic demo@4stash.com)
 - Data stored in cloud, not localStorage
 - New users start with empty lists (migration tool handles existing users)
 

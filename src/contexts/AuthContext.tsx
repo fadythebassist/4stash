@@ -35,7 +35,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_CACHE_KEY = "4later_cached_user";
+const AUTH_CACHE_KEY = "4stash_cached_user";
 
 function serializeCachedUser(user: User): string {
   return JSON.stringify({

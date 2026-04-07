@@ -1,6 +1,36 @@
 import { firebaseStorageService } from "./FirebaseStorageService";
 
 /**
+ * One-time migration of localStorage keys from the old "4later_" prefix to "4stash_".
+ * This must be called on app startup before any storage reads so that existing users
+ * retain their saved data after the rename.
+ *
+ * Safe to call repeatedly — a guard flag prevents it from running more than once.
+ */
+export function migrateLocalStorageKeys(): void {
+  const MIGRATED_FLAG = "4stash_migrated_from_4later";
+  if (localStorage.getItem(MIGRATED_FLAG) === "1") return;
+
+  const keyMap: [string, string][] = [
+    ["4later_mock_data", "4stash_mock_data"],
+    ["4later_cached_user", "4stash_cached_user"],
+    ["4later_analytics_consent", "4stash_analytics_consent"],
+    ["4later_mock_data_backup", "4stash_mock_data_backup"],
+  ];
+
+  for (const [oldKey, newKey] of keyMap) {
+    const existing = localStorage.getItem(oldKey);
+    if (existing !== null && localStorage.getItem(newKey) === null) {
+      localStorage.setItem(newKey, existing);
+      console.log(`🔑 Migrated localStorage key: ${oldKey} → ${newKey}`);
+    }
+  }
+
+  localStorage.setItem(MIGRATED_FLAG, "1");
+  console.log("✅ localStorage key migration from 4later → 4stash complete.");
+}
+
+/**
  * Migrate data from localStorage (MockStorageService) to Firebase (FirebaseStorageService)
  *
  * Usage:
@@ -31,7 +61,7 @@ export async function migrateLocalStorageToFirebase(): Promise<void> {
   console.log("✅ Firebase user:", firebaseUser.email);
 
   // Step 2: Load data from localStorage
-  const stored = localStorage.getItem("4later_mock_data");
+  const stored = localStorage.getItem("4stash_mock_data");
   if (!stored) {
     console.log("⚠️  No localStorage data found to migrate");
     return;
@@ -136,20 +166,20 @@ export async function migrateLocalStorageToFirebase(): Promise<void> {
       timestamp: new Date().toISOString(),
       data: mockData,
     };
-    localStorage.setItem("4later_mock_data_backup", JSON.stringify(backup));
+    localStorage.setItem("4stash_mock_data_backup", JSON.stringify(backup));
     console.log(
-      '\n💾 Backup saved to localStorage as "4later_mock_data_backup"',
+      '\n💾 Backup saved to localStorage as "4stash_mock_data_backup"',
     );
 
     // Optional: Clear old data (commented out for safety)
-    // localStorage.removeItem('4later_mock_data');
+    // localStorage.removeItem('4stash_mock_data');
     // console.log('🗑️  Cleared old localStorage data');
 
     console.log(
       "\n🎉 All done! Check Firebase Console → Firestore to verify your data.",
     );
     console.log(
-      '💡 Tip: You can now delete "4later_mock_data" from localStorage if everything looks good.',
+      '💡 Tip: You can now delete "4stash_mock_data" from localStorage if everything looks good.',
     );
   } catch (err: unknown) {
     console.error("\n❌ Migration failed:", err instanceof Error ? err.message : String(err));

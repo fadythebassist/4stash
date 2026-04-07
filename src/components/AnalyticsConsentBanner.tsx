@@ -61,7 +61,7 @@ const AnalyticsConsentBanner: React.FC = () => {
     <div className="analytics-consent-banner glass fade-in" role="dialog" aria-live="polite">
       <div className="analytics-consent-copy">
         <p className="analytics-consent-eyebrow">Privacy choice</p>
-        <h2>Help improve 4Later with anonymous analytics?</h2>
+        <h2>Help improve 4Stash with anonymous analytics?</h2>
         <p>
           We use Google Analytics for page views and feature usage only. We do not
           use it to read the private content you save.

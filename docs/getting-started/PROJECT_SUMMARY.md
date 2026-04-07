@@ -294,7 +294,7 @@ Automatically detects and tags:
 
 ```bash
 # Clone and install
-cd c:\Users\Fady\GitHub\4later
+cd c:\Users\Fady\GitHub\4stash
 npm install
 
 # Start development

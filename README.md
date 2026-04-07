@@ -1,4 +1,4 @@
-# 4Later
+# 4Stash
 
 <div align="center">
   <h3>🔖 Save and organize multimedia content for later</h3>
@@ -31,8 +31,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/4later.git
-   cd 4later
+   git clone https://github.com/yourusername/4stash.git
+   cd 4stash
    ```
 
 2. **Install dependencies**
@@ -78,7 +78,7 @@ To switch to Firebase:
 ## 📁 Project Structure
 
 ```
-4later/
+4stash/
 ├── src/
 │   ├── components/          # Reusable UI components
 │   │   ├── TopBar.tsx      # Horizontal scrollable list filter
@@ -116,10 +116,10 @@ To switch to Firebase:
 
 ### Web Share Target API
 
-Share content to 4Later from any app:
+Share content to 4Stash from any app:
 
 1. Click share button in any app (Chrome, Twitter, etc.)
-2. Select "4Later"
+   2. Select "4Stash"
 3. Content automatically opens in add item modal
 4. Choose a list and save
 

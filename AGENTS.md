@@ -29,7 +29,7 @@ npm run lint && npm run build
 
 ### Service Layer
 `StorageService` (`src/services/StorageService.ts`) is a TypeScript **interface** with two implementations:
-- `MockStorageService` — localStorage with `4later_` key prefix, simulated async delays. **Default for development.**
+- `MockStorageService` — localStorage with `4stash_` key prefix, simulated async delays. **Default for development.**
 - `FirebaseStorageService` — Firebase Auth + Cloud Firestore for production.
 
 To switch implementations, change the import in `AuthContext.tsx` and `DataContext.tsx` at the module-level singleton line:

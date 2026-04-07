@@ -1160,7 +1160,7 @@ function unfurlPlugin(): Plugin {
           const redditHeaders = {
             ...headers,
             "user-agent":
-              "Mozilla/5.0 (compatible; 4Later/1.0; +https://4later.app)",
+              "Mozilla/5.0 (compatible; 4Stash/1.0; +https://4stash.com)",
           };
 
           const jsonRes = await fetchTextWithTimeout(
@@ -1365,7 +1365,7 @@ function unfurlPlugin(): Plugin {
   };
 
   return {
-    name: "4later-unfurl",
+    name: "4stash-unfurl",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const handled = await handler(req, res);
@@ -1416,8 +1416,8 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: "4Later",
-        short_name: "4Later",
+        name: "4Stash",
+        short_name: "4Stash",
         description: "Save and organize multimedia content for later",
         theme_color: "#ffffff",
         background_color: "#ffffff",

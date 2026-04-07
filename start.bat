@@ -5,5 +5,5 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173') do (
     taskkill /F /PID %%a 2>nul
 )
 timeout /t 1 /nobreak >nul
-echo Starting 4later on port 5173...
+echo Starting 4stash on port 5173...
 npm run dev

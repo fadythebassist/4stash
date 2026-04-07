@@ -256,7 +256,7 @@ const Dashboard: React.FC = () => {
       {/* Header */}
       <header className="dashboard-header glass">
         <div className="header-content">
-          <h1 className="dashboard-logo">4Later</h1>
+          <h1 className="dashboard-logo">4Stash</h1>
           <div className="header-actions">
             <div className="user-info">
               <button

@@ -946,14 +946,14 @@ function buildInstagramMediaFallbackUrl(u) {
 // ---------------------------------------------------------------------------
 async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     var _a, _b, _c, _d, _e;
-    // CORS — allow 4later.xyz and localhost dev
+    // CORS — allow 4stash.com and localhost dev
     const origin = req.headers["origin"];
-    const allowedOrigins = ["https://4later.xyz", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173"];
+    const allowedOrigins = ["https://4stash.com", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173"];
     if (origin && allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
     else {
-        res.setHeader("Access-Control-Allow-Origin", "https://4later.xyz");
+        res.setHeader("Access-Control-Allow-Origin", "https://4stash.com");
     }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -1503,7 +1503,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
             if (!redditJsonUrl.pathname.endsWith("/"))
                 redditJsonUrl.pathname += "/";
             const jsonUrl = redditJsonUrl.toString() + ".json";
-            const redditHeaders = Object.assign(Object.assign({}, headers), { "user-agent": "Mozilla/5.0 (compatible; 4Later/1.0; +https://4later.app)" });
+            const redditHeaders = Object.assign(Object.assign({}, headers), { "user-agent": "Mozilla/5.0 (compatible; 4Stash/1.0; +https://4stash.com)" });
             const jsonRes = await fetchTextWithTimeout(jsonUrl, redditHeaders, 8000);
             attempts["redditJson"]["ok"] = jsonRes.ok;
             if (jsonRes.ok) {

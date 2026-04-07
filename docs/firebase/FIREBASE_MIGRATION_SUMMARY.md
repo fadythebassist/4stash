@@ -79,7 +79,7 @@ When you've completed Phase 1 & 2, tell me and I'll:
 
 ### Before (Mock Storage):
 - ❌ Data in localStorage (port-specific)
-- ❌ Automatic demo@4later.app login
+- ❌ Automatic demo@4stash.com login
 - ❌ Single device only
 - ❌ Data lost if localStorage cleared
 - ❌ Port 5173 vs 5174 confusion

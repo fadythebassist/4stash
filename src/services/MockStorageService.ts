@@ -143,7 +143,7 @@ function detectContentType(url: string): { type: string; source?: string } {
  * Data persists in localStorage to survive page refreshes
  */
 export class MockStorageService implements StorageService {
-  private readonly STORAGE_KEY = "4later_mock_data";
+  private readonly STORAGE_KEY = "4stash_mock_data";
   private data: {
     users: User[];
     lists: List[];
@@ -272,7 +272,7 @@ export class MockStorageService implements StorageService {
     await this.delay();
     // Mock Google sign-in
     const existingUser = this.data.users.find(
-      (u) => u.email === "demo@4later.app",
+      (u) => u.email === "demo@4stash.com",
     );
     if (existingUser) {
       this.data.currentUserId = existingUser.id;
@@ -282,7 +282,7 @@ export class MockStorageService implements StorageService {
 
     const user: User = {
       id: this.generateId(),
-      email: "demo@4later.app",
+      email: "demo@4stash.com",
       displayName: "Demo User",
       photoURL:
         "https://ui-avatars.com/api/?name=Demo+User&background=6366f1&color=fff",
@@ -317,7 +317,7 @@ export class MockStorageService implements StorageService {
     await this.delay();
     // Mock Facebook sign-in - same as Google for development
     const existingUser = this.data.users.find(
-      (u) => u.email === "demo@4later.app",
+      (u) => u.email === "demo@4stash.com",
     );
     if (existingUser) {
       this.data.currentUserId = existingUser.id;
@@ -327,7 +327,7 @@ export class MockStorageService implements StorageService {
 
     const user: User = {
       id: this.generateId(),
-      email: "demo@4later.app",
+      email: "demo@4stash.com",
       displayName: "Demo User (Facebook)",
       photoURL:
         "https://ui-avatars.com/api/?name=Demo+User&background=1877f2&color=fff",
@@ -350,7 +350,7 @@ export class MockStorageService implements StorageService {
     await this.delay();
     // Mock Twitter sign-in - same as Google for development
     const existingUser = this.data.users.find(
-      (u) => u.email === "demo@4later.app",
+      (u) => u.email === "demo@4stash.com",
     );
     if (existingUser) {
       this.data.currentUserId = existingUser.id;
@@ -360,7 +360,7 @@ export class MockStorageService implements StorageService {
 
     const user: User = {
       id: this.generateId(),
-      email: "demo@4later.app",
+      email: "demo@4stash.com",
       displayName: "Demo User (Twitter)",
       photoURL:
         "https://ui-avatars.com/api/?name=Demo+User&background=1da1f2&color=fff",

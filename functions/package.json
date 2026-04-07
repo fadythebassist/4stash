@@ -1,6 +1,6 @@
 {
-  "name": "4later-functions",
-  "description": "Firebase Cloud Functions for 4Later",
+  "name": "4stash-functions",
+  "description": "Firebase Cloud Functions for 4Stash",
   "scripts": {
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",

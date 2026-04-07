@@ -20,7 +20,7 @@ const Recovery: React.FC = () => {
 
   useEffect(() => {
     // Load data from localStorage
-    const stored = localStorage.getItem("4later_mock_data");
+    const stored = localStorage.getItem("4stash_mock_data");
     if (stored) {
       const data = JSON.parse(stored);
       setStoredData(data);
@@ -46,7 +46,7 @@ const Recovery: React.FC = () => {
       currentUserId: userId,
     };
 
-    localStorage.setItem("4later_mock_data", JSON.stringify(newData));
+    localStorage.setItem("4stash_mock_data", JSON.stringify(newData));
     console.log("Switched to user:", userId);
 
     // Reload page to apply changes
