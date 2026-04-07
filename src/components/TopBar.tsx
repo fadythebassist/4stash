@@ -29,6 +29,7 @@ interface TopBarProps {
 // Wheel-to-scroll is attached as a non-passive native listener so preventDefault works.
 function useHorizontalScroll() {
   const ref = React.useRef<HTMLDivElement | null>(null);
+  const hasUserInteracted = React.useRef(false);
   const isDragging = React.useRef(false);
   const startX = React.useRef(0);
   const scrollLeftRef = React.useRef(0);
@@ -41,13 +42,18 @@ function useHorizontalScroll() {
   const updateRight = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
+    if (node.scrollLeft <= LEFT_ARROW_THRESHOLD_PX) {
+      setCanScrollLeft(false);
+    }
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
 
   const updateBoth = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    setCanScrollLeft(node.scrollLeft > LEFT_ARROW_THRESHOLD_PX);
+    setCanScrollLeft(
+      hasUserInteracted.current && node.scrollLeft > LEFT_ARROW_THRESHOLD_PX,
+    );
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
 
@@ -61,6 +67,7 @@ function useHorizontalScroll() {
 
     const handleWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      hasUserInteracted.current = true;
       e.preventDefault();
       node.scrollLeft += e.deltaY;
     };
@@ -90,12 +97,14 @@ function useHorizontalScroll() {
   const scrollBy = (delta: number) => {
     const node = ref.current;
     if (!node) return;
+    hasUserInteracted.current = true;
     node.scrollBy({ left: delta, behavior: "smooth" });
   };
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const node = ref.current;
     if (!node) return;
+    hasUserInteracted.current = true;
     isDragging.current = true;
     startX.current = e.pageX - node.offsetLeft;
     scrollLeftRef.current = node.scrollLeft;
