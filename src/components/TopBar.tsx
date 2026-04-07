@@ -36,8 +36,8 @@ function useHorizontalScroll() {
   const updateArrows = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    setCanScrollLeft(node.scrollLeft > 4);
-    setCanScrollRight(node.scrollLeft + node.clientWidth < node.scrollWidth - 4);
+    setCanScrollLeft(Math.round(node.scrollLeft) > 0);
+    setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
 
   React.useEffect(() => {
@@ -52,7 +52,12 @@ function useHorizontalScroll() {
     node.addEventListener("wheel", handleWheel, { passive: false });
     node.addEventListener("scroll", updateArrows, { passive: true });
 
-    const ro = new ResizeObserver(updateArrows);
+    // Debounce ResizeObserver so we read arrow state after layout fully settles.
+    let rafId: number;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateArrows);
+    });
     ro.observe(node);
 
     updateArrows();
@@ -60,6 +65,7 @@ function useHorizontalScroll() {
     return () => {
       node.removeEventListener("wheel", handleWheel);
       node.removeEventListener("scroll", updateArrows);
+      cancelAnimationFrame(rafId);
       ro.disconnect();
     };
   }, [updateArrows]);
