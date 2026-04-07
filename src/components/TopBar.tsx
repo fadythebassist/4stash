@@ -36,6 +36,7 @@ function useHorizontalScroll() {
   const updateArrows = React.useCallback(() => {
     const node = ref.current;
     if (!node) return;
+    console.log(`[TopBar] scrollLeft=${node.scrollLeft} clientWidth=${node.clientWidth} scrollWidth=${node.scrollWidth}`);
     setCanScrollLeft(node.scrollLeft > 0);
     setCanScrollRight(Math.round(node.scrollLeft + node.clientWidth) < node.scrollWidth);
   }, []);
