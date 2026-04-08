@@ -121,25 +121,32 @@ const CATEGORY_RULES: CategoryRule[] = [
     name: "News",
     icon: "📰",
     keywords: [
-      "breaking",
+      "breaking news",
+      "breaking:",
       "headline",
-      "latest",
-      "report",
-      "news",
-      "update",
+      "news report",
+      "news update",
       "journalist",
+      "press release",
+      "correspondent",
+      "newsroom",
       // Arabic
       "أخبار",
       "خبر عاجل",
       "عاجل",
       "آخر الأخبار",
-      "تقرير",
+      "تقرير إخباري",
       "صحفي",
       "نشرة",
       "مستجدات",
-      "بيان",
+      "بيان رسمي",
     ],
-    domains: ["cnn.com", "bbc.com", "reuters.com", "nytimes.com"],
+    domains: ["cnn.com", "bbc.com", "reuters.com", "nytimes.com", "aljazeera.com"],
+    requiredKeywordGroups: [
+      ["breaking news", "breaking:", "headline", "news report", "news update", "journalist",
+       "press release", "correspondent", "newsroom",
+       "أخبار", "خبر عاجل", "عاجل", "آخر الأخبار", "تقرير إخباري", "صحفي", "نشرة", "مستجدات", "بيان رسمي"],
+    ],
     tags: ["news"],
     priority: 1,
   },
@@ -154,13 +161,15 @@ const CATEGORY_RULES: CategoryRule[] = [
       "policy",
       "congress",
       "parliament",
-      "war",
       "ceasefire",
       "iran",
       "gaza",
       "ukraine",
       "israel",
       "protest",
+      "geopolitics",
+      "diplomatic",
+      "sanctions",
       // Arabic
       "سياسة",
       "حكومة",
@@ -175,8 +184,15 @@ const CATEGORY_RULES: CategoryRule[] = [
       "احتجاج",
       "مظاهرات",
       "دولة",
-      "قرار",
+      "قرار سياسي",
       "مجلس",
+    ],
+    requiredKeywordGroups: [
+      ["president", "government", "minister", "election", "policy", "congress",
+       "parliament", "ceasefire", "iran", "gaza", "ukraine", "israel", "protest",
+       "geopolitics", "diplomatic", "sanctions",
+       "سياسة", "حكومة", "رئيس", "وزير", "انتخابات", "برلمان", "حرب",
+       "وقف إطلاق النار", "غزة", "فلسطين", "احتجاج", "مظاهرات", "دولة", "قرار سياسي", "مجلس"],
     ],
     tags: ["politics", "news"],
     priority: 1,
@@ -350,6 +366,14 @@ const CATEGORY_RULES: CategoryRule[] = [
       "concert",
       "splice",
       "beat",
+      "lyrics",
+      "vocalist",
+      "singer",
+      "band",
+      "track",
+      "single",
+      "streaming",
+      "music video",
       // Arabic
       "موسيقى",
       "أغنية",
@@ -362,10 +386,19 @@ const CATEGORY_RULES: CategoryRule[] = [
       "مطرب",
       "مغني",
       "عزف",
+      "كليب",
     ],
-    domains: ["spotify.com", "soundcloud.com", "bandcamp.com"],
+    domains: ["spotify.com", "soundcloud.com", "bandcamp.com", "anghami.com", "music.apple.com"],
+    sources: ["spotify", "anghami", "soundcloud"],
+    requiredKeywordGroups: [
+      ["music", "song", "guitar", "piano", "album", "playlist", "concert", "splice",
+       "beat", "lyrics", "vocalist", "singer", "band", "track", "single", "streaming",
+       "music video",
+       "موسيقى", "أغنية", "أغاني", "فنان", "ألبوم", "طرب", "إيقاع", "حفلة",
+       "مطرب", "مغني", "عزف", "كليب"],
+    ],
     tags: ["music"],
-    priority: 1,
+    priority: 2,
   },
   {
     name: "Fitness",
@@ -561,15 +594,27 @@ function isArabic(str: string): boolean {
   return /[\u0600-\u06FF]/.test(str);
 }
 
+// Short keywords that are too common as substrings — force word-boundary only, no fallback
+const STRICT_BOUNDARY_KEYWORDS = new Set([
+  "war", "app", "earn", "new", "hit", "hot", "top", "set", "run", "map",
+  "bar", "bit", "net", "art", "act", "rap", "pop", "fit", "mix", "cut",
+  "tip", "job", "key", "led", "fan", "pay", "oil", "low", "raw", "bet",
+]);
+
 function hasKeyword(text: string, keyword: string): boolean {
   // Arabic text has no whitespace word boundaries between all tokens,
   // so fall back to simple substring match for Arabic keywords.
   if (isArabic(keyword)) return text.includes(keyword);
   if (keyword.includes(" ")) return text.includes(keyword);
-  // For single-word keywords, try word-boundary match first, then substring
+  // Short/common words: word-boundary only — no substring fallback
+  // (prevents "war" matching "award", "app" matching "happy", etc.)
+  const wordBoundaryRegex = new RegExp(`(^|\\W)${escapeRegex(keyword)}(?=$|\\W)`, "i");
+  if (STRICT_BOUNDARY_KEYWORDS.has(keyword.toLowerCase())) {
+    return wordBoundaryRegex.test(text);
+  }
+  // For other single-word keywords, try word-boundary match first, then substring
   // (handles cases like "market" inside "Polymarket" or "claude" in normal text)
-  const boundaryMatch = new RegExp(`(^|\\W)${escapeRegex(keyword)}(?=$|\\W)`, "i").test(text);
-  if (boundaryMatch) return true;
+  if (wordBoundaryRegex.test(text)) return true;
   // Substring fallback so compound words (e.g. "Polymarket") still match "market"
   return text.includes(keyword);
 }
