@@ -15,7 +15,6 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   signInWithGoogle: () => Promise<void>;
-  signInWithFacebook: () => Promise<void>;
   signInWithTwitter: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (
@@ -164,23 +163,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signInWithFacebook = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const user = await storageService.signInWithFacebook();
-      setUser(user);
-      writeCachedUser(user);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to sign in with Facebook",
-      );
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const signInWithTwitter = async () => {
     setLoading(true);
     setError(null);
@@ -319,7 +301,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         loading,
         error,
         signInWithGoogle,
-        signInWithFacebook,
         signInWithTwitter,
         signInWithEmail,
         signUpWithEmail,

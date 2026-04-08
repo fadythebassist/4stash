@@ -313,39 +313,6 @@ export class MockStorageService implements StorageService {
     return user;
   }
 
-  async signInWithFacebook(): Promise<User> {
-    await this.delay();
-    // Mock Facebook sign-in - same as Google for development
-    const existingUser = this.data.users.find(
-      (u) => u.email === "demo@4stash.com",
-    );
-    if (existingUser) {
-      this.data.currentUserId = existingUser.id;
-      this.saveToStorage();
-      return existingUser;
-    }
-
-    const user: User = {
-      id: this.generateId(),
-      email: "demo@4stash.com",
-      displayName: "Demo User (Facebook)",
-      photoURL:
-        "https://ui-avatars.com/api/?name=Demo+User&background=1877f2&color=fff",
-      createdAt: new Date(),
-      provider: "facebook",
-    };
-
-    this.data.users.push(user);
-    this.data.currentUserId = user.id;
-
-    // Create default list for new user
-    await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
-    await this.createList(user.id, { name: "Favorites", icon: "⭐" });
-
-    this.saveToStorage();
-    return user;
-  }
-
   async signInWithTwitter(): Promise<User> {
     await this.delay();
     // Mock Twitter sign-in - same as Google for development

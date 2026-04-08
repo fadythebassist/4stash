@@ -1390,6 +1390,12 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
       workbox: {
+        // Exclude Firebase Auth popup handler from SW navigation fallback.
+        // The Firebase OAuth popup opens /__/auth/handler on the firebaseapp.com
+        // domain (which also hosts this SPA). Without this exclusion, the SW
+        // intercepts that navigation and serves the SPA shell, causing the popup
+        // to render the app's /login page instead of Google's OAuth consent screen.
+        navigateFallbackDenylist: [/^\/__\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname === "/api/unfurl",

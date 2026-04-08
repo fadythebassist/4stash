@@ -20,6 +20,7 @@ const Dashboard = React.lazy(() => import("@/pages/Dashboard"));
 const ShareTarget = React.lazy(() => import("@/pages/ShareTarget"));
 const Recovery = React.lazy(() => import("@/pages/Recovery"));
 const Privacy = React.lazy(() => import("@/pages/Privacy"));
+const Terms = React.lazy(() => import("@/pages/Terms"));
 
 const PageSpinner: React.FC = () => (
   <div
@@ -120,6 +121,7 @@ const App: React.FC = () => {
 
               {/* Default redirect */}
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="/" element={<Navigate to="/dashboard" />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </Routes>

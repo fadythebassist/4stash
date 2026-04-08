@@ -14,7 +14,6 @@ import {
 export interface StorageService {
   // Authentication
   signInWithGoogle(): Promise<User>;
-  signInWithFacebook(): Promise<User>;
   signInWithTwitter(): Promise<User>;
   signInWithEmail(email: string, password: string): Promise<User>;
   signUpWithEmail(

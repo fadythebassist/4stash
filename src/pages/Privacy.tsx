@@ -173,6 +173,8 @@ const Privacy: React.FC = () => {
         </section>
 
         <footer className="privacy-footer">
+          <a href="/terms">Terms of Service</a>
+          {" · "}
           <a href="/login">Back to 4Stash</a>
         </footer>
       </div>

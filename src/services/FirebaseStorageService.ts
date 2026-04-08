@@ -4,7 +4,6 @@ import {
   Auth,
   signInWithPopup,
   GoogleAuthProvider,
-  FacebookAuthProvider,
   TwitterAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -209,7 +208,6 @@ export class FirebaseStorageService implements StorageService {
   private auth: Auth;
   private db: Firestore;
   private googleProvider: GoogleAuthProvider;
-  private facebookProvider: FacebookAuthProvider;
   private twitterProvider: TwitterAuthProvider;
 
   constructor() {
@@ -217,7 +215,6 @@ export class FirebaseStorageService implements StorageService {
     this.auth = getAuth(this.app);
     this.db = getFirestore(this.app);
     this.googleProvider = new GoogleAuthProvider();
-    this.facebookProvider = new FacebookAuthProvider();
     this.twitterProvider = new TwitterAuthProvider();
   }
 
@@ -300,43 +297,6 @@ export class FirebaseStorageService implements StorageService {
       console.error("❌ Error during Google sign-in:", error);
       throw error;
     }
-  }
-
-  async signInWithFacebook(): Promise<User> {
-    const result = await signInWithPopup(this.auth, this.facebookProvider);
-    const firebaseUser = result.user;
-
-    // Get user preferences (avatar style)
-    const prefs = await this.getUserPreferences(firebaseUser.uid);
-
-    // If user has chosen a DiceBear style, use that; otherwise use social photo or default
-    const photoURL = prefs.avatarStyle
-      ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
-      : firebaseUser.photoURL ||
-        this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
-
-    const user: User = {
-      id: firebaseUser.uid,
-      email: firebaseUser.email!,
-      displayName: firebaseUser.displayName || undefined,
-      photoURL,
-      avatarStyle: prefs.avatarStyle,
-      settings: prefs.settings,
-      createdAt: new Date(firebaseUser.metadata.creationTime!),
-      provider: "facebook",
-    };
-
-    // Create default lists for new users
-    const listsSnapshot = await getDocs(
-      query(collection(this.db, "lists"), where("userId", "==", user.id)),
-    );
-
-    if (listsSnapshot.empty) {
-      await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
-      await this.createList(user.id, { name: "Favorites", icon: "⭐" });
-    }
-
-    return user;
   }
 
   async signInWithTwitter(): Promise<User> {
