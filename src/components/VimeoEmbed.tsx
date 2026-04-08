@@ -79,6 +79,7 @@ const VimeoEmbed: React.FC<VimeoEmbedProps> = ({
     if (!videoId) return null;
     const params = new URLSearchParams({
       autoplay: autoplay ? "1" : "0",
+      muted: autoplay ? "1" : "0",
       byline: "0",
       portrait: "0",
       title: "0",
