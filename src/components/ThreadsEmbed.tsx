@@ -234,6 +234,8 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   }
 
   // --- Non-connected user: native blockquote embed wrapped in branded card ---
+  // The Threads embed.js renders the full post including media — don't show
+  // any thumbnail or description fallback alongside it (causes double content).
   if (embedUrl) {
     const theme = getAppTheme();
     return (
@@ -254,25 +256,6 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
             </a>
           </blockquote>
         </div>
-
-        {shouldShowThumbnail && (
-          <div className="social-card-thumbnail">
-            <img
-              src={resolvedThumbnail}
-              alt="Threads preview"
-              onError={() => setThumbnailError(true)}
-              loading="lazy"
-            />
-          </div>
-        )}
-
-        {!shouldShowThumbnail && (displayTitle || displayDescription) && (
-          <div className="social-card-text">
-            {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-            {displayDescription && <div className="social-card-description">{displayDescription}</div>}
-          </div>
-        )}
-
         <a
           href={embedUrl}
           target="_blank"
