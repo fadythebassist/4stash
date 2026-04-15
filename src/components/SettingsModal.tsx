@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { setStoredAnalyticsConsent } from '@/services/AnalyticsService';
-import { threadsAuthService } from '@/services/ThreadsAuthService';
 import './Modal.css';
 import './SettingsModal.css';
 
@@ -13,9 +12,8 @@ interface SettingsModalProps {
 type TabType = 'appearance' | 'behavior' | 'privacy' | 'account';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateUserSettings, addSocialConnection, removeSocialConnection, getSocialConnection } = useAuth();
+  const { user, updateUserSettings } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('appearance');
-  const [connectingThreads, setConnectingThreads] = useState(false);
   const [settings, setSettings] = useState({
     theme: (user?.settings?.theme as 'light' | 'dark') || 'light',
     viewDensity: user?.settings?.viewDensity || 'comfortable',
@@ -33,107 +31,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   });
 
   if (!isOpen) return null;
-
-  const handleConnectThreads = async () => {
-    try {
-      if (!threadsAuthService.isConfigured()) {
-        alert(
-          '⚠️ Threads API Not Configured\n\n' +
-          'To connect your Threads account, set VITE_FACEBOOK_APP_ID (or VITE_THREADS_APP_ID) in your .env file.\n\n' +
-          'The app uses the same Meta/Facebook app for Threads OAuth.\n' +
-          'Make sure the redirect URI https://4stash.com/threads-oauth-callback.html is added in the Facebook Developer Portal.'
-        );
-        return;
-      }
-
-      setConnectingThreads(true);
-      const authUrl = threadsAuthService.getAuthorizationUrl();
-
-      const width = 600;
-      const height = 700;
-      const left = Math.round(window.screen.width / 2 - width / 2);
-      const top = Math.round(window.screen.height / 2 - height / 2);
-
-      const popup = window.open(
-        authUrl,
-        'threads-oauth',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-
-      // Listen for OAuth callback — use once:true so the listener auto-removes itself
-      const handleMessage = async (event: MessageEvent) => {
-        // Ignore messages from other origins.
-        // Accept both the current origin and the canonical production domain
-        // so this works regardless of whether the Capacitor server.url is set.
-        const allowedOrigins = [window.location.origin, 'https://4stash.com'];
-        if (!allowedOrigins.includes(event.origin)) return;
-
-        if (event.data?.type === 'threads-oauth-success') {
-          window.removeEventListener('message', handleMessage);
-          const { code } = event.data as { code: string };
-          try {
-            const tokenData = await threadsAuthService.exchangeCodeForToken(code);
-            const profile = await threadsAuthService.getUserProfile(tokenData.access_token);
-            await addSocialConnection({
-              platform: 'threads',
-              accessToken: tokenData.access_token,
-              expiresAt: tokenData.expires_in
-                ? new Date(Date.now() + (tokenData.expires_in as number) * 1000)
-                : undefined,
-              platformUserId: profile.id,
-              platformUsername: profile.username,
-              connectedAt: new Date(),
-            });
-            alert(`Successfully connected to Threads as @${profile.username}`);
-            popup?.close();
-          } catch (err) {
-            console.error('[SettingsModal] Threads token exchange failed:', err);
-            alert('Failed to connect to Threads. Please try again.');
-          } finally {
-            setConnectingThreads(false);
-          }
-        } else if (event.data?.type === 'threads-oauth-error') {
-          window.removeEventListener('message', handleMessage);
-          const { errorDescription } = event.data as { errorDescription?: string };
-          alert(`Threads connection failed: ${errorDescription ?? 'Unknown error'}`);
-          setConnectingThreads(false);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      // If the user closes the popup without completing the flow, clean up
-      const pollClosed = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(pollClosed);
-          window.removeEventListener('message', handleMessage);
-          setConnectingThreads(false);
-        }
-      }, 500);
-    } catch (err) {
-      console.error('[SettingsModal] Failed to initiate Threads connection:', err);
-      alert('Failed to open Threads login. Please try again.');
-      setConnectingThreads(false);
-    }
-  };
-
-  const handleDisconnectThreads = async () => {
-    const confirmed = window.confirm(
-      'Are you sure you want to disconnect your Threads account? You will need to reconnect to save and view Threads posts.'
-    );
-    
-    if (confirmed) {
-      try {
-        await removeSocialConnection('threads');
-        alert('✅ Threads account disconnected');
-      } catch (error) {
-        console.error('Failed to disconnect Threads:', error);
-        alert('Failed to disconnect Threads. Please try again.');
-      }
-    }
-  };
-
-  const threadsConnection = getSocialConnection?.('threads');
 
   const handleSettingChange = async (newSettings: Partial<typeof settings>) => {
     const updated = { ...settings, ...newSettings };
@@ -438,49 +335,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           <p><strong>Account Type:</strong> {user?.provider || 'Unknown'}</p>
           <p><strong>Member Since:</strong> {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}</p>
         </div>
-      </div>
-
-      <div className="setting-group">
-        <label className="setting-label">
-          <strong>🔗 Social Connections</strong>
-          <p className="setting-description">Connect your social accounts to save and view private posts</p>
-        </label>
-        
-        <div className="social-connection-item">
-          <div className="connection-info">
-            <span className="connection-icon">🧵</span>
-            <div className="connection-details">
-              <strong>Threads</strong>
-              {threadsConnection ? (
-                <span className="connection-status connected">
-                  Connected as @{threadsConnection.platformUsername}
-                </span>
-              ) : (
-                <span className="connection-status">Not connected</span>
-              )}
-            </div>
-          </div>
-          {threadsConnection ? (
-            <button 
-              className="btn-secondary btn-small" 
-              onClick={handleDisconnectThreads}
-            >
-              Disconnect
-            </button>
-          ) : (
-            <button 
-              className="btn-primary btn-small" 
-              onClick={handleConnectThreads}
-              disabled={connectingThreads}
-            >
-              {connectingThreads ? 'Connecting...' : 'Connect'}
-            </button>
-          )}
-        </div>
-        
-        <p className="setting-description">
-          ℹ️ Connecting your Threads account allows you to save Threads posts and view rich previews using Meta's official API.
-        </p>
       </div>
 
       <div className="setting-group">

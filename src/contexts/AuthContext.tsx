@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { User, AppSettings, SocialConnection } from "@/types";
+import { User, AppSettings } from "@/types";
 import { StorageService } from "@/services/StorageService";
 import { firebaseStorageService } from "@/services/FirebaseStorageService";
 import { mockStorageService } from "@/services/MockStorageService";
@@ -24,11 +24,6 @@ interface AuthContextType {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserSettings?: (settings: AppSettings) => Promise<void>;
-  // Social Connections
-  getSocialConnection: (platform: string) => SocialConnection | null;
-  addSocialConnection: (connection: Omit<SocialConnection, 'id' | 'userId'>) => Promise<void>;
-  removeSocialConnection: (platform: string) => Promise<void>;
-  hasThreadsConnection: () => boolean;
   refreshUser: () => Promise<void>;
 }
 
@@ -40,12 +35,6 @@ function serializeCachedUser(user: User): string {
   return JSON.stringify({
     ...user,
     createdAt: user.createdAt.toISOString(),
-    socialConnections: user.socialConnections?.map((connection) => ({
-      ...connection,
-      connectedAt: connection.connectedAt.toISOString(),
-      expiresAt: connection.expiresAt?.toISOString(),
-      lastRefreshed: connection.lastRefreshed?.toISOString(),
-    })),
   });
 }
 
@@ -53,25 +42,10 @@ function parseCachedUser(raw: string): User | null {
   try {
     const parsed = JSON.parse(raw) as Omit<User, "createdAt"> & {
       createdAt: string;
-      socialConnections?: Array<
-        Omit<SocialConnection, "connectedAt" | "expiresAt" | "lastRefreshed"> & {
-          connectedAt: string;
-          expiresAt?: string;
-          lastRefreshed?: string;
-        }
-      >;
     };
     return {
       ...parsed,
       createdAt: new Date(parsed.createdAt),
-      socialConnections: parsed.socialConnections?.map((connection) => ({
-        ...connection,
-        connectedAt: new Date(connection.connectedAt),
-        expiresAt: connection.expiresAt ? new Date(connection.expiresAt) : undefined,
-        lastRefreshed: connection.lastRefreshed
-          ? new Date(connection.lastRefreshed)
-          : undefined,
-      })),
     };
   } catch {
     return null;
@@ -248,52 +222,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Social Connection Methods
-  const getSocialConnection = (platform: string) => {
-    if (!user || !user.socialConnections) return null;
-    return user.socialConnections.find(conn => conn.platform === platform) || null;
-  };
-
-  const addSocialConnection = async (connection: Omit<SocialConnection, 'id' | 'userId'>) => {
-    if (!user) {
-      throw new Error("No user logged in");
-    }
-    try {
-      const newConnection = await storageService.addSocialConnection(user.id, connection);
-      const updatedConnections = [...(user.socialConnections || []), newConnection];
-      const updatedUser = { ...user, socialConnections: updatedConnections };
-      setUser(updatedUser);
-      writeCachedUser(updatedUser);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add social connection");
-      throw err;
-    }
-  };
-
-  const removeSocialConnection = async (platform: string) => {
-    if (!user || !user.socialConnections) {
-      throw new Error("No user logged in or no connections");
-    }
-    try {
-      const connection = user.socialConnections.find(conn => conn.platform === platform);
-      if (!connection) {
-        throw new Error(`No connection found for platform: ${platform}`);
-      }
-      await storageService.removeSocialConnection(connection.id);
-      const updatedConnections = user.socialConnections.filter(conn => conn.platform !== platform);
-      const updatedUser = { ...user, socialConnections: updatedConnections };
-      setUser(updatedUser);
-      writeCachedUser(updatedUser);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove social connection");
-      throw err;
-    }
-  };
-
-  const hasThreadsConnection = () => {
-    return getSocialConnection('threads') !== null;
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -306,10 +234,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         signUpWithEmail,
         signOut,
         updateUserSettings,
-        getSocialConnection,
-        addSocialConnection,
-        removeSocialConnection,
-        hasThreadsConnection,
         refreshUser,
       }}
     >

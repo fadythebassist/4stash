@@ -413,10 +413,7 @@ export class FirebaseStorageService implements StorageService {
         async (firebaseUser) => {
           unsubscribe();
           if (firebaseUser) {
-            const [prefs, socialConnections] = await Promise.all([
-              this.getUserPreferences(firebaseUser.uid),
-              this.getSocialConnections(firebaseUser.uid),
-            ]);
+            const prefs = await this.getUserPreferences(firebaseUser.uid);
 
             // If user has chosen a DiceBear style, use that; otherwise use social photo or default
             const photoURL = prefs.avatarStyle
@@ -431,7 +428,6 @@ export class FirebaseStorageService implements StorageService {
               photoURL,
               avatarStyle: prefs.avatarStyle,
               settings: prefs.settings,
-              socialConnections,
               createdAt: new Date(firebaseUser.metadata.creationTime!),
               provider:
                 firebaseUser.providerData[0]?.providerId === "google.com"
@@ -482,131 +478,6 @@ export class FirebaseStorageService implements StorageService {
           ? error.message
           : "Failed to update user settings";
       throw new Error(errorMessage);
-    }
-  }
-
-  // Social Connections Methods
-  async getSocialConnections(userId: string): Promise<import("@/types").SocialConnection[]> {
-    try {
-      const q = query(
-        collection(this.db, "socialConnections"),
-        where("userId", "==", userId)
-      );
-      const snapshot = await getDocs(q);
-      
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          userId: data.userId,
-          platform: data.platform,
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-          expiresAt: data.expiresAt?.toDate?.(),
-          platformUserId: data.platformUserId,
-          platformUsername: data.platformUsername,
-          connectedAt: data.connectedAt?.toDate?.() || new Date(),
-          lastRefreshed: data.lastRefreshed?.toDate?.(),
-        } as import("@/types").SocialConnection;
-      });
-    } catch (error: unknown) {
-      // If collection doesn't exist or permissions not set up, return empty array
-      console.error("❌ Failed to get social connections:", error);
-      return []; // Don't throw - return empty array to prevent app crash
-    }
-  }
-
-  async getSocialConnection(userId: string, platform: string): Promise<import("@/types").SocialConnection | null> {
-    try {
-      const q = query(
-        collection(this.db, "socialConnections"),
-        where("userId", "==", userId),
-        where("platform", "==", platform)
-      );
-      const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        return null;
-      }
-
-      const doc = snapshot.docs[0];
-      const data = doc.data();
-      
-      return {
-        id: doc.id,
-        userId: data.userId,
-        platform: data.platform,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        expiresAt: data.expiresAt?.toDate?.(),
-        platformUserId: data.platformUserId,
-        platformUsername: data.platformUsername,
-        connectedAt: data.connectedAt?.toDate?.() || new Date(),
-        lastRefreshed: data.lastRefreshed?.toDate?.(),
-      } as import("@/types").SocialConnection;
-    } catch (error: unknown) {
-      console.error("❌ Failed to get social connection:", error);
-      throw new Error(error instanceof Error ? error.message : "Failed to get social connection");
-    }
-  }
-
-  async addSocialConnection(userId: string, connection: Omit<import("@/types").SocialConnection, 'id' | 'userId'>): Promise<import("@/types").SocialConnection> {
-    try {
-      const connectionData = {
-        userId,
-        platform: connection.platform,
-        accessToken: connection.accessToken,
-        refreshToken: connection.refreshToken,
-        expiresAt: connection.expiresAt,
-        platformUserId: connection.platformUserId,
-        platformUsername: connection.platformUsername,
-        connectedAt: connection.connectedAt || serverTimestamp(),
-        lastRefreshed: connection.lastRefreshed,
-      };
-
-      const docRef = await addDoc(collection(this.db, "socialConnections"), connectionData);
-      
-      console.log(`✅ Social connection added: ${connection.platform}`);
-      
-      return {
-        id: docRef.id,
-        userId,
-        ...connection,
-        connectedAt: connection.connectedAt || new Date(),
-      } as import("@/types").SocialConnection;
-    } catch (error: unknown) {
-      console.error("❌ Failed to add social connection:", error);
-      throw new Error(error instanceof Error ? error.message : "Failed to add social connection");
-    }
-  }
-
-  async updateSocialConnection(connectionId: string, updates: Partial<import("@/types").SocialConnection>): Promise<void> {
-    try {
-      const updateData: Record<string, unknown> = {};
-      
-      if (updates.accessToken !== undefined) updateData.accessToken = updates.accessToken;
-      if (updates.refreshToken !== undefined) updateData.refreshToken = updates.refreshToken;
-      if (updates.expiresAt !== undefined) updateData.expiresAt = updates.expiresAt;
-      if (updates.platformUserId !== undefined) updateData.platformUserId = updates.platformUserId;
-      if (updates.platformUsername !== undefined) updateData.platformUsername = updates.platformUsername;
-      if (updates.lastRefreshed !== undefined) updateData.lastRefreshed = updates.lastRefreshed;
-
-      await updateDoc(doc(this.db, "socialConnections", connectionId), updateData);
-      
-      console.log(`✅ Social connection updated: ${connectionId}`);
-    } catch (error: unknown) {
-      console.error("❌ Failed to update social connection:", error);
-      throw new Error(error instanceof Error ? error.message : "Failed to update social connection");
-    }
-  }
-
-  async removeSocialConnection(connectionId: string): Promise<void> {
-    try {
-      await deleteDoc(doc(this.db, "socialConnections", connectionId));
-      console.log(`✅ Social connection removed: ${connectionId}`);
-    } catch (error: unknown) {
-      console.error("❌ Failed to remove social connection:", error);
-      throw new Error(error instanceof Error ? error.message : "Failed to remove social connection");
     }
   }
 

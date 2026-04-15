@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { threadsAuthService } from "@/services/ThreadsAuthService";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import { apiUrl } from "@/utils/apiBase";
 import "./SocialCard.css";
@@ -10,12 +8,6 @@ interface ThreadsEmbedProps {
   title?: string;
   description?: string;
   thumbnail?: string;
-}
-
-interface ThreadsOEmbedData {
-  html?: string;
-  author_name?: string;
-  thumbnail_url?: string;
 }
 
 const threadsWin = window as unknown as {
@@ -177,71 +169,19 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   description,
   thumbnail,
 }) => {
-  const { getSocialConnection } = useAuth();
-  const [thumbnailError, setThumbnailError] = useState(false);
-  const [oembedData, setOembedData] = useState<ThreadsOEmbedData | null>(null);
-  const [oembedLoading, setOembedLoading] = useState(true);
-  const [oembedError, setOembedError] = useState(false);
-  // embedFailed: true when embed.js didn't process the blockquote within the timeout.
-  // embedReady: true once embed.js successfully replaces the blockquote with an iframe.
   const [embedFailed, setEmbedFailed] = useState(false);
   const [embedReady, setEmbedReady] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
 
   const embedUrl = normalizeThreadsUrl(url);
-  const threadsConnection = getSocialConnection?.("threads");
-
-  useEffect(() => {
-    if (!threadsConnection || !url) {
-      setOembedLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const fetchOEmbed = async () => {
-      try {
-        setOembedLoading(true);
-        const data = await threadsAuthService.getOEmbedData(
-          url,
-          threadsConnection.accessToken,
-          600
-        );
-        if (cancelled) return;
-        setOembedData(data);
-        setOembedError(false);
-      } catch (error) {
-        console.error("Failed to fetch Threads oEmbed data:", error);
-        if (cancelled) return;
-        setOembedError(true);
-        setOembedData(null);
-      } finally {
-        if (!cancelled) setOembedLoading(false);
-      }
-    };
-
-    fetchOEmbed();
-    return () => {
-      cancelled = true;
-    };
-  }, [url, threadsConnection]);
-
-  useEffect(() => {
-    if (oembedData?.html) {
-      loadThreadsEmbedScript();
-    }
-  }, [oembedData]);
 
   useEffect(() => {
     if (!embedUrl) return;
-    if (threadsConnection && oembedData?.html && !oembedError) return;
     const node = blockquoteRef.current;
     if (!node) return;
     loadThreadsEmbedScript();
     const rafId = requestAnimationFrame(() => processThreadsEmbeds());
 
-    // After 3 seconds, check if embed.js replaced the blockquote with an iframe.
-    // If not, the environment doesn't support it (e.g. Android WebView) — fall
-    // back to the static card.
     // Poll every 500 ms (up to 8 s) to check if embed.js replaced the blockquote
     // with an iframe. Resolves immediately on success so web users see no delay.
     // On Android WebView embed.js may take several seconds to load over the network;
@@ -264,16 +204,13 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       if (rafId) cancelAnimationFrame(rafId);
       clearInterval(pollId);
     };
-  }, [threadsConnection, embedUrl, oembedData, oembedError]);
+  }, [embedUrl]);
 
   const handleClick = () => {
     openPlatformUrl(embedUrl);
   };
 
   // Filter generic metadata
-  const isInstagramCDN = thumbnail?.includes("cdninstagram.com");
-  const shouldShowThumbnail = thumbnail && !isInstagramCDN && !thumbnailError;
-
   const isGenericTitle =
     title?.includes("Log in") || title?.includes("Threads \u2022 Log in");
   const isGenericDescription =
@@ -283,49 +220,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const displayTitle = !isGenericTitle ? title : undefined;
   const displayDescription = !isGenericDescription ? description : undefined;
 
-  // --- Connected user: rich oEmbed HTML wrapped in branded card ---
-  if (threadsConnection && oembedData?.html && !oembedError) {
-    return (
-      <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
-        <div className="social-card-header">
-          <ThreadsLogo />
-          <span className="social-card-header-text">Threads</span>
-        </div>
-        <div
-          className="social-card-embed-wrap"
-          dangerouslySetInnerHTML={{ __html: oembedData.html }}
-        />
-        <a
-          href={embedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="social-card-button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
-        >
-          Open in Threads
-        </a>
-      </div>
-    );
-  }
-
-  // --- Connected user: loading ---
-  if (threadsConnection && oembedLoading) {
-    return (
-      <div className="social-card social-card--threads">
-        <div className="social-card-header">
-          <ThreadsLogo />
-          <span className="social-card-header-text">Threads</span>
-        </div>
-        <div className="social-card-body">
-          <div className="social-card-description" style={{ color: "var(--text-tertiary)" }}>
-            Loading preview...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Non-connected user: static fallback (embed.js failed or timed out) ---
+  // --- Static fallback (embed.js failed or timed out) ---
   if (embedFailed) {
     return (
       <StaticThreadsCard
@@ -337,7 +232,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     );
   }
 
-  // --- Non-connected user: native blockquote embed (hidden while waiting for embed.js) ---
+  // --- Native blockquote embed (hidden while waiting for embed.js) ---
   if (embedUrl) {
     const theme = getAppTheme();
     return (
@@ -403,32 +298,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         <ThreadsLogo />
         <span className="social-card-header-text">Threads</span>
       </div>
-
-      {shouldShowThumbnail ? (
-        <div className="social-card-thumbnail">
-          <img
-            src={thumbnail}
-            alt="Threads preview"
-            onError={() => setThumbnailError(true)}
-            loading="lazy"
-          />
-        </div>
-      ) : (
-        <div className="social-card-body">
-          {(displayTitle || displayDescription) ? (
-            <>
-              {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-              {displayDescription && <div className="social-card-description">{displayDescription}</div>}
-            </>
-          ) : (
-            <>
-              <div className="social-card-icon">🧵</div>
-              <p className="social-card-cta">Tap to view on Threads</p>
-            </>
-          )}
-        </div>
-      )}
-
+      <div className="social-card-body">
+        <div className="social-card-icon">🧵</div>
+        <p className="social-card-cta">Tap to view on Threads</p>
+      </div>
       <a
         href={url}
         target="_blank"

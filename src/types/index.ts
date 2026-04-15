@@ -70,31 +70,6 @@ export interface User {
   createdAt: Date;
   provider: "google" | "email" | "facebook" | "twitter";
   settings?: AppSettings;
-  socialConnections?: SocialConnection[];
-}
-
-// Social media connection for accessing private posts
-export interface SocialConnection {
-  id: string;
-  userId: string;
-  platform: "facebook" | "instagram" | "twitter" | "threads" | "tiktok" | "pinterest";
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt?: Date;
-  platformUserId?: string;
-  platformUsername?: string;
-  connectedAt: Date;
-  lastRefreshed?: Date;
-}
-
-// User settings including social connections
-export interface UserSettings {
-  userId: string;
-  socialConnections: SocialConnection[];
-  preferences?: {
-    autoFetchMetadata?: boolean;
-    defaultList?: string;
-  };
 }
 
 // Share target data (from Web Share API)
