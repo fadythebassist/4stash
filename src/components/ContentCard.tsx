@@ -431,10 +431,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
             } catch { /* Non-critical */ }
           }
           if (!item.content && typeof data.description === "string" && data.description) {
-            const decoded = decodeHtmlEntities(data.description);
-            setResolvedContent(decoded);
+            setResolvedContent(data.description);
             try {
-              await updateItemRef.current({ id: item.id, content: decoded });
+              await updateItemRef.current({ id: item.id, content: data.description });
             } catch { /* Non-critical */ }
           }
           return; // Done for Reddit
@@ -494,18 +493,16 @@ const ContentCard: React.FC<ContentCardProps> = ({
             if (isLoginWall) {
               // Don't save login-wall text — leave content empty so embed renders instead
             } else {
-              const decoded = decodeHtmlEntities(data.description);
-              setResolvedContent(decoded);
+              setResolvedContent(data.description);
               try {
-                await updateItemRef.current({ id: item.id, content: decoded });
+                await updateItemRef.current({ id: item.id, content: data.description });
               } catch { /* Non-critical */ }
             }
           } else {
-            const decoded = decodeHtmlEntities(data.description);
-            setResolvedContent(decoded);
+            setResolvedContent(data.description);
             // Persist the resolved description
             try {
-              await updateItemRef.current({ id: item.id, content: decoded });
+              await updateItemRef.current({ id: item.id, content: data.description });
             } catch {
               // Non-critical
             }
@@ -680,7 +677,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
             title={item.title}
             description={displayContent}
             thumbnail={displayThumbnail}
-            itemType={item.type}
           />
         )}
 

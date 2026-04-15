@@ -164,12 +164,10 @@ function isGenericRedditTitle(title?: string): boolean {
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
-    // cdninstagram.com hosts Threads and Instagram media. Browsers can load it
-    // directly, but the Capacitor Android WebView is blocked by CORP headers from
-    // the capacitor:// / https://4stash.com origin. Proxy all Meta CDN images so
-    // thumbnails render correctly in both web and Android contexts.
-    h.includes("cdninstagram.com") ||
-    h.includes("instagram.com") ||
+    // Don't proxy cdninstagram.com - these are CDN URLs with time-sensitive tokens
+    // that work directly in browsers but fail when proxied
+    // h.includes("cdninstagram.com") ||
+    h.includes("instagram.com") && !h.includes("cdninstagram.com") ||
     h.endsWith("fbcdn.net") ||
     h.includes("facebook.com") ||
     // Facebook crawler thumbnails often come from lookaside.fbsbx.com and are CORP-protected.
