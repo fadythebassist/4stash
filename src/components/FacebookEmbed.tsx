@@ -137,10 +137,12 @@ const FacebookLogo: React.FC = () => (
 );
 
 /**
- * FacebookEmbed – tries the iframe plugin first for regular public post URLs.
- * Short-share URLs (share/p/, share/v/, share/r/) and group permalinks are known to
- * be unrenderable by the plugin — these skip the iframe and show the branded fallback card.
- * For videos/reels, falls back to a thumbnail card if the plugin doesn't send postMessage events.
+ * FacebookEmbed — lazy-load pattern matching Instagram:
+ *
+ * 1. Show thumbnail + branded inline-play button (like Instagram's "▶ Play Reel Here").
+ * 2. On tap, load the Facebook plugin iframe.
+ * 3. If iframe fails (postMessage timeout for posts, hard timeout for videos), revert to card.
+ * 4. Short-share / login / non-embeddable URLs skip straight to the static fallback card.
  */
 const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   url,
@@ -150,8 +152,10 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   thumbnail,
   autoplay = false,
 }) => {
+  // Lazy-load state — only load iframe when user taps the play button
+  const [playInline, setPlayInline] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
+  const [iframeFailed, setIframeFailed] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -187,10 +191,12 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     },
     [normalizedUrl, originalUrl],
   );
+
   const safeDescription = useMemo(
     () => (isGenericFacebookDescription(description) ? undefined : description),
     [description],
   );
+
   const contentType = useMemo(
     () => {
       // Check resolved URL first, then fall back to original URL for type detection
@@ -203,12 +209,10 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     },
     [normalizedUrl, originalUrl],
   );
+
   // Facebook short-share URLs (share/p/, share/r/, share/v/) cannot be rendered by
   // Facebook's own plugin server — they always return "post no longer available".
   // Login-redirect URLs must also never reach the plugin.
-  // Skip the iframe entirely and go straight to the branded fallback card.
-  // NOTE: Only check the resolved URL (normalizedUrl), not the original — if the
-  // unfurl resolved a short-share URL to a proper embeddable URL, use that.
   const isShortShareUrl = useMemo(
     () => normalizedUrl
       ? isFacebookShortShareUrl(normalizedUrl) || isFacebookLoginUrl(normalizedUrl)
@@ -223,57 +227,50 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     [normalizedUrl],
   );
 
-  // For videos/reels: Always try iframe first to enable playback, fallback to thumbnail on error
-  // For posts/photos: If we have a thumbnail, show it immediately (skip iframe loading state)
-  // Now that server.url = "https://4stash.com" the WebView origin matches what Facebook allows.
-  const shouldPreferThumbnailCard = !!thumbnail && !isVideo;
+  // Inline button label — mirrors Instagram's wording
+  const inlineButtonLabel = useMemo(() => {
+    if (contentType === "Reel") return "▶ Play Reel Here";
+    if (contentType === "Video") return "▶ Play Video Here";
+    if (contentType === "Photo") return "View Photo Here";
+    return "View Post Here";
+  }, [contentType]);
+
+  // Can this URL be embedded at all?
+  const canViewInline = !isShortShareUrl && !isNotEmbeddable && !!normalizedUrl;
 
   // Build the iframe src for public posts/videos that the plugin can render
   const iframeSrc = useMemo(() => {
     if (!normalizedUrl) return null;
     const href = encodeURIComponent(normalizedUrl);
     if (isVideo) {
-      // Request larger dimensions to accommodate vertical videos without cropping
       const autoplayParam = autoplay ? '1' : '0';
       return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500&height=800&autoplay=${autoplayParam}`;
     }
     return `https://www.facebook.com/plugins/post.php?href=${href}&show_text=true&width=500`;
   }, [normalizedUrl, isVideo, autoplay]);
 
-  // Reset iframe loaded state when src changes (e.g., autoplay toggle)
+  // Reset inline state when URL changes
   useEffect(() => {
+    setPlayInline(false);
     setIframeLoaded(false);
-    setShowFallback(false);
+    setIframeFailed(false);
   }, [iframeSrc]);
 
-  // After the iframe fires onLoad, check if it rendered real content.
-  // Facebook plugin iframes load but render a tiny ~0-height body when the URL is invalid.
-  // Give it a grace period then measure height; if still tiny → show fallback.
-  //
-  // For posts: listen for Facebook's postMessage resize events and check iframe height.
-  // For videos/reels: the video.php plugin iframe is a standalone player that does NOT
-  // send postMessage events — so skip postMessage detection entirely for videos.
-  // The video iframe either loads and plays, or shows a gray error. The onLoad hard-timeout
-  // (below) is the only safety net for videos.
+  // After iframe fires onLoad, verify it rendered real content (posts only — video plugin
+  // doesn't send postMessage events).
   useEffect(() => {
-    if (!iframeLoaded) return;
-
-    // For videos/reels, the video.php iframe doesn't send postMessage events.
-    // If it loaded (onLoad fired), the player is rendered — keep it.
-    if (isVideo) return;
+    if (!playInline || !iframeLoaded) return;
+    if (isVideo) return; // video plugin doesn't send postMessage — hard timeout handles it
 
     let receivedFacebookMessage = false;
 
     const onMessage = (event: MessageEvent) => {
-      // Facebook sends postMessages from www.facebook.com for working embeds.
-      // Messages arrive as JSON strings or objects with a type like "xfbml.size".
       try {
         if (!event.origin.includes("facebook.com")) return;
         const iframeWindow = iframeRef.current?.contentWindow;
         if (iframeWindow && event.source !== iframeWindow) return;
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        // Facebook resize/ready events signal the embed rendered real content.
         if (
           data &&
           (data.type === "xfbml.size" ||
@@ -295,12 +292,9 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
       const el = iframeRef.current;
       if (el) {
         const height = el.getBoundingClientRect().height;
-        // For posts/photos: CSS doesn't fix height, so measure it.
-        // A working embed renders at >100px; an error/unavailable post renders very small.
-        // Some blocked embeds still render a large gray frame with a broken icon.
-        // In that case height looks valid, but Facebook never sends resize/ready messages.
         if (height < 100 || !receivedFacebookMessage) {
-          setShowFallback(true);
+          setIframeFailed(true);
+          setPlayInline(false);
         }
       }
     }, 6000);
@@ -309,30 +303,24 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
       clearTimeout(timer);
       window.removeEventListener("message", onMessage);
     };
-  }, [iframeLoaded, isVideo]);
+  }, [playInline, iframeLoaded, isVideo]);
 
-  // Hard timeout: if iframe hasn't fired onLoad at all after 6s (posts) or 10s (videos), show fallback
+  // Hard timeout: if iframe hasn't fired onLoad at all after N seconds, revert to card
   useEffect(() => {
+    if (!playInline) return;
     const timer = setTimeout(() => {
       if (!iframeLoaded) {
-        setShowFallback(true);
+        setIframeFailed(true);
+        setPlayInline(false);
       }
     }, isVideo ? 10000 : 6000);
     return () => clearTimeout(timer);
-  }, [iframeLoaded, isVideo]);
+  }, [playInline, iframeLoaded, isVideo]);
 
   if (!normalizedUrl) return null;
 
-  // ── Show iframe plugin (always attempted first) ──
-  // Group permalinks are attempted via iframe too — the postMessage timeout will
-  // auto-fallback to the static card if the plugin can't render them.
-  if (
-    iframeSrc &&
-    !showFallback &&
-    !isShortShareUrl &&
-    !isNotEmbeddable &&
-    !shouldPreferThumbnailCard
-  ) {
+  // ── Inline iframe — shown after user taps the play button ──
+  if (playInline && iframeSrc && !iframeFailed) {
     return (
       <div className="fb-card" onClick={(e) => e.stopPropagation()}>
         <div className="fb-card-header">
@@ -361,7 +349,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
             allowFullScreen
             style={{ opacity: iframeLoaded ? 1 : 0 }}
             onLoad={() => setIframeLoaded(true)}
-            onError={() => setShowFallback(true)}
+            onError={() => { setIframeFailed(true); setPlayInline(false); }}
           />
         </div>
 
@@ -378,13 +366,13 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     );
   }
 
-  // ── Fallback: iframe failed or timed out → static branded card ──
+  // ── Static card: thumbnail + inline-play button (or plain body if no thumbnail) ──
   return (
     <div
       className="fb-card fb-card-clickable"
       onClick={(e) => {
         e.stopPropagation();
-        openPlatformUrl(normalizedUrl);
+        if (!canViewInline) openPlatformUrl(normalizedUrl);
       }}
       style={{ cursor: "pointer" }}
     >
@@ -400,11 +388,39 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
             alt={title || `Facebook ${contentType}`}
             onError={() => setThumbnailFailed(true)}
           />
+          {canViewInline && (
+            <button
+              type="button"
+              className="fb-card-inline-play"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIframeFailed(false);
+                setPlayInline(true);
+              }}
+            >
+              {inlineButtonLabel}
+            </button>
+          )}
         </div>
       ) : (
         <div className="fb-card-body">
           <div className="fb-card-icon">{"\u{1F4F0}"}</div>
-          <p className="fb-card-cta">Tap to view on Facebook</p>
+          <p className="fb-card-cta">
+            {canViewInline ? "Tap below to view inside app" : "Tap to view on Facebook"}
+          </p>
+          {canViewInline && (
+            <button
+              type="button"
+              className="fb-card-inline-play"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIframeFailed(false);
+                setPlayInline(true);
+              }}
+            >
+              {inlineButtonLabel}
+            </button>
+          )}
         </div>
       )}
 
