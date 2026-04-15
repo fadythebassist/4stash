@@ -1,6 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { threadsAuthService } from "@/services/ThreadsAuthService";
+import React, { useState } from "react";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import { apiUrl } from "@/utils/apiBase";
 import "./SocialCard.css";
@@ -26,54 +24,6 @@ interface ThreadsEmbedProps {
   title?: string;
   description?: string;
   thumbnail?: string;
-}
-
-interface ThreadsOEmbedData {
-  html?: string;
-  author_name?: string;
-  thumbnail_url?: string;
-}
-
-const threadsWin = window as unknown as {
-  threadsEmbedScriptLoaded?: boolean;
-  __threadsEmbeds?: { process: () => void };
-};
-
-function processThreadsEmbeds(): void {
-  threadsWin.__threadsEmbeds?.process();
-}
-
-function loadThreadsEmbedScript(): void {
-  if (threadsWin.threadsEmbedScriptLoaded) {
-    processThreadsEmbeds();
-    return;
-  }
-
-  threadsWin.threadsEmbedScriptLoaded = true;
-  const script = document.createElement("script");
-  script.src = "https://www.threads.net/embed.js";
-  script.async = true;
-  script.onload = () => {
-    // Threads embed.js registers itself on window.instgrm which conflicts with
-    // Instagram's embed.js.  Capture Threads' handler separately.
-    const win = window as unknown as {
-      instgrm?: { Embeds?: { process: () => void } };
-    };
-    if (win.instgrm?.Embeds) {
-      threadsWin.__threadsEmbeds = win.instgrm.Embeds;
-    }
-    processThreadsEmbeds();
-  };
-  script.onerror = () => {
-    threadsWin.threadsEmbedScriptLoaded = false;
-  };
-  document.body.appendChild(script);
-}
-
-function getAppTheme(): "light" | "dark" {
-  return document.documentElement.getAttribute("data-theme") === "dark"
-    ? "dark"
-    : "light";
 }
 
 function normalizeThreadsUrl(urlStr: string): string {
@@ -109,76 +59,15 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   description,
   thumbnail,
 }) => {
-  const { getSocialConnection } = useAuth();
   const [thumbnailError, setThumbnailError] = useState(false);
-  const [oembedData, setOembedData] = useState<ThreadsOEmbedData | null>(null);
-  const [oembedLoading, setOembedLoading] = useState(true);
-  const [oembedError, setOembedError] = useState(false);
-  const blockquoteRef = useRef<HTMLDivElement>(null);
 
   const embedUrl = normalizeThreadsUrl(url);
-  const threadsConnection = getSocialConnection?.("threads");
-
-  useEffect(() => {
-    if (!threadsConnection || !url) {
-      setOembedLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const fetchOEmbed = async () => {
-      try {
-        setOembedLoading(true);
-        const data = await threadsAuthService.getOEmbedData(
-          url,
-          threadsConnection.accessToken,
-          600
-        );
-        if (cancelled) return;
-        setOembedData(data);
-        setOembedError(false);
-      } catch (error) {
-        console.error("Failed to fetch Threads oEmbed data:", error);
-        if (cancelled) return;
-        setOembedError(true);
-        setOembedData(null);
-      } finally {
-        if (!cancelled) setOembedLoading(false);
-      }
-    };
-
-    fetchOEmbed();
-    return () => {
-      cancelled = true;
-    };
-  }, [url, threadsConnection]);
-
-  useEffect(() => {
-    if (oembedData?.html) {
-      loadThreadsEmbedScript();
-    }
-  }, [oembedData]);
-
-  useEffect(() => {
-    if (!embedUrl) return;
-    if (threadsConnection && oembedData?.html && !oembedError) return;
-    const node = blockquoteRef.current;
-    if (!node) return;
-    loadThreadsEmbedScript();
-    const rafId = requestAnimationFrame(() => processThreadsEmbeds());
-    return () => {
-      void node;
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [threadsConnection, embedUrl, oembedData, oembedError]);
 
   const handleClick = () => {
     openPlatformUrl(embedUrl);
   };
 
-  // Filter generic metadata
-  // Previously cdninstagram.com thumbnails were hidden because they failed CORS
-  // in the Capacitor WebView. Now we proxy them, so always use resolvedThumbnail.
+  // Proxy cdninstagram.com thumbnails so they load in the Capacitor Android WebView.
   const resolvedThumbnail = proxyCdnInstagram(thumbnail);
   const shouldShowThumbnail = resolvedThumbnail && !thumbnailError;
 
@@ -191,71 +80,50 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const displayTitle = !isGenericTitle ? title : undefined;
   const displayDescription = !isGenericDescription ? description : undefined;
 
-  // --- Connected user: rich oEmbed HTML wrapped in branded card ---
-  if (threadsConnection && oembedData?.html && !oembedError) {
-    return (
-      <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
-        <div className="social-card-header">
-          <ThreadsLogo />
-          <span className="social-card-header-text">Threads</span>
-        </div>
-        <div
-          className="social-card-embed-wrap"
-          dangerouslySetInnerHTML={{ __html: oembedData.html }}
-        />
-        <a
-          href={embedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="social-card-button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
-        >
-          Open in Threads
-        </a>
-      </div>
-    );
-  }
-
-  // --- Connected user: loading ---
-  if (threadsConnection && oembedLoading) {
-    return (
-      <div className="social-card social-card--threads">
-        <div className="social-card-header">
-          <ThreadsLogo />
-          <span className="social-card-header-text">Threads</span>
-        </div>
-        <div className="social-card-body">
-          <div className="social-card-description" style={{ color: "var(--text-tertiary)" }}>
-            Loading preview...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Non-connected user: native blockquote embed wrapped in branded card ---
-  // The Threads embed.js renders the full post including media — don't show
-  // any thumbnail or description fallback alongside it (causes double content).
   if (embedUrl) {
-    const theme = getAppTheme();
     return (
-      <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="social-card social-card--threads"
+        onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
+      >
         <div className="social-card-header">
           <ThreadsLogo />
           <span className="social-card-header-text">Threads</span>
         </div>
-        <div className="social-card-embed-wrap" ref={blockquoteRef}>
-          <blockquote
-            className="text-post-media"
-            data-text-post-permalink={embedUrl}
-            data-text-post-version="0"
-            data-theme={theme}
-          >
-            <a href={embedUrl} target="_blank" rel="noopener noreferrer">
-              View on Threads
-            </a>
-          </blockquote>
-        </div>
+
+        {shouldShowThumbnail ? (
+          <div className="social-card-thumbnail">
+            <img
+              src={resolvedThumbnail}
+              alt="Threads preview"
+              onError={() => setThumbnailError(true)}
+              loading="lazy"
+            />
+          </div>
+        ) : (
+          <div className="social-card-body">
+            {(displayTitle || displayDescription) ? (
+              <>
+                {displayTitle && <div className="social-card-title">{displayTitle}</div>}
+                {displayDescription && <div className="social-card-description">{displayDescription}</div>}
+              </>
+            ) : (
+              <>
+                <div className="social-card-icon">🧵</div>
+                <p className="social-card-cta">Tap to view on Threads</p>
+              </>
+            )}
+          </div>
+        )}
+
         <a
           href={embedUrl}
           target="_blank"
@@ -269,7 +137,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     );
   }
 
-  // --- Last-resort: no URL, just a card ---
+  // --- Last-resort: no URL ---
   return (
     <div
       className="social-card social-card--threads"
@@ -287,41 +155,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         <ThreadsLogo />
         <span className="social-card-header-text">Threads</span>
       </div>
-
-      {shouldShowThumbnail ? (
-        <div className="social-card-thumbnail">
-          <img
-            src={resolvedThumbnail}
-            alt="Threads preview"
-            onError={() => setThumbnailError(true)}
-            loading="lazy"
-          />
-        </div>
-      ) : (
-        <div className="social-card-body">
-          {(displayTitle || displayDescription) ? (
-            <>
-              {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-              {displayDescription && <div className="social-card-description">{displayDescription}</div>}
-            </>
-          ) : (
-            <>
-              <div className="social-card-icon">🧵</div>
-              <p className="social-card-cta">Tap to view on Threads</p>
-            </>
-          )}
-        </div>
-      )}
-
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="social-card-button"
-        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(url); }}
-      >
-        Open in Threads
-      </a>
+      <div className="social-card-body">
+        <div className="social-card-icon">🧵</div>
+        <p className="social-card-cta">Tap to view on Threads</p>
+      </div>
     </div>
   );
 };
