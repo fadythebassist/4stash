@@ -42,7 +42,7 @@ SOCIAL_AUTH_PLAN.md
 nul
 temp_*.txt
 renaming.md
-session-ses_2b36.md
+session-ses_*.md
 
 # Playwright tests
 playwright.config.ts
