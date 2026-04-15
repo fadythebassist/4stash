@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useAuth } from "@/contexts/AuthContext";
 import { threadsAuthService } from "@/services/ThreadsAuthService";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
+import { apiUrl } from "@/utils/apiBase";
 import "./SocialCard.css";
 
 interface ThreadsEmbedProps {
@@ -216,6 +218,68 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
 
   // --- Non-connected user: native blockquote embed wrapped in branded card ---
   if (embedUrl) {
+    // embed.js doesn't render in Android WebView — show a static card instead.
+    if (Capacitor.isNativePlatform()) {
+      // Proxy cdninstagram.com thumbnails to avoid CORP header blocks in Android WebView.
+      const proxyThumbnail = thumbnail
+        ? apiUrl(`/api/proxy-image?url=${encodeURIComponent(thumbnail)}`)
+        : undefined;
+      return (
+        <div
+          className="social-card social-card--threads"
+          onClick={handleClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleClick();
+            }
+          }}
+        >
+          <div className="social-card-header">
+            <ThreadsLogo />
+            <span className="social-card-header-text">Threads</span>
+          </div>
+
+          {proxyThumbnail && !thumbnailError ? (
+            <div className="social-card-thumbnail">
+              <img
+                src={proxyThumbnail}
+                alt="Threads preview"
+                onError={() => setThumbnailError(true)}
+                loading="lazy"
+              />
+            </div>
+          ) : (
+            <div className="social-card-body">
+              {displayTitle || displayDescription ? (
+                <>
+                  {displayTitle && <div className="social-card-title">{displayTitle}</div>}
+                  {displayDescription && <div className="social-card-description">{displayDescription}</div>}
+                </>
+              ) : (
+                <>
+                  <div className="social-card-icon">🧵</div>
+                  <p className="social-card-cta">Tap to view on Threads</p>
+                </>
+              )}
+            </div>
+          )}
+
+          <a
+            href={embedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="social-card-button"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
+          >
+            Open in Threads
+          </a>
+        </div>
+      );
+    }
+
     const theme = getAppTheme();
     return (
       <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
