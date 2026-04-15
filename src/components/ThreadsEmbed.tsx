@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import { apiUrl } from "@/utils/apiBase";
 import "./SocialCard.css";
@@ -19,11 +19,63 @@ function proxyCdnInstagram(url: string | undefined): string | undefined {
   return url;
 }
 
+/** Returns true when running inside the Capacitor Android WebView. */
+function isAndroid(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    /android/i.test(navigator.userAgent)
+  );
+}
+
 interface ThreadsEmbedProps {
   url: string;
   title?: string;
   description?: string;
   thumbnail?: string;
+  /** Used on Android to label the CTA button ("View Video" vs "View Post"). */
+  itemType?: string;
+}
+
+const threadsWin = window as unknown as {
+  threadsEmbedScriptLoaded?: boolean;
+  __threadsEmbeds?: { process: () => void };
+};
+
+function processThreadsEmbeds(): void {
+  threadsWin.__threadsEmbeds?.process();
+}
+
+function loadThreadsEmbedScript(): void {
+  if (threadsWin.threadsEmbedScriptLoaded) {
+    processThreadsEmbeds();
+    return;
+  }
+
+  threadsWin.threadsEmbedScriptLoaded = true;
+  const script = document.createElement("script");
+  script.src = "https://www.threads.net/embed.js";
+  script.async = true;
+  script.onload = () => {
+    // Threads embed.js registers itself on window.instgrm which conflicts with
+    // Instagram's embed.js. Capture Threads' handler separately.
+    const win = window as unknown as {
+      instgrm?: { Embeds?: { process: () => void } };
+    };
+    if (win.instgrm?.Embeds) {
+      threadsWin.__threadsEmbeds = win.instgrm.Embeds;
+    }
+    processThreadsEmbeds();
+  };
+  script.onerror = () => {
+    threadsWin.threadsEmbedScriptLoaded = false;
+  };
+  document.body.appendChild(script);
+}
+
+function getAppTheme(): "light" | "dark" {
+  return document.documentElement.getAttribute("data-theme") === "dark"
+    ? "dark"
+    : "light";
 }
 
 function normalizeThreadsUrl(urlStr: string): string {
@@ -58,10 +110,27 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   title,
   description,
   thumbnail,
+  itemType,
 }) => {
   const [thumbnailError, setThumbnailError] = useState(false);
+  const blockquoteRef = useRef<HTMLDivElement>(null);
 
   const embedUrl = normalizeThreadsUrl(url);
+  const onAndroid = isAndroid();
+
+  // On web only: load embed.js to render the interactive Threads post inline.
+  useEffect(() => {
+    if (onAndroid) return;
+    if (!embedUrl) return;
+    const node = blockquoteRef.current;
+    if (!node) return;
+    loadThreadsEmbedScript();
+    const rafId = requestAnimationFrame(() => processThreadsEmbeds());
+    return () => {
+      void node;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [onAndroid, embedUrl]);
 
   const handleClick = () => {
     openPlatformUrl(embedUrl);
@@ -80,7 +149,11 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const displayTitle = !isGenericTitle ? title : undefined;
   const displayDescription = !isGenericDescription ? description : undefined;
 
-  if (embedUrl) {
+  // --- Android: static branded card with proxied thumbnail + native open ---
+  // embed.js scripts from threads.net are often blocked in the Capacitor WebView.
+  // Show the stored thumbnail directly and let openPlatformUrl route to the app.
+  if (onAndroid && embedUrl) {
+    const ctaLabel = itemType === "video" ? "View Video" : "View Post";
     return (
       <div
         className="social-card social-card--threads"
@@ -124,6 +197,42 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           </div>
         )}
 
+        <a
+          href={embedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="social-card-button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
+        >
+          {ctaLabel}
+        </a>
+      </div>
+    );
+  }
+
+  // --- Web: embed.js blockquote for inline playback ---
+  // embed.js renders the full post including video player inside the blockquote.
+  // Do NOT show any thumbnail or description alongside it — that causes double content.
+  if (embedUrl) {
+    const theme = getAppTheme();
+    return (
+      <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
+        <div className="social-card-header">
+          <ThreadsLogo />
+          <span className="social-card-header-text">Threads</span>
+        </div>
+        <div className="social-card-embed-wrap" ref={blockquoteRef}>
+          <blockquote
+            className="text-post-media"
+            data-text-post-permalink={embedUrl}
+            data-text-post-version="0"
+            data-theme={theme}
+          >
+            <a href={embedUrl} target="_blank" rel="noopener noreferrer">
+              View on Threads
+            </a>
+          </blockquote>
+        </div>
         <a
           href={embedUrl}
           target="_blank"
