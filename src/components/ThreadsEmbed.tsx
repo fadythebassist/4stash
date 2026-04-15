@@ -2,7 +2,24 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { threadsAuthService } from "@/services/ThreadsAuthService";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
+import { apiUrl } from "@/utils/apiBase";
 import "./SocialCard.css";
+
+// Threads/Instagram media is served from cdninstagram.com. Browsers load it
+// fine, but the Capacitor Android WebView is blocked by CORP headers.
+// Route through our proxy so thumbnails render on both platforms.
+function proxyCdnInstagram(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host.includes("cdninstagram.com") || host.includes("instagram.com")) {
+      return apiUrl(`/api/proxy-image?url=${encodeURIComponent(url)}`);
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+  return url;
+}
 
 interface ThreadsEmbedProps {
   url: string;
@@ -160,8 +177,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   };
 
   // Filter generic metadata
-  const isInstagramCDN = thumbnail?.includes("cdninstagram.com");
-  const shouldShowThumbnail = thumbnail && !isInstagramCDN && !thumbnailError;
+  // Previously cdninstagram.com thumbnails were hidden because they failed CORS
+  // in the Capacitor WebView. Now we proxy them, so always use resolvedThumbnail.
+  const resolvedThumbnail = proxyCdnInstagram(thumbnail);
+  const shouldShowThumbnail = resolvedThumbnail && !thumbnailError;
 
   const isGenericTitle =
     title?.includes("Log in") || title?.includes("Threads \u2022 Log in");
@@ -239,7 +258,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         {shouldShowThumbnail && (
           <div className="social-card-thumbnail">
             <img
-              src={thumbnail}
+              src={resolvedThumbnail}
               alt="Threads preview"
               onError={() => setThumbnailError(true)}
               loading="lazy"
@@ -289,7 +308,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       {shouldShowThumbnail ? (
         <div className="social-card-thumbnail">
           <img
-            src={thumbnail}
+            src={resolvedThumbnail}
             alt="Threads preview"
             onError={() => setThumbnailError(true)}
             loading="lazy"
