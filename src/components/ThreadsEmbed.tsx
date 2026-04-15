@@ -236,24 +236,6 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           </blockquote>
         </div>
 
-        {shouldShowThumbnail && (
-          <div className="social-card-thumbnail">
-            <img
-              src={thumbnail}
-              alt="Threads preview"
-              onError={() => setThumbnailError(true)}
-              loading="lazy"
-            />
-          </div>
-        )}
-
-        {!shouldShowThumbnail && (displayTitle || displayDescription) && (
-          <div className="social-card-text">
-            {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-            {displayDescription && <div className="social-card-description">{displayDescription}</div>}
-          </div>
-        )}
-
         <a
           href={embedUrl}
           target="_blank"
