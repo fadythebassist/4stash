@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./SocialCard.css";
 
 // Quick rollback switch: set to false to keep inline viewing for reels only.
@@ -94,7 +95,7 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
 
   const handleCardClick = useCallback(() => {
     if (normalizedUrl) {
-      window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+      openPlatformUrl(normalizedUrl);
     }
   }, [normalizedUrl]);
 
@@ -115,6 +116,9 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
 
   const isReel = contentType === "Reel";
   const isPost = contentType === "Post";
+  // Instagram iframes are allowed now that capacitor.config.ts sets
+  // server.url = "https://4stash.com" — the WebView origin matches what
+  // Instagram's embed allows (no longer capacitor://localhost).
   const canViewInline = !!iframeEmbedUrl && (isReel || (ENABLE_INLINE_INSTAGRAM_POSTS && isPost));
   const inlineButtonLabel = isReel ? "▶ Play Reel Here" : "View Post Here";
   // Keep feed stable by default and only load Instagram iframe when user explicitly
@@ -230,7 +234,7 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
         target="_blank"
         rel="noopener noreferrer"
         className="social-card-button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
       >
         Open in Instagram
       </a>

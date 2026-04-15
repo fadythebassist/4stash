@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Item } from "@/types";
 import { useData } from "@/contexts/DataContext";
 import { cleanFacebookUrl, isFacebookUrl } from "@/utils/facebook";
+import { apiUrl } from "@/utils/apiBase";
 import "./Modal.css";
 
 function decodeHtmlEntities(text: string): string {
@@ -12,7 +13,9 @@ function decodeHtmlEntities(text: string): string {
 
 function shouldProxyThumbnail(urlStr?: string): boolean {
   if (!urlStr) return false;
-  if (urlStr.startsWith("/api/proxy-image?")) return false;
+  // Already proxied — avoid double-wrapping regardless of whether the path is
+  // relative (/api/proxy-image?…) or absolute (https://4stash.com/api/proxy-image?…)
+  if (urlStr.includes("/api/proxy-image?")) return false;
 
   try {
     const hostname = new URL(urlStr, window.location.origin).hostname.toLowerCase();
@@ -29,8 +32,10 @@ function shouldProxyThumbnail(urlStr?: string): boolean {
 
 function toProxyThumbnail(urlStr?: string): string | undefined {
   if (!urlStr) return undefined;
+  // Already a proxy path — just ensure it's an absolute URL for Android (Capacitor).
+  if (urlStr.startsWith("/api/proxy-image?")) return apiUrl(urlStr);
   if (!shouldProxyThumbnail(urlStr)) return urlStr;
-  return `/api/proxy-image?url=${encodeURIComponent(urlStr)}`;
+  return apiUrl(`/api/proxy-image?url=${encodeURIComponent(urlStr)}`);
 }
 
 function isFacebookShareLike(url?: string): boolean {
@@ -188,7 +193,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (!needsUnfurl) return;
 
       try {
-        const res = await fetch(`/api/unfurl?url=${encodeURIComponent(item.url)}`);
+        const res = await fetch(apiUrl(`/api/unfurl?url=${encodeURIComponent(item.url)}`));
         if (!res.ok) return;
 
         const data = await res.json();

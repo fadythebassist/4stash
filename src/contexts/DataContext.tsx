@@ -431,6 +431,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useData = () => {
   const context = useContext(DataContext);
   if (context === undefined) {

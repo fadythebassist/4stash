@@ -7,6 +7,9 @@
     "dev": "vite --port 5173",
     "dev:kill": "powershell -Command \"$p = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { Stop-Process -Id $p -Force }\" && npm run dev",
     "build": "tsc && vite build",
+    "build:android": "npm run build && npx cap sync android",
+    "postinstall": "node -e \"const fs=require('fs');const f='node_modules/@capacitor-firebase/authentication/android/build.gradle';try{let c=fs.readFileSync(f,'utf8');if(c.includes('proguard-android.txt')){fs.writeFileSync(f,c.replace(/proguard-android\\.txt/g,'proguard-android-optimize.txt'));console.log('Patched @capacitor-firebase/authentication build.gradle');}}catch(e){}\"",
+    "assets:android": "npx capacitor-assets generate --android",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "playwright test",
@@ -15,13 +18,18 @@
     "test:report": "playwright show-report"
   },
   "dependencies": {
-    "firebase": "^10.14.1",
+    "@capacitor-firebase/authentication": "^7.5.0",
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "firebase": "^11.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-masonry-css": "^1.0.16",
     "react-router-dom": "^6.20.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@playwright/test": "^1.58.2",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",

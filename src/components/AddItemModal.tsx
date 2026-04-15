@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useData } from "@/contexts/DataContext";
 import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
-import { categorizeContent } from "@/services/AutoCategorizationService";
+import { getGeminiSuggestions } from "@/services/GeminiService";
+import { apiUrl } from "@/utils/apiBase";
 import TweetEmbed from "@/components/TweetEmbed";
 import "./Modal.css";
 
@@ -21,6 +22,14 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
+// Ensure a thumbnail URL returned by the Cloud Function is absolute.
+// The server returns relative paths like /api/proxy-image?url=... which work on
+// the web (same origin) but break inside the Capacitor WebView (capacitor://localhost).
+function absolutizeThumbnail(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  return raw.startsWith("/api/") ? apiUrl(raw) : raw;
+}
+
 const AddItemModal: React.FC<AddItemModalProps> = ({
   onClose,
   onAddList,
@@ -28,7 +37,12 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   initialTitle = "",
   initialContent = "",
 }) => {
-  const { lists, createItem } = useData();
+  const { lists, items, createItem, createList } = useData();
+  // Mirror lists into a ref so async callbacks (runGeminiInBackground) always
+  // read the latest list state, not the stale closure value from mount time.
+  const listsRef = useRef(lists);
+  useEffect(() => { listsRef.current = lists; }, [lists]);
+
   const [title, setTitle] = useState(
     initialTitle ? decodeHtmlEntities(initialTitle) : "",
   );
@@ -50,8 +64,176 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   );
   const [loading, setLoading] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
+  const [taggingWithAi, setTaggingWithAi] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
-  const [manualTagsInput, setManualTagsInput] = useState("");
+
+  // Fire Gemini in the background as soon as we have enough metadata.
+  // Populates tag chips and pre-selects / auto-creates lists so the user sees
+  // AI suggestions before they hit Save — no extra wait at submit time.
+  //
+  // List assignment rules:
+  // - The first list (default "quick bin") is always pre-selected but does NOT
+  //   count toward the AI's 2-list budget. AI can add up to 2 more lists.
+  // - If Gemini matches existing lists by name, those are added (up to 2).
+  // - If Gemini proposes a new list name and the 2-list budget isn't full yet,
+  //   the new list is created automatically and assigned.
+  // - User can always adjust list selection manually before saving.
+  const runGeminiInBackground = async (
+    aiTitle: string,
+    aiContent: string,
+    aiUrl: string,
+    aiSource: string | undefined,
+  ) => {
+    if (!aiTitle && !aiUrl) return;
+    setTaggingWithAi(true);
+    try {
+      // Use listsRef.current so we always have the latest lists, even if this
+      // function was called from a stale closure (e.g. mount-time useEffect).
+      const currentLists = listsRef.current;
+      const listNames = currentLists.map((l) => l.name);
+      console.log("[AddItemModal] runGeminiInBackground — lists:", listNames, "title:", aiTitle, "url:", aiUrl);
+      const result = await getGeminiSuggestions(
+        aiTitle,
+        aiContent,
+        aiUrl,
+        aiSource,
+        existingTags,
+        listNames,
+      );
+      console.log("[AddItemModal] Gemini result:", result);
+
+      // Add AI tags as chips (skip any the user already added manually)
+      if (result.tags.length > 0) {
+        setTagChips((prev) => {
+          const merged = Array.from(new Set([...prev, ...result.tags]));
+          return merged;
+        });
+      }
+
+      // The default list (lists[0]) is the "quick bin" — it is always pre-selected
+      // but does not count toward the AI 2-list cap.
+      const defaultListId = currentLists[0]?.id;
+
+      // Track how many AI-assigned lists (beyond the default) we've added.
+      let aiListsAdded = 0;
+      const MAX_AI_LISTS = 2;
+
+      // Accumulate new list IDs to add so we can do a single setListIds call.
+      const toAdd: string[] = [];
+
+      // 1. Match existing lists by name (Gemini returned exact or case-insensitive match)
+      for (const name of result.listNames) {
+        if (aiListsAdded >= MAX_AI_LISTS) break;
+        const match = currentLists.find(
+          (l) => l.name.toLowerCase() === name.toLowerCase(),
+        );
+        if (match && match.id !== defaultListId) {
+          toAdd.push(match.id);
+          aiListsAdded++;
+        }
+      }
+
+      // 2. If Gemini proposed a new list name and budget allows, create it.
+      if (result.newListName && aiListsAdded < MAX_AI_LISTS) {
+        // Only create if a list with this name doesn't already exist.
+        const alreadyExists = currentLists.find(
+          (l) => l.name.toLowerCase() === result.newListName!.toLowerCase(),
+        );
+        if (alreadyExists) {
+          // Treat as an existing list match instead
+          if (alreadyExists.id !== defaultListId) {
+            toAdd.push(alreadyExists.id);
+            aiListsAdded++;
+          }
+        } else {
+          try {
+            console.log("[AddItemModal] AI creating new list:", result.newListName);
+            const newList = await createList({ name: result.newListName });
+            toAdd.push(newList.id);
+            aiListsAdded++;
+          } catch (err) {
+            console.error("[AddItemModal] Failed to auto-create list:", err);
+          }
+        }
+      }
+
+      console.log("[AddItemModal] AI list IDs to add:", toAdd);
+
+      // Apply all new list assignments in one update
+      if (toAdd.length > 0) {
+        setListIds((prev) => {
+          const next = [...prev];
+          for (const id of toAdd) {
+            if (!next.includes(id)) next.push(id);
+          }
+          return next;
+        });
+      }
+    } finally {
+      setTaggingWithAi(false);
+    }
+  };
+
+  // Chip-based tag input state
+  const [tagChips, setTagChips] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
+
+  // Collect all existing tags from the user's saved items for autocomplete
+  const existingTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of items) {
+      for (const tag of item.tags ?? []) {
+        set.add(tag.toLowerCase());
+      }
+    }
+    return Array.from(set).sort();
+  }, [items]);
+
+  // Filtered suggestions: match the current input, excluding already-added chips
+  const tagSuggestions = useMemo(() => {
+    const q = tagInput.trim().toLowerCase();
+    if (!q) return [];
+    return existingTags
+      .filter((t) => t.includes(q) && !tagChips.includes(t))
+      .slice(0, 6);
+  }, [tagInput, existingTags, tagChips]);
+
+  const addTagChip = (raw: string) => {
+    const tag = raw.trim().toLowerCase();
+    if (tag && !tagChips.includes(tag)) {
+      setTagChips((prev) => [...prev, tag]);
+    }
+    setTagInput("");
+    setShowTagSuggestions(false);
+  };
+
+  const removeTagChip = (tag: string) => {
+    setTagChips((prev) => prev.filter((t) => t !== tag));
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      if (tagInput.trim()) addTagChip(tagInput);
+    } else if (e.key === "Backspace" && !tagInput && tagChips.length > 0) {
+      setTagChips((prev) => prev.slice(0, -1));
+    } else if (e.key === "Escape") {
+      setShowTagSuggestions(false);
+    }
+  };
+
+  // Seed the default list selection once the DataContext finishes loading lists.
+  // lists[] is empty at mount (DataContext loads async), so the useState
+  // initialiser above always produces []. This effect runs when lists first
+  // populates and sets the first list as selected — but only if the user hasn't
+  // already made a manual selection (listIds is still empty).
+  useEffect(() => {
+    if (listIds.length === 0 && lists.length > 0 && lists[0].id) {
+      setListIds([lists[0].id]);
+    }
+  }, [lists]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sourceConfig: Record<string, { emoji: string; label: string }> = {
     facebook: { emoji: "📘", label: "Facebook" },
@@ -232,6 +414,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     const shouldFetchInitialMetadata =
       !initialTitle || hasGenericInitialTitle || isShortUrlThatNeedsResolution;
     if (!shouldFetchInitialMetadata) {
+      // Title is already good — skip metadata fetch but still run Gemini for list/tag suggestions.
+      const aiSource = source?.source ?? undefined;
+      runGeminiInBackground(initialTitle, initialContent, initialUrl, aiSource);
       return;
     }
 
@@ -249,7 +434,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           setTitle(decodeHtmlEntities(meta.title));
         }
         if (meta?.thumbnail) {
-          setThumbnail(meta.thumbnail);
+          setThumbnail(absolutizeThumbnail(meta.thumbnail));
         }
         if (meta?.description && !content) {
           setContent(decodeHtmlEntities(meta.description));
@@ -259,6 +444,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         if (meta?.url && meta.url !== initialUrl) {
           updateUrl(meta.url);
         }
+
+        // Kick off Gemini as soon as we have metadata — runs in background
+        const aiTitle = meta?.title ? decodeHtmlEntities(meta.title) : (initialTitle || "");
+        const aiContent = meta?.description ? decodeHtmlEntities(meta.description) : (initialContent || "");
+        const aiUrl = meta?.url || initialUrl;
+        const aiSource = detectSource(aiUrl)?.source ?? undefined;
+        runGeminiInBackground(aiTitle, aiContent, aiUrl, aiSource);
       } catch (err) {
         console.error("[AddItemModal] Error fetching initial metadata:", err);
       } finally {
@@ -434,7 +626,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     try {
       // Try the API endpoint first
       const response = await fetch(
-        `/api/unfurl?url=${encodeURIComponent(fullUrl)}`,
+        apiUrl(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`),
       );
       if (response.ok) {
         const data = await response.json();
@@ -629,7 +821,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             ? metaTitle
             : fallbackTitle,
           description: description || undefined,
-          thumbnail: meta?.image,
+          thumbnail: absolutizeThumbnail(meta?.image),
         };
       }
 
@@ -766,11 +958,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             ? meta?.description
             : undefined;
 
-          return {
+           return {
             url: meta?.url || fullUrl,
             title: hasValidTitle ? meta.title : fallbackTitle,
             description: safeDescription,
-            thumbnail: meta?.image,
+            thumbnail: absolutizeThumbnail(meta?.image),
           };
         } catch (error) {
           console.log(
@@ -806,7 +998,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             url: resolvedUrl,
             title: hasValidTitle ? meta.title : fallbackTitle,
             description: meta?.description,
-            thumbnail: meta?.image,
+            thumbnail: absolutizeThumbnail(meta?.image),
           };
         } catch {
           return { url: cleanRedditUrl(fullUrl), title: fallbackTitle };
@@ -848,7 +1040,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return {
           title: meta?.title || fallbackTitle,
           description: meta?.description,
-          thumbnail: meta?.image,
+          thumbnail: absolutizeThumbnail(meta?.image),
           url: resolved,
         };
       }
@@ -859,7 +1051,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         return {
           title: meta.title,
           description: meta.description,
-          thumbnail: meta.image,
+          thumbnail: absolutizeThumbnail(meta.image),
           url: meta.url,
         };
       }
@@ -958,7 +1150,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           setTitle(decodeHtmlEntities(fetched.title));
         }
         if (fetched?.thumbnail) {
-          setThumbnail(fetched.thumbnail);
+          setThumbnail(absolutizeThumbnail(fetched.thumbnail));
         }
         if (fetched?.nsfw) {
           setNsfw(true);
@@ -966,6 +1158,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         if (fetched?.description && !content.trim()) {
           setContent(decodeHtmlEntities(fetched.description));
         }
+
+        // Kick off Gemini in background after metadata is ready
+        const aiTitle = (shouldUpdateTitle && fetched?.title)
+          ? decodeHtmlEntities(fetched.title)
+          : existingTitle;
+        const aiContent = fetched?.description || content.trim();
+        const aiUrl = fetched?.url || trimmedUrl;
+        runGeminiInBackground(aiTitle, aiContent, aiUrl, source?.source ?? undefined);
       } catch (err) {
         console.error("[AddItemModal] Error fetching title:", err);
       } finally {
@@ -1098,37 +1298,10 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
       const finalSource = finalUrl ? detectSource(finalUrl)?.source : undefined;
 
-      // Auto-generate tags and detect categories
-      const categorizationResult = categorizeContent({
-        title: finalTitle,
-        content: finalContent,
-        url: finalUrl,
-        source: finalSource,
-      });
-
-      const manualTags = Array.from(
-        new Set(
-          manualTagsInput
-            .split(",")
-            .map((tag) => tag.trim().toLowerCase())
-            .filter(Boolean),
-        ),
-      );
-      const autoTags = categorizationResult.tags;
-      const finalTags = Array.from(new Set([...autoTags, ...manualTags]));
-
-      // Auto-add to matching lists based on category detection
+      // Tags and lists are already populated from the background Gemini call
+      // that ran after metadata fetch. Just use current chip/list state.
+      const finalTags = Array.from(new Set(tagChips));
       const autoListIds = [...listIds];
-      if (categorizationResult.autoCategories.length > 0) {
-        for (const category of categorizationResult.autoCategories) {
-          const matchingList = lists.find(
-            (l) => l.name.toLowerCase() === category.name.toLowerCase(),
-          );
-          if (matchingList && !autoListIds.includes(matchingList.id)) {
-            autoListIds.push(matchingList.id);
-          }
-        }
-      }
 
       await createItem({
         title: finalTitle,
@@ -1144,7 +1317,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
       onClose();
     } catch (err) {
-      alert("Failed to add item");
+      const message = err instanceof Error ? err.message : "Failed to add item";
+      alert(message);
+      onClose();
     } finally {
       setLoading(false);
     }
@@ -1223,11 +1398,20 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                   <TweetEmbed url={url.trim()} />
                 </div>
               ) : thumbnail ? (
-                <img
-                  src={thumbnail}
-                  alt="Preview"
-                  className="share-preview-image"
-                />
+                /* Platform-branded card with thumbnail */
+                <div className={`share-preview-platform-card ${detectedSource ?? "generic"}`}>
+                  {detectedSource && sourceConfig[detectedSource] && (
+                    <div className={`share-preview-platform-header ${detectedSource}`}>
+                      <span className="share-preview-platform-emoji">
+                        {sourceConfig[detectedSource].emoji}
+                      </span>
+                      <span>{sourceConfig[detectedSource].label}</span>
+                    </div>
+                  )}
+                  <div className="share-preview-fb-thumb">
+                    <img src={thumbnail} alt="Preview" />
+                  </div>
+                </div>
               ) : (
                 detectedSource && (
                   <div className="share-preview-placeholder">
@@ -1298,15 +1482,68 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           </div>
 
           <div className="form-group">
-            <label htmlFor="tags">Tags (optional)</label>
-            <input
-              id="tags"
-              type="text"
-              value={manualTagsInput}
-              onChange={(e) => setManualTagsInput(e.target.value)}
-              placeholder="e.g. meal prep, protein, quick recipe"
-              disabled={loading}
-            />
+            <label>
+              Tags (optional)
+              {taggingWithAi && (
+                <span className="fetching-indicator"> (AI tagging...)</span>
+              )}
+            </label>
+            <div
+              className="tag-chip-input"
+              onClick={() => tagInputRef.current?.focus()}
+            >
+              {tagChips.map((chip) => (
+                <span key={chip} className="tag-chip">
+                  {chip}
+                  <button
+                    type="button"
+                    className="tag-chip-remove"
+                    onClick={(e) => { e.stopPropagation(); removeTagChip(chip); }}
+                    disabled={loading}
+                    aria-label={`Remove tag ${chip}`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={tagInputRef}
+                type="text"
+                className="tag-chip-text-input"
+                value={tagInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // Auto-split on comma
+                  if (val.includes(",")) {
+                    val.split(",").forEach((part) => {
+                      if (part.trim()) addTagChip(part);
+                    });
+                  } else {
+                    setTagInput(val);
+                    setShowTagSuggestions(val.trim().length > 0);
+                  }
+                }}
+                onKeyDown={handleTagKeyDown}
+                onFocus={() => setShowTagSuggestions(tagInput.trim().length > 0)}
+                onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
+                placeholder={tagChips.length === 0 ? "Add tags... (Enter or comma to confirm)" : ""}
+                disabled={loading}
+              />
+            </div>
+            {showTagSuggestions && tagSuggestions.length > 0 && (
+              <div className="tag-suggestions">
+                {tagSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className="tag-suggestion-item"
+                    onMouseDown={(e) => { e.preventDefault(); addTagChip(suggestion); }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-group">

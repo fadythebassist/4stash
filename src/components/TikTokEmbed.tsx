@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./SocialCard.css";
 
 function normalizeUrl(urlStr: string): string | null {
@@ -58,7 +59,7 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
 
   const handleClick = useCallback(() => {
     if (normalizedUrl) {
-      window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+      openPlatformUrl(normalizedUrl);
     }
   }, [normalizedUrl]);
 
@@ -105,7 +106,7 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
           target="_blank"
           rel="noopener noreferrer"
           className="social-card-button"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
         >
           Open in TikTok
         </a>
@@ -170,7 +171,7 @@ const TikTokEmbed: React.FC<TikTokEmbedProps> = ({ url, thumbnail, title, descri
         target="_blank"
         rel="noopener noreferrer"
         className="social-card-button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
       >
         Open in TikTok
       </a>

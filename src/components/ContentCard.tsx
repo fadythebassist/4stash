@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { Item } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
+import { apiUrl } from "@/utils/apiBase";
 import "./ContentCard.css";
 
 // Embed components: each platform JS chunk only downloads when the first card
@@ -41,7 +42,7 @@ function shouldProxyThumbnail(source: string | undefined, thumbnail: string): bo
 }
 
 function toProxyThumbnail(thumbnail: string): string {
-  return `/api/proxy-image?url=${encodeURIComponent(thumbnail)}`;
+  return apiUrl(`/api/proxy-image?url=${encodeURIComponent(thumbnail)}`);
 }
 
 function cleanAnghamiUrl(urlStr: string): string {
@@ -242,7 +243,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return derivedSource.charAt(0).toUpperCase() + derivedSource.slice(1);
   };
 
-  const displayThumbnail = resolvedThumbnail ?? item.thumbnail;
+  const displayThumbnail = useMemo(() => {
+    const raw = resolvedThumbnail ?? item.thumbnail;
+    if (!raw) return undefined;
+    // Relative proxy paths from the server must be absolutized for Android (Capacitor),
+    // where capacitor://localhost has no server to handle /api/* routes.
+    return raw.startsWith("/api/proxy-image?") ? apiUrl(raw) : raw;
+  }, [resolvedThumbnail, item.thumbnail]);
   const displayContent = item.content ?? resolvedContent;
   const displayEmbedThumbnail = useMemo(() => {
     if (!displayThumbnail) return undefined;
@@ -380,7 +387,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
       try {
         const res = await fetch(
-          `/api/unfurl?url=${encodeURIComponent(fullUrl)}`,
+          apiUrl(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`),
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -448,16 +455,22 @@ const ContentCard: React.FC<ContentCardProps> = ({
 
         // Update thumbnail if missing or failed
         if (typeof data.image === "string" && data.image) {
+          // The Cloud Function may return a relative /api/proxy-image?url=... path.
+          // On Android (Capacitor) relative paths resolve to capacitor://localhost which
+          // has no server — convert them to absolute URLs using the configured API base.
+          const resolvedImage = data.image.startsWith("/api/")
+            ? apiUrl(data.image)
+            : data.image;
           if (derivedSource === "facebook") {
             // Facebook CDN URLs contain signed tokens (oh=, oe=) that change on every
             // server request — storing them would cause an infinite update loop because
             // the next unfurl call always returns a different token. Display via local
             // state only; do NOT persist to storage.
-            setResolvedThumbnail(data.image);
+            setResolvedThumbnail(resolvedImage);
           } else if (!item.thumbnail || thumbnailError) {
-            setResolvedThumbnail(data.image);
+            setResolvedThumbnail(resolvedImage);
             try {
-              await updateItemRef.current({ id: item.id, thumbnail: data.image });
+              await updateItemRef.current({ id: item.id, thumbnail: resolvedImage });
             } catch {
               // Non-critical
             }
@@ -650,9 +663,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
           <FacebookEmbed
             key={`fb-${item.id}-${autoplayVideos ? 'on' : 'off'}`}
             url={displayUrl || item.url}
+            originalUrl={item.url}
             title={item.title}
             description={displayContent}
-            thumbnail={displayThumbnail}
+            thumbnail={displayEmbedThumbnail}
             autoplay={autoplayVideos}
           />
         )}

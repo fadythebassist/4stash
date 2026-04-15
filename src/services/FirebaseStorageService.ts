@@ -10,7 +10,13 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   updateProfile,
+  type UserCredential,
 } from "firebase/auth";
+import { Capacitor } from "@capacitor/core";
+import {
+  nativeSignInWithGoogle,
+  nativeSignInWithTwitter,
+} from "./NativeAuthService";
 import {
   getFirestore,
   Firestore,
@@ -169,10 +175,18 @@ function detectContentType(url: string): { type: string; source?: string } {
   return { type: "link", source: "other" };
 }
 
-// Firebase configuration from environment variables
+// When running inside Capacitor with server.url = "https://4stash.com", the
+// WebView origin is 4stash.com.  Firebase Auth's JS SDK opens an internal
+// /__/auth/iframe for session persistence — if authDomain points to the default
+// firebaseapp.com subdomain, this becomes a cross-origin iframe inside the
+// WebView, which Android renders as a blank white page after Google sign-in.
+// Overriding authDomain to "4stash.com" makes the iframe same-origin (Firebase
+// Hosting automatically serves /__/auth/ on any connected custom domain).
+// On the web PWA the page also loads from 4stash.com, so the override is safe
+// there too — this effectively makes 4stash.com the canonical auth domain.
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  authDomain: "4stash.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
@@ -186,7 +200,6 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
   );
   console.error("Required env variables:");
   console.error("  - VITE_FIREBASE_API_KEY");
-  console.error("  - VITE_FIREBASE_AUTH_DOMAIN");
   console.error("  - VITE_FIREBASE_PROJECT_ID");
   console.error("  - VITE_FIREBASE_STORAGE_BUCKET");
   console.error("  - VITE_FIREBASE_MESSAGING_SENDER_ID");
@@ -241,72 +254,22 @@ export class FirebaseStorageService implements StorageService {
     userId: string,
     style: string = "lorelei",
   ): string {
-    return `https://api.dicebear.com/7.x/${style}/svg?seed=${userId}`;
+    return `https://api.dicebear.com/7.x/${style}/png?seed=${userId}&size=64`;
   }
 
   // Authentication Methods
-  async signInWithGoogle(): Promise<User> {
-    console.log("🔐 Starting Google sign-in...");
 
-    try {
-      const result = await signInWithPopup(this.auth, this.googleProvider);
-      console.log("✅ Google popup authentication successful");
-
-      const firebaseUser = result.user;
-      console.log("👤 Firebase user:", firebaseUser.email);
-
-      // Get user preferences (avatar style)
-      const prefs = await this.getUserPreferences(firebaseUser.uid);
-
-      // If user has chosen a DiceBear style, use that; otherwise use social photo or default
-      const photoURL = prefs.avatarStyle
-        ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
-        : firebaseUser.photoURL ||
-          this.generateDiceBearUrl(firebaseUser.uid, "lorelei");
-
-      const user: User = {
-        id: firebaseUser.uid,
-        email: firebaseUser.email!,
-        displayName: firebaseUser.displayName || undefined,
-        photoURL,
-        avatarStyle: prefs.avatarStyle,
-        settings: prefs.settings,
-        createdAt: new Date(firebaseUser.metadata.creationTime!),
-        provider: "google",
-      };
-
-      // Create default lists for new users
-      console.log("📋 Checking for existing lists...");
-      const listsSnapshot = await getDocs(
-        query(collection(this.db, "lists"), where("userId", "==", user.id)),
-      );
-
-      if (listsSnapshot.empty) {
-        console.log("📝 Creating default lists...");
-        await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
-        console.log("✅ Created Quick Bin list");
-        await this.createList(user.id, { name: "Favorites", icon: "⭐" });
-        console.log("✅ Created Favorites list");
-      } else {
-        console.log(`✅ User already has ${listsSnapshot.size} lists`);
-      }
-
-      console.log("✅ Sign-in complete, returning user");
-      return user;
-    } catch (error) {
-      console.error("❌ Error during Google sign-in:", error);
-      throw error;
-    }
-  }
-
-  async signInWithTwitter(): Promise<User> {
-    const result = await signInWithPopup(this.auth, this.twitterProvider);
+  /**
+   * Shared helper: given a Firebase UserCredential (from popup or native SDK),
+   * build the app User object, create default lists for new users, and return.
+   */
+  private async buildUserFromCredential(
+    result: UserCredential,
+    provider: "google" | "twitter",
+  ): Promise<User> {
     const firebaseUser = result.user;
-
-    // Get user preferences (avatar style)
     const prefs = await this.getUserPreferences(firebaseUser.uid);
 
-    // If user has chosen a DiceBear style, use that; otherwise use social photo or default
     const photoURL = prefs.avatarStyle
       ? this.generateDiceBearUrl(firebaseUser.uid, prefs.avatarStyle)
       : firebaseUser.photoURL ||
@@ -314,26 +277,59 @@ export class FirebaseStorageService implements StorageService {
 
     const user: User = {
       id: firebaseUser.uid,
-      email: firebaseUser.email || `${firebaseUser.uid}@twitter.placeholder`,
+      email:
+        firebaseUser.email ||
+        (provider === "twitter"
+          ? `${firebaseUser.uid}@twitter.placeholder`
+          : firebaseUser.email!),
       displayName: firebaseUser.displayName || undefined,
       photoURL,
-      settings: prefs.settings,
       avatarStyle: prefs.avatarStyle,
+      settings: prefs.settings,
       createdAt: new Date(firebaseUser.metadata.creationTime!),
-      provider: "twitter",
+      provider,
     };
 
     // Create default lists for new users
     const listsSnapshot = await getDocs(
       query(collection(this.db, "lists"), where("userId", "==", user.id)),
     );
-
     if (listsSnapshot.empty) {
       await this.createList(user.id, { name: "Quick Bin", icon: "📥" });
       await this.createList(user.id, { name: "Favorites", icon: "⭐" });
     }
 
     return user;
+  }
+
+  async signInWithGoogle(): Promise<User> {
+    console.log("🔐 Starting Google sign-in...");
+    try {
+      // On Android/iOS use the native Google Sign-In SDK to avoid WebView
+      // popup limitations.  On web keep the standard popup flow.
+      const result = Capacitor.isNativePlatform()
+        ? await nativeSignInWithGoogle()
+        : await signInWithPopup(this.auth, this.googleProvider);
+
+      console.log("✅ Google authentication successful");
+      return this.buildUserFromCredential(result, "google");
+    } catch (error) {
+      console.error("❌ Error during Google sign-in:", error);
+      throw error;
+    }
+  }
+
+  async signInWithTwitter(): Promise<User> {
+    try {
+      const result = Capacitor.isNativePlatform()
+        ? await nativeSignInWithTwitter()
+        : await signInWithPopup(this.auth, this.twitterProvider);
+
+      return this.buildUserFromCredential(result, "twitter");
+    } catch (error) {
+      console.error("❌ Error during Twitter sign-in:", error);
+      throw error;
+    }
   }
 
   async signInWithEmail(email: string, password: string): Promise<User> {
@@ -699,7 +695,7 @@ export class FirebaseStorageService implements StorageService {
 
     try {
       // Build listData, only including defined fields (Firestore doesn't accept undefined)
-      const listData: any = {
+      const listData: Record<string, unknown> = {
         name: data.name,
         userId,
         itemCount: 0,
@@ -735,7 +731,7 @@ export class FirebaseStorageService implements StorageService {
       console.error("❌ Error creating list:", error);
       if (error instanceof Error) {
         console.error("Error message:", error.message);
-        console.error("Error code:", (error as any).code);
+        console.error("Error code:", (error as unknown as { code?: string }).code);
       }
       throw error;
     }
@@ -888,7 +884,7 @@ export class FirebaseStorageService implements StorageService {
     }
 
     // Build itemData, only including defined fields (Firestore doesn't accept undefined)
-    const itemData: any = {
+    const itemData: Record<string, unknown> = {
       type: detectedInfo.type,
       title: data.title,
       listIds: data.listIds,

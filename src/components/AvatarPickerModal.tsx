@@ -41,7 +41,7 @@ const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({ onClose }) => {
   };
 
   const generatePreviewUrl = (style: string) => {
-    return `https://api.dicebear.com/7.x/${style}/svg?seed=${user?.id || "preview"}`;
+    return `https://api.dicebear.com/7.x/${style}/png?seed=${user?.id || "preview"}&size=64`;
   };
 
   return (

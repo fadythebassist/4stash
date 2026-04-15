@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./SocialCard.css";
 
 const TWITTER_WIDGETS_SRC = "https://platform.twitter.com/widgets.js";
@@ -144,7 +145,7 @@ const TweetEmbed: React.FC<TweetEmbedProps> = ({ url, thumbnail, title, descript
 
   const handleClick = useCallback(() => {
     if (normalizedUrl) {
-      window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+      openPlatformUrl(normalizedUrl);
     }
   }, [normalizedUrl]);
 
@@ -212,7 +213,7 @@ const TweetEmbed: React.FC<TweetEmbedProps> = ({ url, thumbnail, title, descript
         target="_blank"
         rel="noopener noreferrer"
         className="social-card-button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
       >
         Open in X
       </a>

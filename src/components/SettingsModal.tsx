@@ -62,8 +62,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
       // Listen for OAuth callback — use once:true so the listener auto-removes itself
       const handleMessage = async (event: MessageEvent) => {
-        // Ignore messages from other origins
-        if (event.origin !== window.location.origin) return;
+        // Ignore messages from other origins.
+        // Accept both the current origin and the canonical production domain
+        // so this works regardless of whether the Capacitor server.url is set.
+        const allowedOrigins = [window.location.origin, 'https://4stash.com'];
+        if (!allowedOrigins.includes(event.origin)) return;
 
         if (event.data?.type === 'threads-oauth-success') {
           window.removeEventListener('message', handleMessage);

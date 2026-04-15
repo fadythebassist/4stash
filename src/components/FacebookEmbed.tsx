@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./FacebookEmbed.css";
 
 // Decode HTML entities for proper display
@@ -224,6 +225,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
 
   // For videos/reels: Always try iframe first to enable playback, fallback to thumbnail on error
   // For posts/photos: If we have a thumbnail, show it immediately (skip iframe loading state)
+  // Now that server.url = "https://4stash.com" the WebView origin matches what Facebook allows.
   const shouldPreferThumbnailCard = !!thumbnail && !isVideo;
 
   // Build the iframe src for public posts/videos that the plugin can render
@@ -368,7 +370,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           className="fb-card-button"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
         >
           Open in Facebook
         </a>
@@ -382,7 +384,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
       className="fb-card fb-card-clickable"
       onClick={(e) => {
         e.stopPropagation();
-        window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+        openPlatformUrl(normalizedUrl);
       }}
       style={{ cursor: "pointer" }}
     >
@@ -419,7 +421,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
         target="_blank"
         rel="noopener noreferrer"
         className="fb-card-button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
       >
         Open in Facebook
       </a>

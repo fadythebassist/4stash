@@ -15,17 +15,39 @@ const BLOCKED_DOMAINS = [
   // Add more as needed
 ];
 
-// Keywords in URLs/titles that might indicate NSFW content
+// Keywords in URLs/titles that might indicate NSFW content.
+// These are matched with word boundaries to avoid false positives
+// (e.g. "sex" must not match "actress", "adult" must not match "adults").
 const NSFW_KEYWORDS = [
   "porn",
   "xxx",
   "nsfw",
-  "adult",
-  "sex",
+  " sex ",
   "nude",
   "naked",
   // Add more patterns
 ];
+
+// Regex-based word-boundary check for NSFW keywords (avoids substring false positives)
+function containsNsfwKeyword(text: string): string | null {
+  const lower = text.toLowerCase();
+  for (const keyword of NSFW_KEYWORDS) {
+    // Keywords with leading/trailing spaces are already bounded; use includes()
+    if (keyword.startsWith(" ") || keyword.endsWith(" ")) {
+      if (lower.includes(keyword)) return keyword.trim();
+      continue;
+    }
+    // Multi-word phrases: simple includes is sufficient (already specific)
+    if (keyword.includes(" ")) {
+      if (lower.includes(keyword)) return keyword;
+      continue;
+    }
+    // Single-word keywords: require word boundaries to avoid false positives
+    const re = new RegExp(`(^|\\W)${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|\\W)`, "i");
+    if (re.test(lower)) return keyword;
+  }
+  return null;
+}
 
 export interface ModerationResult {
   allowed: boolean;
@@ -53,13 +75,12 @@ export function checkUrl(url: string): ModerationResult {
 
     // Check URL path for NSFW keywords
     const urlLower = url.toLowerCase();
-    for (const keyword of NSFW_KEYWORDS) {
-      if (urlLower.includes(keyword)) {
-        return {
-          allowed: false,
-          reason: "URL contains inappropriate content indicators",
-        };
-      }
+    const urlMatch = containsNsfwKeyword(urlLower);
+    if (urlMatch) {
+      return {
+        allowed: false,
+        reason: "URL contains inappropriate content indicators",
+      };
     }
 
     // Check for Reddit NSFW indicators in URL
@@ -92,15 +113,12 @@ export function checkUrl(url: string): ModerationResult {
 export function checkText(text: string | undefined): ModerationResult {
   if (!text) return { allowed: true };
 
-  const textLower = text.toLowerCase();
-
-  for (const keyword of NSFW_KEYWORDS) {
-    if (textLower.includes(keyword)) {
-      return {
-        allowed: false,
-        reason: "Content contains inappropriate language",
-      };
-    }
+  const match = containsNsfwKeyword(text);
+  if (match) {
+    return {
+      allowed: false,
+      reason: "Content contains inappropriate language",
+    };
   }
 
   return { allowed: true };

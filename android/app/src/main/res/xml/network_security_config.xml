@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security configuration for 4Stash (Capacitor Android).
+
+  The app loads from capacitor://localhost (a custom scheme). Android WebView
+  applies strict cross-origin subresource rules from that origin by default.
+  This config explicitly trusts the system certificate store for all HTTPS
+  connections, which is the standard baseline needed for external API calls
+  (DiceBear avatars, Firebase, etc.) to succeed inside the WebView.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust the system CA store (covers all public HTTPS certificates) -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

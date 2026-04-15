@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./SocialCard.css";
 
 function normalizeUrl(urlStr: string): string | null {
@@ -36,7 +37,10 @@ function buildRedditEmbedUrl(normalizedUrl: string): string | null {
     const embedUrl = new URL(`https://embed.reddit.com${u.pathname}`);
     embedUrl.searchParams.set("ref_source", "embed");
     embedUrl.searchParams.set("ref", "share");
-    embedUrl.searchParams.set("embed_host_url", window.location.origin);
+    // Use the canonical production domain as embed host so Reddit accepts the
+    // iframe regardless of whether the app is running as a PWA or via Capacitor.
+    const embedHost = window.location.origin.startsWith('https://') ? window.location.origin : 'https://4stash.com';
+    embedUrl.searchParams.set("embed_host_url", embedHost);
     embedUrl.searchParams.set("showmedia", "true");
     embedUrl.searchParams.set("showmore", "false");
     embedUrl.searchParams.set("theme", document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
@@ -77,7 +81,7 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url, thumbnail, title, descri
 
   const handleClick = useCallback(() => {
     if (normalizedUrl) {
-      window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+      openPlatformUrl(normalizedUrl);
     }
   }, [normalizedUrl]);
 
@@ -154,7 +158,7 @@ const RedditEmbed: React.FC<RedditEmbedProps> = ({ url, thumbnail, title, descri
         target="_blank"
         rel="noopener noreferrer"
         className="social-card-button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(normalizedUrl); }}
       >
         Open in Reddit
       </a>

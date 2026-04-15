@@ -46,12 +46,17 @@ const Dashboard: React.FC = () => {
     deleteList,
     deleteItem,
     archiveItem,
+    refreshData,
   } = useData();
   const navigate = useNavigate();
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
+  const pullStartYRef = useRef<number | null>(null);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
 
   const [showAddItem, setShowAddItem] = useState(false);
+  const [shareInitialUrl, setShareInitialUrl] = useState<string | undefined>(undefined);
   const [showAddList, setShowAddList] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -60,6 +65,7 @@ const Dashboard: React.FC = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   // Track item count to detect when a new post is added
   const prevItemCountRef = useRef(items.length);
@@ -79,6 +85,33 @@ const Dashboard: React.FC = () => {
     prevItemCountRef.current = items.length;
     prevFirstItemIdRef.current = currentFirstItemId;
   }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally tracks length only; items[0] read inside is stable
+
+  // Listen for shares from the native Android layer (warm-start path).
+  // MainActivity fires a 'capacitor-share' CustomEvent when the app is already
+  // running and the user shares a URL into it via the Android share sheet.
+  // Also checks window.__pendingCapacitorShare on mount to catch cold-start
+  // shares that fired before this listener was registered.
+  useEffect(() => {
+    const handleCapacitorShare = (e: Event) => {
+      const detail = (e as CustomEvent<{ url: string }>).detail;
+      if (detail?.url) {
+        setShareInitialUrl(detail.url);
+        setShowAddItem(true);
+      }
+    };
+    window.addEventListener("capacitor-share", handleCapacitorShare);
+
+    // Check for a pending share that was set before this listener mounted
+    // (cold-start: Java sets window.__pendingCapacitorShare before/alongside the event).
+    const win = window as unknown as { __pendingCapacitorShare?: { url: string } };
+    if (win.__pendingCapacitorShare?.url) {
+      setShareInitialUrl(win.__pendingCapacitorShare.url);
+      setShowAddItem(true);
+      win.__pendingCapacitorShare = undefined;
+    }
+
+    return () => window.removeEventListener("capacitor-share", handleCapacitorShare);
+  }, []);
 
   // Collect all unique tags from items for the TopBar filter
   const availableTags = useMemo(() => {
@@ -162,6 +195,11 @@ const Dashboard: React.FC = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [user?.settings?.theme]);
 
+  // Reset avatar error state when photoURL changes (e.g. after avatar picker)
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.photoURL]);
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/login");
@@ -189,6 +227,49 @@ const Dashboard: React.FC = () => {
   const handleArchiveItem = async (itemId: string) => {
     await archiveItem(itemId);
   };
+
+  const PULL_THRESHOLD = 72; // px of drag needed to trigger refresh
+  const PULL_MAX = 110;      // max visual pull distance (elastic damping beyond threshold)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0) {
+      pullStartYRef.current = e.touches[0]?.clientY ?? null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (pullStartYRef.current === null || pullRefreshing) return;
+    const dy = (e.touches[0]?.clientY ?? 0) - pullStartYRef.current;
+    if (dy <= 0) {
+      setPullDistance(0);
+      return;
+    }
+    // Apply rubber-band damping: full resistance before threshold, extra damping beyond
+    const damped = dy < PULL_THRESHOLD
+      ? dy * 0.55
+      : PULL_THRESHOLD * 0.55 + (dy - PULL_THRESHOLD) * 0.2;
+    setPullDistance(Math.min(damped, PULL_MAX));
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (pullStartYRef.current === null) return;
+    const dy = (e.changedTouches[0]?.clientY ?? 0) - pullStartYRef.current;
+    pullStartYRef.current = null;
+    setPullDistance(0);
+    if (dy >= PULL_THRESHOLD && !pullRefreshing) {
+      navigator.vibrate?.(50);
+      setPullRefreshing(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!pullRefreshing) return;
+    let cancelled = false;
+    refreshData().finally(() => {
+      if (!cancelled) setPullRefreshing(false);
+    });
+    return () => { cancelled = true; };
+  }, [pullRefreshing, refreshData]);
 
   const isActiveFilter = selectedTags.length > 0 || searchQuery.trim() !== "" || selectedSourceFilter !== null;
 
@@ -252,7 +333,35 @@ const Dashboard: React.FC = () => {
   }, [hasMoreItems, isActiveFilter, items.length, loadMoreItems]);
 
   return (
-    <div className="dashboard">
+    <div
+      className="dashboard"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 4 || pullRefreshing) && (
+        <div
+          className={`pull-refresh-indicator${pullRefreshing ? " pull-refresh-indicator--refreshing" : ""}`}
+          style={!pullRefreshing ? { transform: `translateX(-50%) translateY(${pullDistance - 40}px)` } : undefined}
+        >
+          {pullRefreshing ? (
+            <div className="pull-refresh-spinner" />
+          ) : (
+            <svg
+              className={`pull-refresh-arrow${pullDistance >= PULL_THRESHOLD * 0.55 ? " pull-refresh-arrow--ready" : ""}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          )}
+        </div>
+      )}
       {/* Header */}
       <header className="dashboard-header glass">
         <div className="header-content">
@@ -264,11 +373,12 @@ const Dashboard: React.FC = () => {
                 onClick={() => setShowAvatarPicker(true)}
                 title="Change avatar"
               >
-                {user?.photoURL ? (
+                {user?.photoURL && !avatarError ? (
                   <img
                     src={user.photoURL}
                     alt={user.displayName || "User"}
                     className="user-avatar"
+                    onError={() => setAvatarError(true)}
                   />
                 ) : (
                   <div className="user-avatar-placeholder">
@@ -432,8 +542,9 @@ const Dashboard: React.FC = () => {
       <Suspense fallback={null}>
       {showAddItem && (
         <AddItemModal
-          onClose={() => setShowAddItem(false)}
+          onClose={() => { setShowAddItem(false); setShareInitialUrl(undefined); }}
           onAddList={() => setShowAddList(true)}
+          initialUrl={shareInitialUrl}
         />
       )}
 

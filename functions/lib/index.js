@@ -945,10 +945,10 @@ function buildInstagramMediaFallbackUrl(u) {
 // Main handler (shared between /api/unfurl and /api/proxy-image)
 // ---------------------------------------------------------------------------
 async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     // CORS — allow 4stash.com and localhost dev
     const origin = req.headers["origin"];
-    const allowedOrigins = ["https://4stash.com", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173"];
+    const allowedOrigins = ["https://4stash.com", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173", "capacitor://localhost"];
     if (origin && allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
@@ -1023,7 +1023,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         try {
             targetUrl = new url_1.URL(target);
         }
-        catch (_f) {
+        catch (_g) {
             res.status(400).json({ error: "Invalid url param" });
             return;
         }
@@ -1130,7 +1130,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     try {
         targetUrl = new url_1.URL(target);
     }
-    catch (_g) {
+    catch (_h) {
         res.status(400).json({ error: "Invalid url param" });
         return;
     }
@@ -1149,7 +1149,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         try {
             targetUrl = new url_1.URL(cleanFacebookUrl(targetUrl.toString()));
         }
-        catch (_h) {
+        catch (_j) {
             // keep original targetUrl
         }
     }
@@ -1170,7 +1170,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 try {
                     targetUrl = new url_1.URL(resolved);
                 }
-                catch ( /* keep original */_j) { /* keep original */ }
+                catch ( /* keep original */_k) { /* keep original */ }
             }
         }
     }
@@ -1188,7 +1188,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 primary = await fetchTextWithTimeout(cleanedFacebookUrl, facebookPreviewHeaders, 10000);
                 targetUrl = new url_1.URL(cleanedFacebookUrl);
             }
-            catch (_k) {
+            catch (_l) {
                 // keep original failed response
             }
         }
@@ -1287,24 +1287,33 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         }
     }
     const isFacebookHost = targetUrl.hostname.includes("facebook.com") || targetUrl.hostname.includes("fb.watch");
-    // Facebook often omits `og:image` on the main desktop HTML for reels/videos.
-    // `mbasic.facebook.com` tends to expose a usable poster image more reliably,
-    // so try it for any Facebook URL when the image is still missing.
-    if (isFacebookHost && !meta.image) {
-        try {
-            const mbasicUrl = new url_1.URL(targetUrl.toString());
-            mbasicUrl.hostname = "mbasic.facebook.com";
-            const mbasicRes = await fetchTextWithTimeout(mbasicUrl.toString(), facebookPreviewHeaders, 8000);
-            if (mbasicRes.ok) {
+    // For Facebook we run all fallback enrichment attempts in parallel so the
+    // total wait is bounded by the slowest single attempt rather than the sum of
+    // all attempts.  Each helper resolves to a partial meta object; we merge them
+    // in priority order afterwards.
+    if (isFacebookHost) {
+        // Clear generic Facebook error titles so fallback attempts can replace them
+        if (isGenericFacebookTitle(meta.title))
+            meta.title = undefined;
+        // ── Helper A: mbasic.facebook.com scrape ────────────────────────────────
+        const mbasicPromise = (async () => {
+            var _a;
+            if (meta.image)
+                return {}; // already have image — skip
+            try {
+                const mbasicUrl = new url_1.URL(targetUrl.toString());
+                mbasicUrl.hostname = "mbasic.facebook.com";
+                const mbasicRes = await fetchTextWithTimeout(mbasicUrl.toString(), facebookPreviewHeaders, 8000);
+                if (!mbasicRes.ok)
+                    return {};
                 const mbasicMeta = extractMetadata(mbasicRes.text);
-                if (mbasicMeta.image)
-                    meta.image = mbasicMeta.image;
-                if (!meta.title && mbasicMeta.title && !isGenericFacebookTitle(mbasicMeta.title))
-                    meta.title = mbasicMeta.title;
-                if (!meta.description && mbasicMeta.description)
-                    meta.description = mbasicMeta.description;
-                if (!meta.image) {
-                    const imgMatches = (_e = mbasicRes.text.match(/<img\s[^>]*src=["']([^"']+)["'][^>]*>/gi)) !== null && _e !== void 0 ? _e : [];
+                const result = {};
+                if (mbasicMeta.image) {
+                    result.image = mbasicMeta.image;
+                }
+                else {
+                    // Scan raw <img> tags as a last resort, skipping CDN/emoji/reaction assets
+                    const imgMatches = (_a = mbasicRes.text.match(/<img\s[^>]*src=["']([^"']+)["'][^>]*>/gi)) !== null && _a !== void 0 ? _a : [];
                     for (const imgTag of imgMatches) {
                         const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
                         if (!(srcMatch === null || srcMatch === void 0 ? void 0 : srcMatch[1]))
@@ -1313,151 +1322,179 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                         if (src.includes("static.xx.fbcdn") ||
                             src.includes("emoji") ||
                             src.includes("reaction") ||
-                            src.includes("rsrc.php")) {
+                            src.includes("rsrc.php"))
                             continue;
-                        }
                         if (src.startsWith("https://")) {
-                            meta.image = src;
+                            result.image = src;
                             break;
                         }
                     }
                 }
+                if (mbasicMeta.title && !isGenericFacebookTitle(mbasicMeta.title))
+                    result.title = mbasicMeta.title;
+                if (mbasicMeta.description)
+                    result.description = mbasicMeta.description;
+                return result;
             }
-        }
-        catch (_l) {
-            /* mbasic failed */
-        }
-    }
-    // Clear generic Facebook error titles so fallback attempts can replace them
-    if (isFacebookHost && isGenericFacebookTitle(meta.title)) {
-        meta.title = undefined;
-    }
-    // Facebook Graph API + oEmbed + Jina fallback
-    if (isFacebookHost && (!meta.title || !meta.description || !meta.image)) {
-        // Secrets set via: firebase functions:secrets:set FB_APP_ID and FB_APP_SECRET
+            catch (_b) {
+                return {};
+            }
+        })();
+        // ── Helper B: Graph API /{videoId}?fields=picture ───────────────────────
+        const fbVideoId = extractFacebookVideoId(targetUrl.toString());
+        const isVideoUrl = isFacebookVideoUrl(targetUrl.toString());
         const appId = fbAppId;
         const appSecret = fbAppSecret;
-        if (appId && appSecret) {
-            const accessToken = `${appId}|${appSecret}`;
-            // --- 1) Graph API /{video-id}?fields=picture for reel/video thumbnails ---
-            const fbVideoId = extractFacebookVideoId(targetUrl.toString());
-            if (fbVideoId && !meta.image) {
-                attempts["facebookGraphVideo"] = { attempted: true, ok: false, videoId: fbVideoId };
-                try {
-                    const graphUrl = `https://graph.facebook.com/v19.0/${fbVideoId}?fields=picture,description,from{name}&access_token=${encodeURIComponent(accessToken)}`;
-                    const graphRes = await nodeFetch(graphUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
-                    if (graphRes.ok) {
-                        const graphData = tryParseJson(await graphRes.text());
-                        if (graphData) {
-                            attempts["facebookGraphVideo"]["ok"] = true;
-                            if (graphData["picture"] && typeof graphData["picture"] === "string") {
-                                meta.image = graphData["picture"];
-                            }
-                            if (!meta.description && graphData["description"] && typeof graphData["description"] === "string") {
-                                meta.description = graphData["description"];
-                            }
-                            const from = graphData["from"];
-                            if (!meta.title && (from === null || from === void 0 ? void 0 : from["name"]) && typeof from["name"] === "string") {
-                                meta.title = from["name"];
-                            }
-                        }
+        const accessToken = appId && appSecret ? `${appId}|${appSecret}` : "";
+        const graphPromise = (async () => {
+            if (!fbVideoId || !accessToken)
+                return {};
+            attempts["facebookGraphVideo"] = { attempted: true, ok: false, videoId: fbVideoId };
+            try {
+                const graphUrl = `https://graph.facebook.com/v19.0/${fbVideoId}?fields=picture,description,from{name}&access_token=${encodeURIComponent(accessToken)}`;
+                const graphRes = await nodeFetch(graphUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
+                if (!graphRes.ok)
+                    return {};
+                const graphData = tryParseJson(await graphRes.text());
+                if (!graphData)
+                    return {};
+                attempts["facebookGraphVideo"]["ok"] = true;
+                const result = {};
+                if (graphData["picture"] && typeof graphData["picture"] === "string")
+                    result.image = graphData["picture"];
+                if (graphData["description"] && typeof graphData["description"] === "string")
+                    result.description = graphData["description"];
+                const from = graphData["from"];
+                if ((from === null || from === void 0 ? void 0 : from["name"]) && typeof from["name"] === "string")
+                    result.title = from["name"];
+                return result;
+            }
+            catch (_a) {
+                return {};
+            }
+        })();
+        // ── Helper C: oEmbed ────────────────────────────────────────────────────
+        const oembedEndpoints = isVideoUrl ? ["oembed_video", "oembed_post"] : ["oembed_post"];
+        const oembedPromises = oembedEndpoints.map((endpoint) => (async () => {
+            if (!accessToken)
+                return {};
+            const attemptKey = endpoint === "oembed_video" ? "facebookOembedVideo" : "facebookOembed";
+            attempts[attemptKey] = { attempted: true, ok: false };
+            try {
+                const oembedUrl = `https://graph.facebook.com/v19.0/${endpoint}?url=${encodeURIComponent(targetUrl.toString())}&access_token=${encodeURIComponent(accessToken)}&fields=author_name,author_url,provider_name,provider_url,type,width,height,html,thumbnail_url,thumbnail_width,thumbnail_height`;
+                const oembedRes = await nodeFetch(oembedUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
+                if (!oembedRes.ok)
+                    return {};
+                const oembedData = tryParseJson(await oembedRes.text());
+                if (!oembedData)
+                    return {};
+                attempts[attemptKey]["ok"] = true;
+                const result = {};
+                if (oembedData["thumbnail_url"] && typeof oembedData["thumbnail_url"] === "string")
+                    result.image = oembedData["thumbnail_url"];
+                if (oembedData["author_name"])
+                    result.title = decodeHtmlEntities(oembedData["author_name"]);
+                else if (oembedData["html"]) {
+                    const textMatch = oembedData["html"].match(/>([^<]+)</);
+                    if (textMatch === null || textMatch === void 0 ? void 0 : textMatch[1])
+                        result.title = decodeHtmlEntities(textMatch[1].trim());
+                }
+                if (oembedData["html"]) {
+                    const descText = oembedData["html"]
+                        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+                        .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                    if (descText)
+                        result.description = decodeHtmlEntities(descText);
+                }
+                return result;
+            }
+            catch (_a) {
+                return {};
+            }
+        })());
+        // ── Helper D: plugins/video.php embed page ───────────────────────────────
+        const embedPagePromise = (async () => {
+            if (!isVideoUrl)
+                return {};
+            attempts["facebookEmbedPage"] = { attempted: true, ok: false };
+            try {
+                const embedPageUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(targetUrl.toString())}`;
+                const embedRes = await fetchTextWithTimeout(embedPageUrl, facebookPreviewHeaders, 8000);
+                if (!embedRes.ok)
+                    return {};
+                attempts["facebookEmbedPage"]["ok"] = true;
+                const embedMeta = extractMetadata(embedRes.text);
+                const result = {};
+                if (embedMeta.image) {
+                    result.image = embedMeta.image;
+                }
+                else {
+                    const posterMatch = embedRes.text.match(/poster=["']([^"']+)["']/i);
+                    if (posterMatch === null || posterMatch === void 0 ? void 0 : posterMatch[1])
+                        result.image = decodeHtmlEntities(posterMatch[1]);
+                    else {
+                        const bgImgMatch = embedRes.text.match(/background-image:\s*url\(['"]?([^'")\s]+)['"]?\)/i);
+                        if (bgImgMatch === null || bgImgMatch === void 0 ? void 0 : bgImgMatch[1])
+                            result.image = decodeHtmlEntities(bgImgMatch[1]);
                     }
                 }
-                catch ( /* Graph API failed */_m) { /* Graph API failed */ }
+                return result;
             }
-            // --- 2) oEmbed (try oembed_video for video/reel URLs, then oembed_post) ---
-            const isVideoUrl = isFacebookVideoUrl(targetUrl.toString());
-            const oembedEndpoints = isVideoUrl
-                ? ["oembed_video", "oembed_post"]
-                : ["oembed_post"];
-            for (const endpoint of oembedEndpoints) {
-                if (meta.title && meta.description && meta.image)
-                    break;
-                const attemptKey = endpoint === "oembed_video" ? "facebookOembedVideo" : "facebookOembed";
-                attempts[attemptKey] = { attempted: true, ok: false };
-                try {
-                    const oembedUrl = `https://graph.facebook.com/v19.0/${endpoint}?url=${encodeURIComponent(targetUrl.toString())}&access_token=${encodeURIComponent(accessToken)}&fields=author_name,author_url,provider_name,provider_url,type,width,height,html,thumbnail_url,thumbnail_width,thumbnail_height`;
-                    const oembedRes = await nodeFetch(oembedUrl, { headers: { accept: "application/json" }, timeoutMs: 8000 });
-                    if (oembedRes.ok) {
-                        const oembedData = tryParseJson(await oembedRes.text());
-                        if (oembedData) {
-                            attempts[attemptKey]["ok"] = true;
-                            if (!meta.image && oembedData["thumbnail_url"] && typeof oembedData["thumbnail_url"] === "string") {
-                                meta.image = oembedData["thumbnail_url"];
-                            }
-                            if (!meta.title && oembedData["author_name"])
-                                meta.title = decodeHtmlEntities(oembedData["author_name"]);
-                            else if (!meta.title && oembedData["html"]) {
-                                const textMatch = oembedData["html"].match(/>([^<]+)</);
-                                if (textMatch === null || textMatch === void 0 ? void 0 : textMatch[1])
-                                    meta.title = decodeHtmlEntities(textMatch[1].trim());
-                            }
-                            if (!meta.description && oembedData["html"]) {
-                                const descText = oembedData["html"]
-                                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-                                    .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-                                if (descText)
-                                    meta.description = decodeHtmlEntities(descText);
-                            }
-                        }
-                    }
-                }
-                catch ( /* ignore oEmbed errors */_o) { /* ignore oEmbed errors */ }
+            catch (_a) {
+                return {};
             }
-            // --- 3) Video embed page — fetch the plugins/video.php page for og:image ---
-            if (!meta.image && isVideoUrl) {
-                attempts["facebookEmbedPage"] = { attempted: true, ok: false };
-                try {
-                    const embedPageUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(targetUrl.toString())}`;
-                    const embedRes = await fetchTextWithTimeout(embedPageUrl, facebookPreviewHeaders, 8000);
-                    if (embedRes.ok) {
-                        attempts["facebookEmbedPage"]["ok"] = true;
-                        const embedMeta = extractMetadata(embedRes.text);
-                        if (embedMeta.image)
-                            meta.image = embedMeta.image;
-                        // Also try to find poster/thumbnail in the HTML
-                        if (!meta.image) {
-                            // Look for background-image or poster attributes in the embed HTML
-                            const posterMatch = embedRes.text.match(/poster=["']([^"']+)["']/i);
-                            if (posterMatch === null || posterMatch === void 0 ? void 0 : posterMatch[1])
-                                meta.image = decodeHtmlEntities(posterMatch[1]);
-                        }
-                        if (!meta.image) {
-                            const bgImgMatch = embedRes.text.match(/background-image:\s*url\(['"]?([^'")\s]+)['"]?\)/i);
-                            if (bgImgMatch === null || bgImgMatch === void 0 ? void 0 : bgImgMatch[1])
-                                meta.image = decodeHtmlEntities(bgImgMatch[1]);
-                        }
-                    }
-                }
-                catch ( /* embed page failed */_p) { /* embed page failed */ }
-            }
-        }
-        if (!meta.title || !meta.description || !meta.image) {
+        })();
+        // ── Helper E: Jina AI proxy ──────────────────────────────────────────────
+        const jinaPromise = (async () => {
             attempts["facebookJina"] = { attempted: true, ok: false };
             try {
                 const jinaUrl = `https://r.jina.ai/${targetUrl.toString()}`;
                 const proxied = await fetchTextWithTimeout(jinaUrl, headers, 10000);
                 attempts["facebookJina"]["ok"] = proxied.ok;
                 const fbMeta = extractMetadata(proxied.text);
-                if (!meta.title && fbMeta.title && !isGenericFacebookTitle(fbMeta.title))
-                    meta.title = fbMeta.title;
-                if (!meta.description && fbMeta.description)
-                    meta.description = fbMeta.description;
-                if (!meta.image && fbMeta.image)
-                    meta.image = fbMeta.image;
+                const result = {};
+                if (fbMeta.title && !isGenericFacebookTitle(fbMeta.title))
+                    result.title = fbMeta.title;
+                if (fbMeta.description)
+                    result.description = fbMeta.description;
+                if (fbMeta.image)
+                    result.image = fbMeta.image;
+                return result;
             }
-            catch ( /* ignore */_q) { /* ignore */ }
+            catch (_a) {
+                return {};
+            }
+        })();
+        // ── Run all helpers in parallel, then merge ──────────────────────────────
+        // Priority: primary HTML fetch (already in meta) > mbasic > Graph API > oEmbed (video first) > embed page > Jina
+        const [mbasicResult, graphResult, ...oembedResults] = await Promise.all([
+            mbasicPromise,
+            graphPromise,
+            ...oembedPromises,
+            embedPagePromise,
+            jinaPromise,
+        ]);
+        const embedPageResult = (_e = oembedResults[oembedResults.length - 2]) !== null && _e !== void 0 ? _e : {};
+        const jinaResult = (_f = oembedResults[oembedResults.length - 1]) !== null && _f !== void 0 ? _f : {};
+        const oembedMerged = oembedResults.slice(0, oembedResults.length - 2);
+        for (const result of [mbasicResult, graphResult, ...oembedMerged, embedPageResult, jinaResult]) {
+            if (!meta.image && result.image)
+                meta.image = result.image;
+            if (!meta.title && result.title)
+                meta.title = result.title;
+            if (!meta.description && result.description)
+                meta.description = result.description;
         }
-    }
-    // Replace generic Facebook error titles with meaningful fallback
-    if (isFacebookHost && isGenericFacebookTitle(meta.title)) {
-        meta.title = getFacebookFallbackTitle(targetUrl.toString());
-    }
-    // Early return if Facebook still has nothing
-    if (isFacebookHost && !meta.title && !meta.description && !meta.image) {
-        const fallbackTitle = getFacebookFallbackTitle(targetUrl.toString());
-        res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: targetUrl.toString(), contentType, status: primary.status, title: fallbackTitle, description: undefined, image: undefined, shareResolvedUrl }, (debug ? { debug: { attempts } } : {})));
-        return;
+        // Replace any generic Facebook error title with a meaningful fallback
+        if (isGenericFacebookTitle(meta.title)) {
+            meta.title = getFacebookFallbackTitle(targetUrl.toString());
+        }
+        // Early return if Facebook still has nothing
+        if (!meta.title && !meta.description && !meta.image) {
+            const fallbackTitle = getFacebookFallbackTitle(targetUrl.toString());
+            res.status(200).setHeader("Cache-Control", "no-store").json(Object.assign({ url: targetUrl.toString(), contentType, status: primary.status, title: fallbackTitle, description: undefined, image: undefined, shareResolvedUrl }, (debug ? { debug: { attempts } } : {})));
+            return;
+        }
     }
     // Reddit
     const isReddit = targetUrl.hostname.includes("reddit.com") || targetUrl.hostname.includes("redd.it");
@@ -1480,7 +1517,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     steps: redditResolveResult.debugAttempts,
                 };
             }
-            catch (_r) {
+            catch (_m) {
                 // keep original targetUrl
             }
         }
@@ -1538,7 +1575,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 }
             }
         }
-        catch ( /* Reddit JSON failed */_s) { /* Reddit JSON failed */ }
+        catch ( /* Reddit JSON failed */_o) { /* Reddit JSON failed */ }
         // Reddit oEmbed — works server-side and returns the real post title.
         // Try this before Jina since it's more reliable.
         if (!meta.title) {
@@ -1559,7 +1596,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     }
                 }
             }
-            catch ( /* ignore */_t) { /* ignore */ }
+            catch ( /* ignore */_p) { /* ignore */ }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["redditJina"] = { attempted: true, ok: false };
@@ -1575,7 +1612,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 if (!meta.image && redditMeta.image)
                     meta.image = redditMeta.image;
             }
-            catch ( /* ignore */_u) { /* ignore */ }
+            catch ( /* ignore */_q) { /* ignore */ }
         }
         // If title is still a generic error string (e.g. "403" from the error page HTML),
         // clear it so the client falls back to its own "Reddit Post in r/..." label.
@@ -1604,7 +1641,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     meta.image = threadsMeta.image;
             }
         }
-        catch ( /* ignore */_v) { /* ignore */ }
+        catch ( /* ignore */_r) { /* ignore */ }
     }
     const image = meta.image ? new url_1.URL(meta.image, finalUrl).toString() : undefined;
     const proxiedImage = (() => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { threadsAuthService } from "@/services/ThreadsAuthService";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./SocialCard.css";
 
 interface ThreadsEmbedProps {
@@ -155,7 +156,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   }, [threadsConnection, embedUrl, oembedData, oembedError]);
 
   const handleClick = () => {
-    window.open(embedUrl, "_blank", "noopener,noreferrer");
+    openPlatformUrl(embedUrl);
   };
 
   // Filter generic metadata
@@ -188,7 +189,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           className="social-card-button"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
         >
           Open in Threads
         </a>
@@ -258,7 +259,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           className="social-card-button"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
         >
           Open in Threads
         </a>
@@ -315,7 +316,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         target="_blank"
         rel="noopener noreferrer"
         className="social-card-button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(url); }}
       >
         Open in Threads
       </a>

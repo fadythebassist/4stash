@@ -14,6 +14,7 @@
  */
 
 import React from "react";
+import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import "./FacebookPreviewCard.css";
 
 export interface FacebookPreviewCardProps {
@@ -38,7 +39,7 @@ const FacebookPreviewCard: React.FC<FacebookPreviewCardProps> = ({
     if ("preventDefault" in e) {
       e.preventDefault();
     }
-    window.open(normalizedUrl, "_blank", "noopener,noreferrer");
+    openPlatformUrl(normalizedUrl);
   };
 
   // Determine content type from URL for better display

@@ -9,6 +9,7 @@ import {
   AppSettings,
 } from "@/types";
 import { StorageService } from "./StorageService";
+import { apiUrl } from "@/utils/apiBase";
 
 /**
  * Helper functions for content detection
@@ -160,11 +161,11 @@ export class MockStorageService implements StorageService {
     if (stored) {
       const parsed = JSON.parse(stored);
       // Convert date strings back to Date objects
-      parsed.users = parsed.users.map((u: any) => ({
+      parsed.users = parsed.users.map((u: Omit<User, 'createdAt'> & { createdAt: string }) => ({
         ...u,
         createdAt: new Date(u.createdAt),
       }));
-      parsed.lists = parsed.lists.map((l: any) => ({
+      parsed.lists = parsed.lists.map((l: Omit<List, 'createdAt' | 'updatedAt'> & { createdAt: string; updatedAt: string }) => ({
         ...l,
         createdAt: new Date(l.createdAt),
         updatedAt: new Date(l.updatedAt),
@@ -173,7 +174,7 @@ export class MockStorageService implements StorageService {
       // Track if data was enriched
       let dataEnriched = false;
 
-      parsed.items = parsed.items.map((i: any) => {
+      parsed.items = parsed.items.map((i: Omit<Item, 'createdAt' | 'updatedAt'> & { createdAt: string; updatedAt: string; listId?: string }) => {
         const item = {
           ...i,
           createdAt: new Date(i.createdAt),
@@ -252,7 +253,7 @@ export class MockStorageService implements StorageService {
       const fullUrl = this.normalizeUrl(urlStr);
       if (!fullUrl) return null;
 
-      const res = await fetch(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`);
+      const res = await fetch(apiUrl(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`));
       if (!res.ok) return null;
       const data = await res.json();
 
@@ -416,7 +417,7 @@ export class MockStorageService implements StorageService {
     const user = this.data.users.find((u) => u.id === userId);
     if (user) {
       user.avatarStyle = style;
-      user.photoURL = `https://api.dicebear.com/7.x/${style}/svg?seed=${userId}`;
+      user.photoURL = `https://api.dicebear.com/7.x/${style}/png?seed=${userId}&size=64`;
       this.saveToStorage();
     }
   }
