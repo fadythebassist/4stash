@@ -148,7 +148,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   title,
   description,
   thumbnail,
-  autoplay = true,
+  autoplay = false,
 }) => {
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
@@ -235,7 +235,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     if (isVideo) {
       // Request larger dimensions to accommodate vertical videos without cropping
       const autoplayParam = autoplay ? '1' : '0';
-      return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500&height=800&autoplay=${autoplayParam}&muted=1`;
+      return `https://www.facebook.com/plugins/video.php?href=${href}&show_text=false&width=500&height=800&autoplay=${autoplayParam}`;
     }
     return `https://www.facebook.com/plugins/post.php?href=${href}&show_text=true&width=500`;
   }, [normalizedUrl, isVideo, autoplay]);
