@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 import { useAuth } from "@/contexts/AuthContext";
 import { threadsAuthService } from "@/services/ThreadsAuthService";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
-import { apiUrl } from "@/utils/apiBase";
+import { apiUrl, isAndroidWebView } from "@/utils/apiBase";
 import "./SocialCard.css";
 
 interface ThreadsEmbedProps {
@@ -219,7 +218,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   // --- Non-connected user: native blockquote embed wrapped in branded card ---
   if (embedUrl) {
     // embed.js doesn't render in Android WebView — show a static card instead.
-    if (Capacitor.isNativePlatform()) {
+    if (isAndroidWebView()) {
       // Proxy cdninstagram.com thumbnails to avoid CORP header blocks in Android WebView.
       const proxyThumbnail = thumbnail
         ? apiUrl(`/api/proxy-image?url=${encodeURIComponent(thumbnail)}`)
