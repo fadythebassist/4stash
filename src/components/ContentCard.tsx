@@ -680,6 +680,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
             title={item.title}
             description={displayContent}
             thumbnail={displayThumbnail}
+            itemType={item.type}
           />
         )}
 

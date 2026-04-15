@@ -145,26 +145,6 @@
   display: block;
 }
 
-/* ── Preview (static card, tap to expand) ─────────────────────────── */
-.social-card-preview {
-  cursor: pointer;
-}
-
-.social-card-play-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  padding: 8px 16px;
-  background: rgba(0, 0, 0, 0.72);
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
 /* ── Thumbnail ────────────────────────────────────────────────────── */
 .social-card-thumbnail {
   width: 100%;
