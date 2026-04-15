@@ -242,10 +242,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     // After 3 seconds, check if embed.js replaced the blockquote with an iframe.
     // If not, the environment doesn't support it (e.g. Android WebView) — fall
     // back to the static card.
-    // Poll every 500 ms (up to 3 s) to check if embed.js replaced the blockquote
+    // Poll every 500 ms (up to 8 s) to check if embed.js replaced the blockquote
     // with an iframe. Resolves immediately on success so web users see no delay.
-    // On Android WebView embed.js never fires, so after 3 s we fall back to the
-    // static card.
+    // On Android WebView embed.js may take several seconds to load over the network;
+    // only fall back to the static card if it hasn't rendered within 8 s.
     let elapsed = 0;
     const pollId = setInterval(() => {
       elapsed += 500;
@@ -253,7 +253,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       if (hasIframe) {
         clearInterval(pollId);
         setEmbedReady(true);
-      } else if (elapsed >= 3000) {
+      } else if (elapsed >= 8000) {
         clearInterval(pollId);
         setEmbedFailed(true);
       }
