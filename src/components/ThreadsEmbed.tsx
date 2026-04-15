@@ -19,21 +19,11 @@ function proxyCdnInstagram(url: string | undefined): string | undefined {
   return url;
 }
 
-/** Returns true when running inside the Capacitor Android WebView. */
-function isAndroid(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    /android/i.test(navigator.userAgent)
-  );
-}
-
 interface ThreadsEmbedProps {
   url: string;
   title?: string;
   description?: string;
   thumbnail?: string;
-  /** Used on Android to label the CTA button ("View Video" vs "View Post"). */
-  itemType?: string;
 }
 
 const threadsWin = window as unknown as {
@@ -56,8 +46,6 @@ function loadThreadsEmbedScript(): void {
   script.src = "https://www.threads.net/embed.js";
   script.async = true;
   script.onload = () => {
-    // Threads embed.js registers itself on window.instgrm which conflicts with
-    // Instagram's embed.js. Capture Threads' handler separately.
     const win = window as unknown as {
       instgrm?: { Embeds?: { process: () => void } };
     };
@@ -110,17 +98,16 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   title,
   description,
   thumbnail,
-  itemType,
 }) => {
+  const [expanded, setExpanded] = useState(false);
   const [thumbnailError, setThumbnailError] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
 
   const embedUrl = normalizeThreadsUrl(url);
-  const onAndroid = isAndroid();
 
-  // On web only: load embed.js to render the interactive Threads post inline.
+  // Load embed.js once the user taps to expand.
   useEffect(() => {
-    if (onAndroid) return;
+    if (!expanded) return;
     if (!embedUrl) return;
     const node = blockquoteRef.current;
     if (!node) return;
@@ -130,13 +117,8 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
       void node;
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [onAndroid, embedUrl]);
+  }, [expanded, embedUrl]);
 
-  const handleClick = () => {
-    openPlatformUrl(embedUrl);
-  };
-
-  // Proxy cdninstagram.com thumbnails so they load in the Capacitor Android WebView.
   const resolvedThumbnail = proxyCdnInstagram(thumbnail);
   const shouldShowThumbnail = resolvedThumbnail && !thumbnailError;
 
@@ -149,21 +131,20 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const displayTitle = !isGenericTitle ? title : undefined;
   const displayDescription = !isGenericDescription ? description : undefined;
 
-  // --- Android: static branded card with proxied thumbnail + native open ---
-  // embed.js scripts from threads.net are often blocked in the Capacitor WebView.
-  // Show the stored thumbnail directly and let openPlatformUrl route to the app.
-  if (onAndroid && embedUrl) {
-    const ctaLabel = itemType === "video" ? "View Video" : "View Post";
+  if (!embedUrl) {
     return (
       <div
         className="social-card social-card--threads"
-        onClick={(e) => { e.stopPropagation(); handleClick(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          openPlatformUrl(url);
+        }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            handleClick();
+            openPlatformUrl(url);
           }
         }}
       >
@@ -171,56 +152,28 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           <ThreadsLogo />
           <span className="social-card-header-text">Threads</span>
         </div>
-
-        {shouldShowThumbnail ? (
-          <div className="social-card-thumbnail">
-            <img
-              src={resolvedThumbnail}
-              alt="Threads preview"
-              onError={() => setThumbnailError(true)}
-              loading="lazy"
-            />
-          </div>
-        ) : (
-          <div className="social-card-body">
-            {(displayTitle || displayDescription) ? (
-              <>
-                {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-                {displayDescription && <div className="social-card-description">{displayDescription}</div>}
-              </>
-            ) : (
-              <>
-                <div className="social-card-icon">🧵</div>
-                <p className="social-card-cta">Tap to view on Threads</p>
-              </>
-            )}
-          </div>
-        )}
-
-        <a
-          href={embedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="social-card-button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
-        >
-          {ctaLabel}
-        </a>
+        <div className="social-card-body">
+          <div className="social-card-icon">🧵</div>
+          <p className="social-card-cta">Tap to view on Threads</p>
+        </div>
       </div>
     );
   }
 
-  // --- Web: embed.js blockquote for inline playback ---
-  // embed.js renders the full post including video player inside the blockquote.
-  // Do NOT show any thumbnail or description alongside it — that causes double content.
-  if (embedUrl) {
-    const theme = getAppTheme();
-    return (
-      <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
-        <div className="social-card-header">
-          <ThreadsLogo />
-          <span className="social-card-header-text">Threads</span>
-        </div>
+  const theme = getAppTheme();
+
+  return (
+    <div
+      className="social-card social-card--threads"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="social-card-header">
+        <ThreadsLogo />
+        <span className="social-card-header-text">Threads</span>
+      </div>
+
+      {expanded ? (
+        // Expanded: render the embed.js blockquote for inline playback.
         <div className="social-card-embed-wrap" ref={blockquoteRef}>
           <blockquote
             className="text-post-media"
@@ -233,41 +186,67 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
             </a>
           </blockquote>
         </div>
-        <a
-          href={embedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="social-card-button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
+      ) : (
+        // Collapsed: static card with thumbnail. Tapping expands to embed.js.
+        <div
+          className="social-card-preview"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setExpanded(true);
+            }
+          }}
         >
-          Open in Threads
-        </a>
-      </div>
-    );
-  }
+          {shouldShowThumbnail ? (
+            <div className="social-card-thumbnail">
+              <img
+                src={resolvedThumbnail}
+                alt="Threads preview"
+                onError={() => setThumbnailError(true)}
+                loading="lazy"
+              />
+              <div className="social-card-play-hint">Tap to play</div>
+            </div>
+          ) : (
+            <div className="social-card-body">
+              {displayTitle || displayDescription ? (
+                <>
+                  {displayTitle && (
+                    <div className="social-card-title">{displayTitle}</div>
+                  )}
+                  {displayDescription && (
+                    <div className="social-card-description">
+                      {displayDescription}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="social-card-icon">🧵</div>
+                  <p className="social-card-cta">Tap to play inline</p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-  // --- Last-resort: no URL ---
-  return (
-    <div
-      className="social-card social-card--threads"
-      onClick={(e) => { e.stopPropagation(); handleClick(); }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+      <a
+        href={embedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="social-card-button"
+        onClick={(e) => {
+          e.stopPropagation();
           e.preventDefault();
-          handleClick();
-        }
-      }}
-    >
-      <div className="social-card-header">
-        <ThreadsLogo />
-        <span className="social-card-header-text">Threads</span>
-      </div>
-      <div className="social-card-body">
-        <div className="social-card-icon">🧵</div>
-        <p className="social-card-cta">Tap to view on Threads</p>
-      </div>
+          openPlatformUrl(embedUrl);
+        }}
+      >
+        Open in Threads
+      </a>
     </div>
   );
 };
