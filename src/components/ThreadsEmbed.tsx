@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { threadsAuthService } from "@/services/ThreadsAuthService";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
-import { apiUrl, isAndroidWebView } from "@/utils/apiBase";
+import { apiUrl } from "@/utils/apiBase";
 import "./SocialCard.css";
 
 interface ThreadsEmbedProps {
@@ -87,6 +87,90 @@ const ThreadsLogo: React.FC = () => (
   </svg>
 );
 
+// Static fallback card shown when embed.js fails (e.g. Android WebView).
+// Proxies all thumbnails through /api/proxy-image to bypass CORP headers.
+interface StaticThreadsCardProps {
+  embedUrl: string;
+  thumbnail?: string;
+  displayTitle?: string;
+  displayDescription?: string;
+}
+
+const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
+  embedUrl,
+  thumbnail,
+  displayTitle,
+  displayDescription,
+}) => {
+  const [thumbError, setThumbError] = useState(false);
+  const proxyThumbnail = thumbnail
+    ? apiUrl(`/api/proxy-image?url=${encodeURIComponent(thumbnail)}`)
+    : undefined;
+
+  const handleClick = () => openPlatformUrl(embedUrl);
+
+  return (
+    <div
+      className="social-card social-card--threads"
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
+    >
+      <div className="social-card-header">
+        <ThreadsLogo />
+        <span className="social-card-header-text">Threads</span>
+      </div>
+
+      {proxyThumbnail && !thumbError ? (
+        <div className="social-card-thumbnail">
+          <img
+            src={proxyThumbnail}
+            alt="Threads preview"
+            onError={() => setThumbError(true)}
+            loading="lazy"
+          />
+        </div>
+      ) : (
+        <div className="social-card-body">
+          {displayTitle || displayDescription ? (
+            <>
+              {displayTitle && <div className="social-card-title">{displayTitle}</div>}
+              {displayDescription && (
+                <div className="social-card-description">{displayDescription}</div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="social-card-icon">🧵</div>
+              <p className="social-card-cta">Tap to view on Threads</p>
+            </>
+          )}
+        </div>
+      )}
+
+      <a
+        href={embedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="social-card-button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          openPlatformUrl(embedUrl);
+        }}
+      >
+        Open in Threads
+      </a>
+    </div>
+  );
+};
+
 const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   url,
   title,
@@ -98,6 +182,10 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const [oembedData, setOembedData] = useState<ThreadsOEmbedData | null>(null);
   const [oembedLoading, setOembedLoading] = useState(true);
   const [oembedError, setOembedError] = useState(false);
+  // embedFailed: true when embed.js didn't process the blockquote within the timeout.
+  // embedReady: true once embed.js successfully replaces the blockquote with an iframe.
+  const [embedFailed, setEmbedFailed] = useState(false);
+  const [embedReady, setEmbedReady] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
 
   const embedUrl = normalizeThreadsUrl(url);
@@ -150,9 +238,23 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     if (!node) return;
     loadThreadsEmbedScript();
     const rafId = requestAnimationFrame(() => processThreadsEmbeds());
+
+    // After 3 seconds, check if embed.js replaced the blockquote with an iframe.
+    // If not, the environment doesn't support it (e.g. Android WebView) — fall
+    // back to the static card.
+    const timeoutId = setTimeout(() => {
+      const hasIframe = blockquoteRef.current?.querySelector("iframe") !== null;
+      if (hasIframe) {
+        setEmbedReady(true);
+      } else {
+        setEmbedFailed(true);
+      }
+    }, 3000);
+
     return () => {
       void node;
       if (rafId) cancelAnimationFrame(rafId);
+      clearTimeout(timeoutId);
     };
   }, [threadsConnection, embedUrl, oembedData, oembedError]);
 
@@ -215,70 +317,20 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     );
   }
 
-  // --- Non-connected user: native blockquote embed wrapped in branded card ---
+  // --- Non-connected user: static fallback (embed.js failed or timed out) ---
+  if (embedFailed) {
+    return (
+      <StaticThreadsCard
+        embedUrl={embedUrl}
+        thumbnail={thumbnail}
+        displayTitle={displayTitle}
+        displayDescription={displayDescription}
+      />
+    );
+  }
+
+  // --- Non-connected user: native blockquote embed (hidden while waiting for embed.js) ---
   if (embedUrl) {
-    // embed.js doesn't render in Android WebView — show a static card instead.
-    if (isAndroidWebView()) {
-      // Proxy cdninstagram.com thumbnails to avoid CORP header blocks in Android WebView.
-      const proxyThumbnail = thumbnail
-        ? apiUrl(`/api/proxy-image?url=${encodeURIComponent(thumbnail)}`)
-        : undefined;
-      return (
-        <div
-          className="social-card social-card--threads"
-          onClick={handleClick}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleClick();
-            }
-          }}
-        >
-          <div className="social-card-header">
-            <ThreadsLogo />
-            <span className="social-card-header-text">Threads</span>
-          </div>
-
-          {proxyThumbnail && !thumbnailError ? (
-            <div className="social-card-thumbnail">
-              <img
-                src={proxyThumbnail}
-                alt="Threads preview"
-                onError={() => setThumbnailError(true)}
-                loading="lazy"
-              />
-            </div>
-          ) : (
-            <div className="social-card-body">
-              {displayTitle || displayDescription ? (
-                <>
-                  {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-                  {displayDescription && <div className="social-card-description">{displayDescription}</div>}
-                </>
-              ) : (
-                <>
-                  <div className="social-card-icon">🧵</div>
-                  <p className="social-card-cta">Tap to view on Threads</p>
-                </>
-              )}
-            </div>
-          )}
-
-          <a
-            href={embedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="social-card-button"
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); openPlatformUrl(embedUrl); }}
-          >
-            Open in Threads
-          </a>
-        </div>
-      );
-    }
-
     const theme = getAppTheme();
     return (
       <div className="social-card social-card--threads" onClick={(e) => e.stopPropagation()}>
@@ -286,7 +338,12 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           <ThreadsLogo />
           <span className="social-card-header-text">Threads</span>
         </div>
-        <div className="social-card-embed-wrap" ref={blockquoteRef}>
+        {/* Hide the raw blockquote until embed.js processes it into an iframe */}
+        <div
+          className="social-card-embed-wrap"
+          ref={blockquoteRef}
+          style={embedReady ? undefined : { display: "none" }}
+        >
           <blockquote
             className="text-post-media"
             data-text-post-permalink={embedUrl}
@@ -298,6 +355,14 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
             </a>
           </blockquote>
         </div>
+        {/* Show a placeholder while waiting for embed.js */}
+        {!embedReady && (
+          <div className="social-card-body">
+            <div className="social-card-description" style={{ color: "var(--text-tertiary)" }}>
+              Loading preview...
+            </div>
+          </div>
+        )}
 
         <a
           href={embedUrl}
