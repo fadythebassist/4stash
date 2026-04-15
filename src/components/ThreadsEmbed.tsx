@@ -157,7 +157,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     return (
       <div
         className="social-card social-card--threads"
-        onClick={handleClick}
+        onClick={(e) => { e.stopPropagation(); handleClick(); }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -250,7 +250,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   return (
     <div
       className="social-card social-card--threads"
-      onClick={handleClick}
+      onClick={(e) => { e.stopPropagation(); handleClick(); }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
