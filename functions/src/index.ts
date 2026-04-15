@@ -266,6 +266,9 @@ function isFacebookVideoUrl(urlStr: string): boolean {
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
+    // cdninstagram.com hosts Threads and Instagram media — proxy so Capacitor
+    // Android WebView can load thumbnails (CORP headers block cross-origin requests).
+    h.includes("cdninstagram.com") ||
     h.includes("instagram.com") ||
     h.endsWith("fbcdn.net") ||
     h.includes("facebook.com") ||
