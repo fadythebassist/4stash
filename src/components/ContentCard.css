@@ -301,11 +301,18 @@
   margin-bottom: var(--spacing-sm);
   width: 100%;
   max-width: 100%;
+  overflow: hidden;
 }
 
 .tiktok-embed-container iframe {
   width: 100% !important;
   max-width: 100% !important;
+  overflow: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+
+.tiktok-embed-container iframe::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .tiktok-embed-container blockquote {
