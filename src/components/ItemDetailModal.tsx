@@ -20,7 +20,8 @@ function shouldProxyThumbnail(urlStr?: string): boolean {
   try {
     const hostname = new URL(urlStr, window.location.origin).hostname.toLowerCase();
     return (
-      hostname.includes("instagram.com") ||
+      // Don't proxy cdninstagram.com — time-sensitive signed tokens fail when proxied.
+      hostname.includes("instagram.com") && !hostname.includes("cdninstagram.com") ||
       hostname.endsWith("fbcdn.net") ||
       hostname.includes("facebook.com") ||
       hostname.endsWith("fbsbx.com")
