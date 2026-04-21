@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
-import { apiUrl } from "@/utils/apiBase";
+import { apiUrl, isAndroidWebView } from "@/utils/apiBase";
 import "./SocialCard.css";
 
 interface ThreadsEmbedProps {
@@ -292,6 +292,22 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   // let the native embed.js iframe take over. If embed.js also fails, show a
   // plain "tap to view" static card with no misleading thumbnail or description.
   const effectiveThumbnail = isLoginWall ? undefined : thumbnail;
+
+  // --- Android WebView: skip embed.js entirely ---
+  // The Threads embed iframe loads successfully on Android, but video thumbnails
+  // inside the iframe fail because Meta CDN (fbcdn.net / cdninstagram.com) requires
+  // session cookies that the isolated Capacitor WebView doesn't have. The static
+  // card uses our /api/proxy-image endpoint which works correctly in production.
+  if (isAndroidWebView()) {
+    return (
+      <StaticThreadsCard
+        embedUrl={embedUrl}
+        thumbnail={effectiveThumbnail}
+        displayTitle={displayTitle}
+        displayDescription={displayDescription}
+      />
+    );
+  }
 
   // --- Static fallback (embed.js failed or timed out) ---
   if (embedFailed) {

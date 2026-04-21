@@ -1013,7 +1013,7 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
       }
       const buf = Buffer.from(await upstream.arrayBuffer());
       if (buf.byteLength > 8 * 1024 * 1024) { res.status(413).json({ error: "Image too large" }); return; }
-      res.status(200).setHeader("Content-Type", contentType).setHeader("Cache-Control", "no-store").end(buf);
+      res.status(200).setHeader("Content-Type", contentType).setHeader("Cache-Control", "public, max-age=3600").end(buf);
     } catch (e: unknown) {
       res.status(500).json({ error: e instanceof Error && e.message === "Timeout" ? "Upstream timeout" : "Proxy failed" });
     }
