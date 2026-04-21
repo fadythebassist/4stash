@@ -9,26 +9,45 @@
   position: sticky;
   top: 0;
   z-index: 101;
-  overflow: hidden;
 }
 
 .dashboard-header {
   background: var(--bg-base);
   border-bottom: 1px solid var(--glass-border);
   padding: var(--spacing-md);
+  transition: padding 220ms ease;
+}
+
+.dashboard-header .dashboard-logo {
+  transition: font-size 220ms ease;
 }
 
 .topbar-wrapper {
   background: var(--bg-base);
   border-bottom: 1px solid var(--glass-border);
-  transform: translateY(0);
-  transition: transform 220ms ease;
-  will-change: transform;
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 220ms ease;
+  overflow: hidden;
 }
 
-.topbar-wrapper--hidden {
-  transform: translateY(-100%);
-  pointer-events: none;
+.topbar-wrapper > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Compact state: shrink header + collapse topbar */
+.dashboard-sticky-shell--compact .dashboard-header {
+  padding: var(--spacing-xs) var(--spacing-md);
+}
+
+.dashboard-sticky-shell--compact .dashboard-header .dashboard-logo {
+  font-size: var(--font-base);
+}
+
+.dashboard-sticky-shell--compact .topbar-wrapper {
+  grid-template-rows: 0fr;
+  border-bottom: none;
 }
 
 .header-content {

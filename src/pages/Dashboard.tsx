@@ -67,10 +67,11 @@ const Dashboard: React.FC = () => {
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const lastScrollYRef = useRef(0);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const topbarWrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // Hide topbar on scroll-down, reveal on scroll-up.
-  // Directly toggle the CSS class via DOM ref to avoid React re-render jitter.
+  // Scroll down: compact header + hide 3 bars. Scroll up: restore all.
+  // Direct DOM class toggling via refs — no React re-renders on scroll.
   useEffect(() => {
     let ticking = false;
     const handleScroll = () => {
@@ -81,12 +82,12 @@ const Dashboard: React.FC = () => {
         const prev = lastScrollYRef.current;
         const delta = current - prev;
         if (Math.abs(delta) < 4) { ticking = false; return; }
-        const node = topbarWrapperRef.current;
-        if (node) {
+        const shell = shellRef.current;
+        if (shell) {
           if (delta > 0 && current > 60) {
-            node.classList.add("topbar-wrapper--hidden");
+            shell.classList.add("dashboard-sticky-shell--compact");
           } else if (delta < 0) {
-            node.classList.remove("topbar-wrapper--hidden");
+            shell.classList.remove("dashboard-sticky-shell--compact");
           }
         }
         lastScrollYRef.current = current;
@@ -393,7 +394,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
       {/* Sticky shell: header + topbar slide together, topbar hides on scroll-down */}
-      <div className="dashboard-sticky-shell">
+      <div ref={shellRef} className="dashboard-sticky-shell">
       {/* Header */}
       <header className="dashboard-header glass">
         <div className="header-content">
