@@ -266,7 +266,9 @@ function isFacebookVideoUrl(urlStr: string): boolean {
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
-    h.includes("instagram.com") ||
+    // Don't proxy cdninstagram.com — these are CDN URLs with time-sensitive signed tokens
+    // that work directly in browsers but fail when proxied (upstream returns 422).
+    h.includes("instagram.com") && !h.includes("cdninstagram.com") ||
     h.endsWith("fbcdn.net") ||
     h.includes("facebook.com") ||
     h.endsWith("fbsbx.com")
@@ -989,8 +991,17 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
     if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") { res.status(400).json({ error: "Only http/https URLs are allowed" }); return; }
 
     const h = targetUrl.hostname.toLowerCase();
+
+    // cdninstagram.com URLs have time-sensitive signed tokens — proxying them fails with 422
+    // because the upstream CDN rejects requests without a valid session. Redirect the client
+    // directly so it can attempt the URL natively (and trigger onError → re-unfurl if expired).
+    if (h.includes("cdninstagram.com")) {
+      res.redirect(302, targetUrl.toString());
+      return;
+    }
+
     const isFbImg = h.endsWith("fbsbx.com") || h.endsWith("fbcdn.net") || h.includes("facebook.com");
-    const isIgImg = h.includes("cdninstagram.com") || h.includes("instagram.com");
+    const isIgImg = h.includes("instagram.com");
 
     const imgHeaders: Record<string, string> = {
       "user-agent": isFbImg
