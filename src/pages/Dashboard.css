@@ -14,6 +14,20 @@
   padding: var(--spacing-md);
 }
 
+.topbar-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--glass-border);
+  transform: translateY(0);
+  transition: transform 250ms ease;
+}
+
+.topbar-wrapper--hidden {
+  transform: translateY(-110%);
+}
+
 .header-content {
   display: flex;
   align-items: center;

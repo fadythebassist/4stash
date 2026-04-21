@@ -66,6 +66,24 @@ const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
+  const [topbarHidden, setTopbarHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+
+  // Hide topbar on scroll-down, reveal immediately on scroll-up
+  useEffect(() => {
+    const handleScroll = () => {
+      const current = window.scrollY;
+      const prev = lastScrollYRef.current;
+      if (current > prev && current > 60) {
+        setTopbarHidden(true);
+      } else if (current < prev) {
+        setTopbarHidden(false);
+      }
+      lastScrollYRef.current = current;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Track item count to detect when a new post is added
   const prevItemCountRef = useRef(items.length);
@@ -451,6 +469,7 @@ const Dashboard: React.FC = () => {
       </header>
 
       {/* Top Bar with Lists */}
+      <div className={`topbar-wrapper${topbarHidden ? " topbar-wrapper--hidden" : ""}`}>
       <TopBar
         lists={lists}
         selectedListId={selectedListId}
@@ -465,6 +484,7 @@ const Dashboard: React.FC = () => {
         onAddList={() => setShowAddList(true)}
         onDeleteList={handleDeleteList}
       />
+      </div>
 
       {/* Main Content */}
       <main className="dashboard-main">
