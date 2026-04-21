@@ -10,6 +10,27 @@ interface ThreadsEmbedProps {
   thumbnail?: string;
 }
 
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
+function isLoginWallTitle(t?: string): boolean {
+  if (!t) return false;
+  return t.includes("Log in") || t.includes("Threads \u2022 Log in");
+}
+
+function isLoginWallDescription(d?: string): boolean {
+  if (!d) return false;
+  const lower = d.toLowerCase();
+  return (
+    lower.includes("join threads to share ideas") ||
+    lower.includes("log in with your instagram") ||
+    lower.includes("say more with threads")
+  );
+}
+
 // Threads embed.js registers itself on window.instgrm (same key as Instagram).
 // We capture it once on load and store it separately so Instagram's embed.js
 // cannot overwrite our reference.
@@ -240,22 +261,22 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     openPlatformUrl(embedUrl);
   };
 
-  // Filter generic metadata
-  const isGenericTitle =
-    title?.includes("Log in") || title?.includes("Threads \u2022 Log in");
-  const isGenericDescription =
-    description?.includes("Join Threads to share ideas") ||
-    description?.includes("Log in with your Instagram");
+  // Filter login-wall metadata and decode HTML entities
+  const isLoginWall = isLoginWallTitle(title) || isLoginWallDescription(description);
+  const displayTitle = !isLoginWallTitle(title) ? (title ? decodeHtmlEntities(title) : undefined) : undefined;
+  const displayDescription = !isLoginWallDescription(description) ? (description ? decodeHtmlEntities(description) : undefined) : undefined;
 
-  const displayTitle = !isGenericTitle ? title : undefined;
-  const displayDescription = !isGenericDescription ? description : undefined;
+  // For login-wall items: don't show a thumbnail (it's the generic Threads logo),
+  // let the native embed.js iframe take over. If embed.js also fails, show a
+  // plain "tap to view" static card with no misleading thumbnail or description.
+  const effectiveThumbnail = isLoginWall ? undefined : thumbnail;
 
   // --- Static fallback (embed.js failed or timed out) ---
   if (embedFailed) {
     return (
       <StaticThreadsCard
         embedUrl={embedUrl}
-        thumbnail={thumbnail}
+        thumbnail={effectiveThumbnail}
         displayTitle={displayTitle}
         displayDescription={displayDescription}
       />

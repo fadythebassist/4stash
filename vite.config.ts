@@ -6,6 +6,14 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 function decodeHtmlEntities(input: string): string {
   return input
+    // Numeric hex entities: &#x62e; or &#X62E;
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (_, hex) =>
+      String.fromCodePoint(parseInt(hex, 16))
+    )
+    // Numeric decimal entities: &#1575;
+    .replace(/&#([0-9]+);/g, (_, dec) =>
+      String.fromCodePoint(parseInt(dec, 10))
+    )
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, "&")
