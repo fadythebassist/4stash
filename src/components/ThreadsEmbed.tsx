@@ -10,40 +10,50 @@ interface ThreadsEmbedProps {
   thumbnail?: string;
 }
 
+// Threads embed.js registers itself on window.instgrm (same key as Instagram).
+// We capture it once on load and store it separately so Instagram's embed.js
+// cannot overwrite our reference.
 const threadsWin = window as unknown as {
-  threadsEmbedScriptLoaded?: boolean;
+  __threadsEmbedPromise?: Promise<boolean>;
   __threadsEmbeds?: { process: () => void };
 };
 
-function processThreadsEmbeds(): void {
-  threadsWin.__threadsEmbeds?.process();
+/**
+ * Returns a promise that resolves to `true` when embed.js has loaded and
+ * `__threadsEmbeds` is ready, or `false` if the script fails to load.
+ * Subsequent calls return the same promise (singleton).
+ */
+function getThreadsEmbedScript(): Promise<boolean> {
+  if (threadsWin.__threadsEmbedPromise) return threadsWin.__threadsEmbedPromise;
+
+  threadsWin.__threadsEmbedPromise = new Promise<boolean>((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://www.threads.net/embed.js";
+    script.async = true;
+    script.onload = () => {
+      // Capture the Threads Embeds handler before Instagram's embed.js can
+      // overwrite window.instgrm with its own version.
+      const win = window as unknown as {
+        instgrm?: { Embeds?: { process: () => void } };
+      };
+      if (win.instgrm?.Embeds) {
+        threadsWin.__threadsEmbeds = win.instgrm.Embeds;
+      }
+      resolve(true);
+    };
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+
+  return threadsWin.__threadsEmbedPromise;
 }
 
-function loadThreadsEmbedScript(): void {
-  if (threadsWin.threadsEmbedScriptLoaded) {
-    processThreadsEmbeds();
-    return;
-  }
-
-  threadsWin.threadsEmbedScriptLoaded = true;
-  const script = document.createElement("script");
-  script.src = "https://www.threads.net/embed.js";
-  script.async = true;
-  script.onload = () => {
-    // Threads embed.js registers itself on window.instgrm which conflicts with
-    // Instagram's embed.js.  Capture Threads' handler separately.
-    const win = window as unknown as {
-      instgrm?: { Embeds?: { process: () => void } };
-    };
-    if (win.instgrm?.Embeds) {
-      threadsWin.__threadsEmbeds = win.instgrm.Embeds;
-    }
-    processThreadsEmbeds();
-  };
-  script.onerror = () => {
-    threadsWin.threadsEmbedScriptLoaded = false;
-  };
-  document.body.appendChild(script);
+/**
+ * Ask embed.js to process all unprocessed blockquotes in the DOM.
+ * Re-reads __threadsEmbeds each time so a late capture still works.
+ */
+function processThreadsEmbeds(): void {
+  threadsWin.__threadsEmbeds?.process();
 }
 
 function getAppTheme(): "light" | "dark" {
@@ -177,32 +187,52 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
 
   useEffect(() => {
     if (!embedUrl) return;
-    const node = blockquoteRef.current;
-    if (!node) return;
-    loadThreadsEmbedScript();
-    const rafId = requestAnimationFrame(() => processThreadsEmbeds());
+    let cancelled = false;
 
-    // Poll every 500 ms (up to 8 s) to check if embed.js replaced the blockquote
-    // with an iframe. Resolves immediately on success so web users see no delay.
-    // On Android WebView embed.js may take several seconds to load over the network;
-    // only fall back to the static card if it hasn't rendered within 8 s.
-    let elapsed = 0;
-    const pollId = setInterval(() => {
-      elapsed += 500;
-      const hasIframe = !!blockquoteRef.current?.querySelector("iframe");
-      if (hasIframe) {
-        clearInterval(pollId);
-        setEmbedReady(true);
-      } else if (elapsed >= 8000) {
-        clearInterval(pollId);
+    const run = async () => {
+      // Wait for embed.js to finish loading (or fail). All concurrent cards
+      // share the same promise so the script is only injected once.
+      const scriptOk = await getThreadsEmbedScript();
+
+      if (cancelled) return;
+
+      if (!scriptOk) {
         setEmbedFailed(true);
+        return;
       }
-    }, 500);
 
+      // Script is ready — ask it to process any unprocessed blockquotes.
+      processThreadsEmbeds();
+
+      // Poll every 300 ms (up to 10 s) to detect when embed.js replaces the
+      // blockquote with an iframe. We keep calling processThreadsEmbeds() on
+      // each tick so blockquotes that weren't in the DOM when the script first
+      // ran still get picked up.
+      let elapsed = 0;
+      const pollId = setInterval(() => {
+        if (cancelled) {
+          clearInterval(pollId);
+          return;
+        }
+        elapsed += 300;
+        processThreadsEmbeds();
+        const hasIframe = !!blockquoteRef.current?.querySelector("iframe");
+        if (hasIframe) {
+          clearInterval(pollId);
+          setEmbedReady(true);
+        } else if (elapsed >= 10000) {
+          clearInterval(pollId);
+          setEmbedFailed(true);
+        }
+      }, 300);
+
+      return () => clearInterval(pollId);
+    };
+
+    const cleanup = run();
     return () => {
-      void node;
-      if (rafId) cancelAnimationFrame(rafId);
-      clearInterval(pollId);
+      cancelled = true;
+      cleanup.then((fn) => fn?.());
     };
   }, [embedUrl]);
 
