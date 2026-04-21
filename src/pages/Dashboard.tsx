@@ -69,29 +69,47 @@ const Dashboard: React.FC = () => {
   const lastScrollYRef = useRef(0);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const topbarWrapperRef = useRef<HTMLDivElement | null>(null);
+  const isCompactRef = useRef(false);
+  const accumulatedRef = useRef(0);
 
   // Scroll down: compact header + hide 3 bars. Scroll up: restore all.
-  // Direct DOM class toggling via refs — no React re-renders on scroll.
+  // Uses accumulation hysteresis to prevent blinking on inertial/jittery scroll.
   useEffect(() => {
+    const HIDE_THRESHOLD = 40;   // px of downward scroll needed to hide
+    const SHOW_THRESHOLD = 30;   // px of upward scroll needed to show
+    const MIN_SCROLL_Y   = 60;   // don't hide until past this point on page
+
     let ticking = false;
     const handleScroll = () => {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
         const current = window.scrollY;
-        const prev = lastScrollYRef.current;
-        const delta = current - prev;
-        if (Math.abs(delta) < 4) { ticking = false; return; }
-        const shell = shellRef.current;
-        if (shell) {
-          if (delta > 0 && current > 60) {
-            shell.classList.add("dashboard-sticky-shell--compact");
-          } else if (delta < 0) {
-            shell.classList.remove("dashboard-sticky-shell--compact");
-          }
-        }
+        const delta = current - lastScrollYRef.current;
         lastScrollYRef.current = current;
         ticking = false;
+
+        if (Math.abs(delta) < 2) return;
+
+        // Accumulate in the direction of scroll; reset if direction reverses
+        if (delta > 0) {
+          accumulatedRef.current = Math.max(0, accumulatedRef.current) + delta;
+        } else {
+          accumulatedRef.current = Math.min(0, accumulatedRef.current) + delta;
+        }
+
+        const shell = shellRef.current;
+        if (!shell) return;
+
+        if (!isCompactRef.current && accumulatedRef.current > HIDE_THRESHOLD && current > MIN_SCROLL_Y) {
+          isCompactRef.current = true;
+          accumulatedRef.current = 0;
+          shell.classList.add("dashboard-sticky-shell--compact");
+        } else if (isCompactRef.current && accumulatedRef.current < -SHOW_THRESHOLD) {
+          isCompactRef.current = false;
+          accumulatedRef.current = 0;
+          shell.classList.remove("dashboard-sticky-shell--compact");
+        }
       });
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
