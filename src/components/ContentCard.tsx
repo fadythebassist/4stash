@@ -25,6 +25,21 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
+function isThreadsLoginWallTitle(title?: string): boolean {
+  if (!title) return false;
+  return title.includes("Log in") || title.includes("Threads • Log in");
+}
+
+function isThreadsLoginWallDescription(description?: string): boolean {
+  if (!description) return false;
+  const d = description.toLowerCase();
+  return (
+    d.includes("join threads to share ideas") ||
+    d.includes("log in with your instagram") ||
+    d.includes("say more with threads")
+  );
+}
+
 function shouldProxyThumbnail(source: string | undefined, thumbnail: string): boolean {
   if (source !== "instagram" && source !== "facebook") return false;
 
@@ -99,6 +114,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
     string | undefined
   >(undefined);
   const [resolvedContent, setResolvedContent] = useState<string | undefined>(
+    undefined,
+  );
+  const [resolvedTitle, setResolvedTitle] = useState<string | undefined>(
     undefined,
   );
   const [resolvedFacebookUrl, setResolvedFacebookUrl] = useState<
@@ -250,7 +268,20 @@ const ContentCard: React.FC<ContentCardProps> = ({
     // where capacitor://localhost has no server to handle /api/* routes.
     return raw.startsWith("/api/proxy-image?") ? apiUrl(raw) : raw;
   }, [resolvedThumbnail, item.thumbnail]);
-  const displayContent = item.content ?? resolvedContent;
+  const displayContent = useMemo(() => {
+    const raw = resolvedContent ?? item.content;
+    if (derivedSource === "threads" && isThreadsLoginWallDescription(raw)) {
+      return undefined;
+    }
+    return raw;
+  }, [derivedSource, item.content, resolvedContent]);
+  const displayTitle = useMemo(() => {
+    const raw = decodeHtmlEntities(resolvedTitle ?? item.title);
+    if (derivedSource === "threads" && isThreadsLoginWallTitle(raw)) {
+      return "Threads Post";
+    }
+    return raw;
+  }, [derivedSource, item.title, resolvedTitle]);
   const displayEmbedThumbnail = useMemo(() => {
     if (!displayThumbnail) return undefined;
     return shouldProxyThumbnail(derivedSource, displayThumbnail)
@@ -378,18 +409,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
       const isThreadsLoginWallContent = derivedSource === "threads" && (
         !item.content ||
-        (() => {
-          const d = (item.content ?? "").toLowerCase();
-          return (
-            d.includes("join threads to share ideas") ||
-            d.includes("log in with your instagram") ||
-            d.includes("say more with threads")
-          );
-        })()
+        isThreadsLoginWallDescription(item.content)
       );
+      const isThreadsLoginWallTitleStored =
+        derivedSource === "threads" && isThreadsLoginWallTitle(item.title);
       const needsUnfurl =
         (derivedSource === "facebook" && ((!resolvedThumbnailRef.current && !item.thumbnail) || !item.content || !resolvedFacebookUrlRef.current)) ||
-        (derivedSource === "threads" && (!item.thumbnail || isThreadsLoginWallContent)) ||
+        (derivedSource === "threads" && (!item.thumbnail || isThreadsLoginWallContent || isThreadsLoginWallTitleStored)) ||
         derivedSource === "reddit" ||
         !item.thumbnail ||
         thumbnailError ||
@@ -519,6 +545,21 @@ const ContentCard: React.FC<ContentCardProps> = ({
             }
           }
         }
+
+        if (
+          derivedSource === "threads" &&
+          typeof data.title === "string" &&
+          data.title &&
+          !isThreadsLoginWallTitle(data.title) &&
+          (isThreadsLoginWallTitleStored || !item.title)
+        ) {
+          setResolvedTitle(data.title);
+          try {
+            await updateItemRef.current({ id: item.id, title: data.title });
+          } catch {
+            // Non-critical
+          }
+        }
       } catch {
         // Endpoint doesn't exist or CORS blocked - this is expected
       }
@@ -528,7 +569,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [derivedSource, item.url, item.thumbnail, item.content, item.id, thumbnailError]);
+  }, [derivedSource, item.url, item.thumbnail, item.content, item.title, item.id, thumbnailError]);
 
   return (
     <div
@@ -577,7 +618,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         <div className="card-thumbnail placeholder">
           <div className="video-placeholder">
             <span>▶️</span>
-            <p>{item.title}</p>
+            <p>{displayTitle}</p>
           </div>
           {getSourceBadge()}
         </div>
@@ -585,7 +626,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
         <div className="card-thumbnail placeholder">
           <div className="image-placeholder">
             <span>🖼️</span>
-            <p>{item.title}</p>
+            <p>{displayTitle}</p>
           </div>
           {getSourceBadge()}
         </div>
@@ -605,7 +646,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           </div>
         )}
         <div className="card-header">
-          <h3 className="card-title">{decodeHtmlEntities(item.title)}</h3>
+          <h3 className="card-title">{displayTitle}</h3>
           {item.nsfw && <span className="nsfw-badge">NSFW</span>}
           {layoutMode === 'list' && item.url && (
             <a
@@ -683,12 +724,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
         )}
 
         {shouldShowThreadsPreview && item.url && (
-          <ThreadsEmbed
-            url={item.url}
-            title={item.title}
-            description={displayContent}
-            thumbnail={displayThumbnail}
-          />
+            <ThreadsEmbed
+              url={item.url}
+              title={resolvedTitle ?? item.title}
+              description={displayContent}
+              thumbnail={displayThumbnail}
+            />
         )}
 
         {shouldShowInstagramEmbed && item.url && (
