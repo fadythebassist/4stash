@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Item } from "@/types";
 import { useData } from "@/contexts/DataContext";
 import { cleanFacebookUrl, isFacebookUrl } from "@/utils/facebook";
@@ -151,6 +151,8 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onEdit,
 }) => {
   const { updateItem } = useData();
+  const updateItemRef = useRef(updateItem);
+  useEffect(() => { updateItemRef.current = updateItem; }, [updateItem]);
   const [thumbnailError, setThumbnailError] = useState(false);
   const [resolvedThumbnail, setResolvedThumbnail] = useState<string | undefined>(undefined);
   const [resolvedUrl, setResolvedUrl] = useState<string | undefined>(undefined);
@@ -224,6 +226,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       if (!item.url) return;
 
       const needsUnfurl =
+        thumbnailError ||
         item.source === "instagram" ||
         item.source === "threads" ||
         (item.source === "facebook" && isFacebookShareLike(item.url)) ||
@@ -259,6 +262,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
         if (nextThumbnail) {
           setResolvedThumbnail(nextThumbnail);
+          if (thumbnailError) {
+            setThumbnailError(false);
+          }
         }
         if (nextUrl && nextUrl !== item.url) {
           setResolvedUrl(nextUrl);
@@ -298,7 +304,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         }
 
         if (hasChanges) {
-          await updateItem(updatePayload);
+          await updateItemRef.current(updatePayload);
         }
       } catch {
         // Non-critical detail modal enrichment
@@ -310,7 +316,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [item, updateItem]);
+  }, [item, thumbnailError]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -506,6 +506,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
             setResolvedThumbnail(resolvedImage);
           } else if (!item.thumbnail || thumbnailError || isThreadsLoginWallContent) {
             setResolvedThumbnail(resolvedImage);
+            if (thumbnailError) {
+              setThumbnailError(false);
+            }
             try {
               await updateItemRef.current({ id: item.id, thumbnail: resolvedImage });
             } catch {
