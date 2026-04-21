@@ -941,6 +941,32 @@ function unfurlPlugin(): Plugin {
           }
         }
 
+        // oembed fallback: Instagram's public oembed endpoint returns thumbnail_url without auth.
+        if (!meta.image) {
+          attempts.instagramOembed = { attempted: true, ok: false };
+          try {
+            const oembedUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(targetUrl.toString())}&maxwidth=640&omitscript=1`;
+            const oembedRes = await fetchTextWithTimeout(oembedUrl, {
+              "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+              accept: "application/json,*/*;q=0.8",
+              "accept-language": "en-US,en;q=0.9",
+            }, 8000);
+            attempts.instagramOembed.ok = oembedRes.ok;
+            if (oembedRes.ok) {
+              const oembedData = tryParseJson(oembedRes.text) as Record<string, unknown> | null;
+              if (oembedData && typeof oembedData["thumbnail_url"] === "string") {
+                meta.image = oembedData["thumbnail_url"] as string;
+              }
+              if (oembedData && !meta.description && typeof oembedData["title"] === "string") {
+                const cleaned = cleanInstagramText(oembedData["title"] as string);
+                if (cleaned && cleaned.length >= 5) meta.description = cleaned;
+              }
+            }
+          } catch {
+            // oembed failed
+          }
+        }
+
         // Last-resort: Instagram legacy media endpoint (may still be blocked, but sometimes works)
         if (!meta.image) {
           attempts.fallbackMediaUrl.attempted = true;
@@ -1304,6 +1330,28 @@ function unfurlPlugin(): Plugin {
           }
         } catch {
           // Direct fetch failed, metadata will be empty
+        }
+
+        // Jina.ai fallback for Threads when direct fetch fails or returns no image
+        if (!meta.image || !meta.description) {
+          attempts.threadsJinaFallback = { attempted: true, ok: false };
+          try {
+            const jinaThreadsUrl = `https://r.jina.ai/${targetUrl.toString()}`;
+            const jinaRes = await fetchTextWithTimeout(jinaThreadsUrl, {
+              "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+              accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "accept-language": "en-US,en;q=0.9",
+            }, 10000);
+            attempts.threadsJinaFallback.ok = jinaRes.ok;
+            if (jinaRes.ok) {
+              const jinaMeta = extractMetadata(jinaRes.text);
+              if (!meta.image && jinaMeta.image) meta.image = jinaMeta.image;
+              if (!meta.description && jinaMeta.description) meta.description = jinaMeta.description;
+              if (!meta.title && jinaMeta.title) meta.title = jinaMeta.title;
+            }
+          } catch {
+            // Jina fallback failed
+          }
         }
       }
 
