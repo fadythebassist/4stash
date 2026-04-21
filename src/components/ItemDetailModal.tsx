@@ -77,12 +77,38 @@ function isGenericFacebookErrorTitle(title?: string): boolean {
   return false;
 }
 
+function isThreadsItem(item: Item): boolean {
+  const lowerUrl = (item.url || "").toLowerCase();
+  return item.source === "threads" || lowerUrl.includes("threads.com") || lowerUrl.includes("threads.net");
+}
+
+function isGenericThreadsTitle(title?: string): boolean {
+  if (!title) return true;
+  const t = decodeHtmlEntities(title).trim().toLowerCase();
+  return t === "threads" || t.includes("threads • log in") || t.includes("threads . log in") || t.includes(" log in");
+}
+
+function isGenericThreadsDescription(text?: string): boolean {
+  if (!text) return true;
+  const normalized = decodeHtmlEntities(text).trim().toLowerCase();
+  if (!normalized) return true;
+  if (normalized.includes("join threads to share ideas")) return true;
+  if (normalized.includes("log in with your instagram")) return true;
+  if (normalized.includes("say more with threads")) return true;
+  return false;
+}
+
 function getSafeFallbackTitle(item: Item): string {
   const currentTitle = decodeHtmlEntities(item.title || "").trim();
   const isFacebook = (item.source === "facebook") ||
     (item.url || "").toLowerCase().includes("facebook.com");
+  const isThreads = isThreadsItem(item);
 
-  if (currentTitle && !(isFacebook && isGenericFacebookErrorTitle(currentTitle))) {
+  if (
+    currentTitle &&
+    !(isFacebook && isGenericFacebookErrorTitle(currentTitle)) &&
+    !(isThreads && isGenericThreadsTitle(currentTitle))
+  ) {
     return currentTitle;
   }
 
@@ -101,6 +127,10 @@ function getSafeFallbackTitle(item: Item): string {
   }
   if (item.source === "facebook") {
     return "Facebook Post";
+  }
+
+  if (isThreadsItem(item)) {
+    return "Threads Post";
   }
 
   return currentTitle || "Saved Item";
@@ -167,11 +197,20 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const displayTitle = decodeHtmlEntities(resolvedTitle ?? getSafeFallbackTitle(item));
   const displayContent = useMemo(() => {
     const nextContent = resolvedContent ?? item.content;
+    if (isThreadsItem(item) && isGenericThreadsDescription(nextContent)) {
+      return undefined;
+    }
     if (isFacebookItem(item) && isGenericFacebookDescription(nextContent)) {
       return undefined;
     }
     return nextContent;
   }, [resolvedContent, item]);
+  const safeDisplayTitle = useMemo(() => {
+    if (isThreadsItem(item) && isGenericThreadsTitle(displayTitle)) {
+      return "Threads Post";
+    }
+    return displayTitle;
+  }, [displayTitle, item]);
 
   useEffect(() => {
     setThumbnailError(false);
@@ -204,11 +243,15 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           ? cleanFacebookUrl(data.url) ?? data.url
           : undefined;
         const nextTitle = typeof data.title === "string" && data.title &&
+          !(isThreadsItem(item) && isGenericThreadsTitle(data.title)) &&
           !(isFacebookItem(item) && isGenericFacebookErrorTitle(data.title))
           ? data.title
           : undefined;
         const nextContent = typeof data.description === "string" && data.description ? data.description : undefined;
         const safeNextContent =
+          isThreadsItem(item) && isGenericThreadsDescription(nextContent)
+            ? undefined
+            :
           isFacebookItem(item) && isGenericFacebookDescription(nextContent)
             ? undefined
             : nextContent;
@@ -275,7 +318,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h2>{displayTitle}</h2>
+          <h2>{safeDisplayTitle}</h2>
           <button className="modal-close" onClick={onClose}>
             ✕
           </button>
@@ -286,7 +329,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <div className="video-player">
               <iframe
                 src={youtubeEmbedUrl}
-                title={displayTitle}
+                title={safeDisplayTitle}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               ></iframe>
@@ -296,7 +339,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               <div className="detail-thumbnail">
                 <img
                   src={displayThumbnail}
-                  alt={displayTitle}
+                  alt={safeDisplayTitle}
                   onError={() => setThumbnailError(true)}
                 />
               </div>
