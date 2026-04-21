@@ -9,6 +9,7 @@
   position: sticky;
   top: 0;
   z-index: 101;
+  overflow: hidden;
 }
 
 .dashboard-header {
@@ -20,14 +21,14 @@
 .topbar-wrapper {
   background: var(--bg-base);
   border-bottom: 1px solid var(--glass-border);
-  max-height: 200px;
-  overflow: hidden;
-  transition: max-height 250ms ease;
+  transform: translateY(0);
+  transition: transform 220ms ease;
+  will-change: transform;
 }
 
 .topbar-wrapper--hidden {
-  max-height: 0;
-  border-bottom: none;
+  transform: translateY(-100%);
+  pointer-events: none;
 }
 
 .header-content {

@@ -66,20 +66,32 @@ const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
-  const [topbarHidden, setTopbarHidden] = useState(false);
   const lastScrollYRef = useRef(0);
+  const topbarWrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // Hide topbar on scroll-down, reveal immediately on scroll-up
+  // Hide topbar on scroll-down, reveal on scroll-up.
+  // Directly toggle the CSS class via DOM ref to avoid React re-render jitter.
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const current = window.scrollY;
-      const prev = lastScrollYRef.current;
-      if (current > prev && current > 60) {
-        setTopbarHidden(true);
-      } else if (current < prev) {
-        setTopbarHidden(false);
-      }
-      lastScrollYRef.current = current;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const current = window.scrollY;
+        const prev = lastScrollYRef.current;
+        const delta = current - prev;
+        if (Math.abs(delta) < 4) { ticking = false; return; }
+        const node = topbarWrapperRef.current;
+        if (node) {
+          if (delta > 0 && current > 60) {
+            node.classList.add("topbar-wrapper--hidden");
+          } else if (delta < 0) {
+            node.classList.remove("topbar-wrapper--hidden");
+          }
+        }
+        lastScrollYRef.current = current;
+        ticking = false;
+      });
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
@@ -471,7 +483,7 @@ const Dashboard: React.FC = () => {
       </header>
 
       {/* Top Bar with Lists */}
-      <div className={`topbar-wrapper${topbarHidden ? " topbar-wrapper--hidden" : ""}`}>
+      <div ref={topbarWrapperRef} className="topbar-wrapper">
       <TopBar
         lists={lists}
         selectedListId={selectedListId}
