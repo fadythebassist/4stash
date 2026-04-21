@@ -5,27 +5,29 @@
   background: var(--bg-base);
 }
 
-.dashboard-header {
+.dashboard-sticky-shell {
   position: sticky;
   top: 0;
   z-index: 101;
+}
+
+.dashboard-header {
   background: var(--bg-base);
   border-bottom: 1px solid var(--glass-border);
   padding: var(--spacing-md);
 }
 
 .topbar-wrapper {
-  position: sticky;
-  top: 0;
-  z-index: 100;
   background: var(--bg-base);
   border-bottom: 1px solid var(--glass-border);
-  transform: translateY(0);
-  transition: transform 250ms ease;
+  max-height: 200px;
+  overflow: hidden;
+  transition: max-height 250ms ease;
 }
 
 .topbar-wrapper--hidden {
-  transform: translateY(-110%);
+  max-height: 0;
+  border-bottom: none;
 }
 
 .header-content {

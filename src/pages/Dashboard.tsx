@@ -380,6 +380,8 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       )}
+      {/* Sticky shell: header + topbar slide together, topbar hides on scroll-down */}
+      <div className="dashboard-sticky-shell">
       {/* Header */}
       <header className="dashboard-header glass">
         <div className="header-content">
@@ -485,6 +487,7 @@ const Dashboard: React.FC = () => {
         onDeleteList={handleDeleteList}
       />
       </div>
+      </div> {/* end dashboard-sticky-shell */}
 
       {/* Main Content */}
       <main className="dashboard-main">
