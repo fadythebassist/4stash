@@ -8,6 +8,7 @@ interface ThreadsEmbedProps {
   title?: string;
   description?: string;
   thumbnail?: string;
+  onThumbnailError?: () => void;
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -141,6 +142,7 @@ interface StaticThreadsCardProps {
   thumbnail?: string;
   displayTitle?: string;
   displayDescription?: string;
+  onThumbnailError?: () => void;
 }
 
 const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
@@ -148,9 +150,15 @@ const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
   thumbnail,
   displayTitle,
   displayDescription,
+  onThumbnailError,
 }) => {
   const [thumbError, setThumbError] = useState(false);
   const proxyThumbnail = toProxyThumbnail(thumbnail);
+
+  const handleThumbError = () => {
+    setThumbError(true);
+    onThumbnailError?.();
+  };
 
   const handleClick = () => openPlatformUrl(embedUrl);
 
@@ -177,7 +185,7 @@ const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
           <img
             src={proxyThumbnail}
             alt="Threads preview"
-            onError={() => setThumbError(true)}
+            onError={() => handleThumbError()}
             loading="lazy"
           />
         </div>
@@ -221,6 +229,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   title,
   description,
   thumbnail,
+  onThumbnailError,
 }) => {
   const [embedFailed, setEmbedFailed] = useState(false);
   const [embedReady, setEmbedReady] = useState(false);
@@ -305,6 +314,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         thumbnail={effectiveThumbnail}
         displayTitle={displayTitle}
         displayDescription={displayDescription}
+        onThumbnailError={onThumbnailError}
       />
     );
   }
@@ -317,6 +327,7 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         thumbnail={effectiveThumbnail}
         displayTitle={displayTitle}
         displayDescription={displayDescription}
+        onThumbnailError={onThumbnailError}
       />
     );
   }

@@ -729,6 +729,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
               title={resolvedTitle ?? item.title}
               description={displayContent}
               thumbnail={displayThumbnail}
+              onThumbnailError={() => setThumbnailError(true)}
             />
         )}
 
