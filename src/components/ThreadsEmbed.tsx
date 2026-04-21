@@ -31,6 +31,30 @@ function isLoginWallDescription(d?: string): boolean {
   );
 }
 
+function shouldProxyThumbnail(urlStr?: string): boolean {
+  if (!urlStr) return false;
+  if (urlStr.includes("/api/proxy-image?")) return false;
+
+  try {
+    const hostname = new URL(urlStr, window.location.origin).hostname.toLowerCase();
+    return (
+      hostname.includes("instagram.com") ||
+      hostname.endsWith("fbcdn.net") ||
+      hostname.includes("facebook.com") ||
+      hostname.endsWith("fbsbx.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function toProxyThumbnail(urlStr?: string): string | undefined {
+  if (!urlStr) return undefined;
+  if (urlStr.startsWith("/api/proxy-image?")) return apiUrl(urlStr);
+  if (!shouldProxyThumbnail(urlStr)) return urlStr;
+  return apiUrl(`/api/proxy-image?url=${encodeURIComponent(urlStr)}`);
+}
+
 // Threads embed.js registers itself on window.instgrm (same key as Instagram).
 // We capture it once on load and store it separately so Instagram's embed.js
 // cannot overwrite our reference.
@@ -126,9 +150,7 @@ const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
   displayDescription,
 }) => {
   const [thumbError, setThumbError] = useState(false);
-  const proxyThumbnail = thumbnail
-    ? apiUrl(`/api/proxy-image?url=${encodeURIComponent(thumbnail)}`)
-    : undefined;
+  const proxyThumbnail = toProxyThumbnail(thumbnail);
 
   const handleClick = () => openPlatformUrl(embedUrl);
 
