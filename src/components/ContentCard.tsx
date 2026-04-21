@@ -376,9 +376,20 @@ const ContentCard: React.FC<ContentCardProps> = ({
       if (derivedSource === "reddit" && !isRedditBadUrl) return;
 
       // Skip if we already have all needed data (except for Facebook which needs URL resolution)
+      const isThreadsLoginWallContent = derivedSource === "threads" && (
+        !item.content ||
+        (() => {
+          const d = (item.content ?? "").toLowerCase();
+          return (
+            d.includes("join threads to share ideas") ||
+            d.includes("log in with your instagram") ||
+            d.includes("say more with threads")
+          );
+        })()
+      );
       const needsUnfurl =
         (derivedSource === "facebook" && ((!resolvedThumbnailRef.current && !item.thumbnail) || !item.content || !resolvedFacebookUrlRef.current)) ||
-        (derivedSource === "threads" && (!item.thumbnail || !item.content)) ||
+        (derivedSource === "threads" && (!item.thumbnail || isThreadsLoginWallContent)) ||
         derivedSource === "reddit" ||
         !item.thumbnail ||
         thumbnailError ||
@@ -467,7 +478,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
             // the next unfurl call always returns a different token. Display via local
             // state only; do NOT persist to storage.
             setResolvedThumbnail(resolvedImage);
-          } else if (!item.thumbnail || thumbnailError) {
+          } else if (!item.thumbnail || thumbnailError || isThreadsLoginWallContent) {
             setResolvedThumbnail(resolvedImage);
             try {
               await updateItemRef.current({ id: item.id, thumbnail: resolvedImage });
@@ -477,9 +488,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
           }
         }
 
-        // Update description if missing
+        // Update description if missing or login-wall
         if (
-          !item.content &&
+          (!item.content || isThreadsLoginWallContent) &&
           typeof data.description === "string" &&
           data.description
         ) {
