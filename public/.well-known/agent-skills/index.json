@@ -1,4 +1,26 @@
 {
   "$schema": "https://agentskills.io/schema/v0.2.0/index.json",
-  "skills": []
+  "skills": [
+    {
+      "name": "save-content",
+      "type": "action",
+      "description": "Save any URL (tweet, TikTok, Instagram post, Reddit thread, YouTube video, or any link) to your 4Stash for later.",
+      "url": "https://4stash.com/login",
+      "sha256": "9a76b635dc898aa7bd2810b555d7ff586e59c9b6683145cc015c8e00b7af62cd"
+    },
+    {
+      "name": "organize-lists",
+      "type": "action",
+      "description": "Create and manage lists to organize saved content by topic, project, or category.",
+      "url": "https://4stash.com/login",
+      "sha256": "cb0e7c886fb61a153d26080704d85ce3ec7f3deb11ca5d1316c26a6655b6c442"
+    },
+    {
+      "name": "browse-stash",
+      "type": "action",
+      "description": "Browse, search, and revisit all previously saved content across all lists.",
+      "url": "https://4stash.com/login",
+      "sha256": "73852e17a63438dd48d959273cbe2b887b452f467039590019bf616cecf8c514"
+    }
+  ]
 }
