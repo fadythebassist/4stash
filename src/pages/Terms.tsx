@@ -144,13 +144,15 @@ const Terms: React.FC = () => {
         <section>
           <h2>12. Contact</h2>
           <p>
-            If you have questions about these Terms of Service, please contact
-            us through the app.
+            If you have questions about these Terms of Service, please email us
+            at <a href="mailto:support@4stash.com">support@4stash.com</a>.
           </p>
         </section>
 
         <footer className="privacy-footer">
           <a href="/privacy">Privacy Policy</a>
+          {" · "}
+          <a href="mailto:support@4stash.com">support@4stash.com</a>
           {" · "}
           <a href="/login">Back to 4Stash</a>
         </footer>

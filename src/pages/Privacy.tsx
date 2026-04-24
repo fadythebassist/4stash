@@ -41,12 +41,14 @@ const Privacy: React.FC = () => {
             users.
           </p>
 
-          <h3>Social Connections (Optional)</h3>
+          <h3>Threads Content</h3>
           <p>
-            If you connect your Threads account, we store an access token
-            provided by Meta in your account record. This token is used solely
-            to fetch rich previews of Threads posts you save. We do not post,
-            like, follow, or take any action on your behalf.
+            4Stash supports saving and previewing Threads posts by URL. When you
+            save a Threads post, we fetch and store its metadata (title,
+            description, and preview image) using the public Threads embed API.
+            We do not require you to connect or log in to a Threads account, and
+            we do not post, like, follow, or take any action on the Threads
+            platform on your behalf.
           </p>
 
           <h3>Usage Data</h3>
@@ -74,8 +76,8 @@ const Privacy: React.FC = () => {
               proxy endpoint
             </li>
             <li>
-              To display rich previews of Threads posts using your optional
-              Threads access token
+              To display rich previews of Threads posts using the public Threads
+              embed API
             </li>
           </ul>
           <p>We do not sell, rent, or share your data with third parties.</p>
@@ -107,8 +109,9 @@ const Privacy: React.FC = () => {
               </a>
             </li>
             <li>
-              <strong>Meta Threads API</strong> — Used only when you explicitly
-              connect your Threads account to fetch post previews.{" "}
+              <strong>Meta Threads Embed API</strong> — Used to render Threads
+              post previews when you save a Threads URL. No account connection
+              or login is required.{" "}
               <a
                 href="https://privacycenter.instagram.com/policy"
                 target="_blank"
@@ -167,13 +170,15 @@ const Privacy: React.FC = () => {
         <section>
           <h2>10. Contact</h2>
           <p>
-            If you have questions about this Privacy Policy, please open an
-            issue or contact us through the app.
+            If you have questions about this Privacy Policy, please email us at{" "}
+            <a href="mailto:support@4stash.com">support@4stash.com</a>.
           </p>
         </section>
 
         <footer className="privacy-footer">
           <a href="/terms">Terms of Service</a>
+          {" · "}
+          <a href="mailto:support@4stash.com">support@4stash.com</a>
           {" · "}
           <a href="/login">Back to 4Stash</a>
         </footer>
