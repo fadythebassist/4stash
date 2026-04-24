@@ -1,0 +1,13 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://4stash.com/",
+      "service-doc": [
+        {
+          "href": "https://4stash.com/",
+          "type": "text/html"
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,15 @@
 import React from "react";
+import { usePageMeta } from "@/hooks/usePageMeta";
 import "./Privacy.css";
 
 const Terms: React.FC = () => {
+  usePageMeta({
+    title: "Terms of Service - 4Stash",
+    description:
+      "Read the 4Stash Terms of Service. Understand the rules governing your use of the app.",
+    canonical: "https://4stash.com/terms",
+  });
+
   return (
     <div className="privacy-page">
       <div className="privacy-container">

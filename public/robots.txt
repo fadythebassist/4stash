@@ -1,0 +1,75 @@
+# robots.txt for 4stash.com
+# https://www.rfc-editor.org/rfc/rfc9309
+
+# ── General crawlers ──────────────────────────────────────────────
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+# ── Google ────────────────────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+# ── AI crawlers — allowed for search/discovery, not training ──────
+User-agent: GPTBot
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /dashboard
+Disallow: /share-target
+Disallow: /recovery
+Disallow: /api/
+
+# ── Content signals (AI usage preferences) ────────────────────────
+# https://contentsignals.org
+Content-Signal: ai-train=no, search=yes, ai-input=no
+
+# ── Sitemap ───────────────────────────────────────────────────────
+Sitemap: https://4stash.com/sitemap.xml

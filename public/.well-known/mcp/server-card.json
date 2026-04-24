@@ -1,0 +1,9 @@
+{
+  "serverInfo": {
+    "name": "4Stash",
+    "version": "1.0.0",
+    "description": "Personal multimedia content organizer. Save links, tweets, TikToks, Instagram posts, Reddit threads, YouTube videos, and more for later."
+  },
+  "homepage": "https://4stash.com/",
+  "capabilities": []
+}
