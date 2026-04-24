@@ -69,8 +69,19 @@ const Dashboard: React.FC = () => {
   const lastScrollYRef = useRef(0);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const topbarWrapperRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const isCompactRef = useRef(false);
   const accumulatedRef = useRef(0);
+
+  // Dismiss mobile keyboard when the native "Search" button is tapped on the virtual keyboard.
+  // The `search` event fires on <input type="search"> when the user submits via the keyboard action button.
+  useEffect(() => {
+    const input = searchInputRef.current;
+    if (!input) return;
+    const handleSearch = () => input.blur();
+    input.addEventListener("search", handleSearch);
+    return () => input.removeEventListener("search", handleSearch);
+  }, []);
 
   // Scroll down: compact header + hide 3 bars. Scroll up: restore all.
   // Uses accumulation hysteresis to prevent blinking on inertial/jittery scroll.
@@ -463,10 +474,14 @@ const Dashboard: React.FC = () => {
               <input
                 type="search"
                 className="header-search-input"
+                ref={searchInputRef}
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Escape") setSearchQuery(""); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSearchQuery("");
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
                 aria-label="Search saved items"
               />
               {searchQuery && (
