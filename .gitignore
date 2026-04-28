@@ -38,6 +38,12 @@ firestore-debug.log
 # Social Auth
 SOCIAL_AUTH_PLAN.md
 
+# Publishing plans
+GOOGLE_PLAY_PUBLISH_PLAN.md
+
+# Android signing
+android/keystore.properties
+
 # Temp / scratch files
 nul
 temp_*.txt

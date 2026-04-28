@@ -52,6 +52,12 @@ The Android app is coming soon to Google Play. It will support saving content di
 
 - Homepage: https://4stash.com/
 - Login / Get Started: https://4stash.com/login
+- Read It Later App: https://4stash.com/read-it-later-app
+- Bookmark Social Media Posts: https://4stash.com/bookmark-social-media-posts
+- Save Tweets and X Posts: https://4stash.com/save-tweets-for-later
+- Save Instagram Posts: https://4stash.com/save-instagram-posts
+- Save TikToks: https://4stash.com/save-tiktoks-for-later
+- Save Reddit Threads: https://4stash.com/save-reddit-threads
 - Privacy Policy: https://4stash.com/privacy
 - Terms of Service: https://4stash.com/terms
 - Support: support@4stash.com
