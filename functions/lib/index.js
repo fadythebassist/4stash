@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.api = void 0;
+exports.home = exports.api = void 0;
 const functions = __importStar(require("firebase-functions"));
 const params_1 = require("firebase-functions/params");
 const https = __importStar(require("https"));
@@ -42,9 +42,83 @@ const url_1 = require("url");
 const FB_APP_ID = (0, params_1.defineSecret)("FB_APP_ID");
 const FB_APP_SECRET = (0, params_1.defineSecret)("FB_APP_SECRET");
 const THREADS_APP_SECRET = (0, params_1.defineSecret)("THREADS_APP_SECRET");
+const SITE_ORIGIN = "https://4stash.com";
+const AGENT_LINK_HEADER = "</.well-known/api-catalog>; rel=\"api-catalog\", </index.md>; rel=\"alternate\"; type=\"text/markdown\"";
+const FALLBACK_MARKDOWN = `# 4Stash — Save Content from Anywhere, Find It Later
+
+4Stash is a personal multimedia content organizer for saving links, tweets, TikToks, Instagram posts, Reddit threads, YouTube videos, Threads posts, Facebook posts, and any URL in one private stash.
+
+- Homepage: https://4stash.com/
+- Login / Get Started: https://4stash.com/login
+- Privacy Policy: https://4stash.com/privacy
+- Terms of Service: https://4stash.com/terms
+- API Catalog: https://4stash.com/.well-known/api-catalog
+`;
+const FALLBACK_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>4Stash - Save Content from Anywhere, Find It Later</title>
+    <meta name="description" content="4Stash is a personal content organizer. Save links, tweets, TikToks, Instagram posts, Reddit threads, YouTube videos, and more — all in one place." />
+    <link rel="canonical" href="https://4stash.com/" />
+  </head>
+  <body>
+    <h1>4Stash</h1>
+    <p>Save Content from Anywhere, Find It Later.</p>
+    <p><a href="/login">Get started</a></p>
+  </body>
+</html>`;
 // ---------------------------------------------------------------------------
 // Helpers (ported from vite.config.ts unfurl middleware)
 // ---------------------------------------------------------------------------
+function getAcceptQuality(accept, mediaType) {
+    if (!accept)
+        return 0;
+    return accept
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .reduce((best, entry) => {
+        const [type, ...params] = entry.split(";").map((part) => part.trim().toLowerCase());
+        if (type !== mediaType.toLowerCase())
+            return best;
+        const qParam = params.find((param) => param.startsWith("q="));
+        const q = qParam ? Number(qParam.slice(2)) : 1;
+        return Number.isFinite(q) ? Math.max(best, q) : best;
+    }, 0);
+}
+function shouldReturnMarkdown(accept) {
+    const markdownQ = getAcceptQuality(accept, "text/markdown");
+    if (markdownQ <= 0)
+        return false;
+    const htmlQ = getAcceptQuality(accept, "text/html");
+    return markdownQ >= htmlQ;
+}
+async function fetchStaticText(path, fallback) {
+    try {
+        const response = await fetch(`${SITE_ORIGIN}${path}`);
+        if (!response.ok)
+            return fallback;
+        return await response.text();
+    }
+    catch (_a) {
+        return fallback;
+    }
+}
+async function handleHomeRequest(req, res) {
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Link", AGENT_LINK_HEADER);
+    res.setHeader("Vary", "Accept");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (shouldReturnMarkdown(req.headers.accept)) {
+        const markdown = await fetchStaticText("/index.md", FALLBACK_MARKDOWN);
+        res.status(200).type("text/markdown; charset=utf-8").send(markdown);
+        return;
+    }
+    const html = await fetchStaticText("/landing.html", FALLBACK_HTML);
+    res.status(200).type("text/html; charset=utf-8").send(html);
+}
 function decodeHtmlEntities(input) {
     return input
         .replace(/&quot;/g, '"')
@@ -1673,5 +1747,10 @@ exports.api = functions
     .runWith({ timeoutSeconds: 30, memory: "256MB", secrets: ["FB_APP_ID", "FB_APP_SECRET", "THREADS_APP_SECRET"] })
     .https.onRequest(async (req, res) => {
     await handleRequest(req, res, FB_APP_ID.value(), FB_APP_SECRET.value(), THREADS_APP_SECRET.value());
+});
+exports.home = functions
+    .runWith({ timeoutSeconds: 10, memory: "128MB" })
+    .https.onRequest(async (req, res) => {
+    await handleHomeRequest(req, res);
 });
 //# sourceMappingURL=index.js.map

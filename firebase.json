@@ -18,11 +18,15 @@
       },
       {
         "source": "/",
-        "destination": "/landing.html"
+        "function": "home"
+      },
+      {
+        "source": "/index.html",
+        "destination": "/app.html"
       },
       {
         "source": "**",
-        "destination": "/index.html"
+        "destination": "/app.html"
       }
     ],
     "headers": [
@@ -72,6 +76,15 @@
       },
       {
         "source": "index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "app.html",
         "headers": [
           {
             "key": "Cache-Control",

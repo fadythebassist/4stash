@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --port 5173",
     "dev:kill": "powershell -Command \"$p = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { Stop-Process -Id $p -Force }\" && npm run dev",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/prepare-hosting.mjs",
     "build:android": "npm run build && npx cap sync android",
     "postinstall": "node -e \"const fs=require('fs');const f='node_modules/@capacitor-firebase/authentication/android/build.gradle';try{let c=fs.readFileSync(f,'utf8');if(c.includes('proguard-android.txt')){fs.writeFileSync(f,c.replace(/proguard-android\\.txt/g,'proguard-android-optimize.txt'));console.log('Patched @capacitor-firebase/authentication build.gradle');}}catch(e){}\"",
     "assets:android": "npx capacitor-assets generate --android",
