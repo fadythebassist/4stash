@@ -682,7 +682,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           </div>
         </div>
 
-        {displayContent && !shouldShowFacebookPreview && !shouldShowThreadsPreview && !shouldShowInstagramEmbed && (
+        {displayContent && !shouldShowFacebookPreview && !shouldShowThreadsPreview && !shouldShowInstagramEmbed && derivedSource !== "twitter" && (
           <p className={`card-text ${isTextExpanded ? 'expanded' : ''}`}>
             {displayText}
             {needsTruncation && !isTextExpanded && (
