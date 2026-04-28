@@ -7,6 +7,24 @@
           "href": "https://4stash.com/",
           "type": "text/html"
         }
+      ],
+      "openid-configuration": [
+        {
+          "href": "https://4stash.com/.well-known/openid-configuration",
+          "type": "application/json"
+        }
+      ],
+      "oauth-authorization-server": [
+        {
+          "href": "https://4stash.com/.well-known/oauth-authorization-server",
+          "type": "application/json"
+        }
+      ],
+      "oauth-protected-resource": [
+        {
+          "href": "https://4stash.com/.well-known/oauth-protected-resource",
+          "type": "application/json"
+        }
       ]
     }
   ]

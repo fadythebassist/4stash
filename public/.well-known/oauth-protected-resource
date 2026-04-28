@@ -1,0 +1,7 @@
+{
+  "resource": "https://4stash.com",
+  "authorization_servers": ["https://accounts.google.com"],
+  "scopes_supported": ["openid", "email", "profile"],
+  "bearer_methods_supported": ["header"],
+  "resource_documentation": "https://4stash.com/.well-known/api-catalog"
+}
