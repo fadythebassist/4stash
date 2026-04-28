@@ -329,7 +329,10 @@ function isFacebookVideoUrl(urlStr) {
 }
 function shouldProxyImageHost(hostname) {
     const h = hostname.toLowerCase();
-    return (h.includes("instagram.com") ||
+    return (
+    // Instagram CDN images are CORP-protected in browsers; proxy them with an
+    // Instagram referer so they render inside our app origin.
+    h.includes("instagram.com") ||
         h.endsWith("fbcdn.net") ||
         h.includes("facebook.com") ||
         h.endsWith("fbsbx.com"));
@@ -945,7 +948,7 @@ function buildInstagramMediaFallbackUrl(u) {
 // Main handler (shared between /api/unfurl and /api/proxy-image)
 // ---------------------------------------------------------------------------
 async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     // CORS — allow 4stash.com and localhost dev
     const origin = req.headers["origin"];
     const allowedOrigins = ["https://4stash.com", "https://later-production-9a596.web.app", "http://localhost:5173", "http://localhost:4173", "capacitor://localhost"];
@@ -1023,7 +1026,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         try {
             targetUrl = new url_1.URL(target);
         }
-        catch (_g) {
+        catch (_j) {
             res.status(400).json({ error: "Invalid url param" });
             return;
         }
@@ -1033,7 +1036,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
         }
         const h = targetUrl.hostname.toLowerCase();
         const isFbImg = h.endsWith("fbsbx.com") || h.endsWith("fbcdn.net") || h.includes("facebook.com");
-        const isIgImg = h.includes("cdninstagram.com") || h.includes("instagram.com");
+        const isIgImg = h.includes("instagram.com");
         const imgHeaders = Object.assign(Object.assign({ "user-agent": isFbImg
                 ? "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
                 : isIgImg
@@ -1051,7 +1054,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 res.status(413).json({ error: "Image too large" });
                 return;
             }
-            res.status(200).setHeader("Content-Type", contentType).setHeader("Cache-Control", "no-store").end(buf);
+            res.status(200).setHeader("Content-Type", contentType).setHeader("Cache-Control", "public, max-age=3600").end(buf);
         }
         catch (e) {
             res.status(500).json({ error: e instanceof Error && e.message === "Timeout" ? "Upstream timeout" : "Proxy failed" });
@@ -1130,7 +1133,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     try {
         targetUrl = new url_1.URL(target);
     }
-    catch (_h) {
+    catch (_k) {
         res.status(400).json({ error: "Invalid url param" });
         return;
     }
@@ -1148,8 +1151,14 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
     if (isFacebook) {
         try {
             targetUrl = new url_1.URL(cleanFacebookUrl(targetUrl.toString()));
+            if (isFacebookLoginUrl(targetUrl.toString())) {
+                const next = (_e = targetUrl.searchParams.get("next")) !== null && _e !== void 0 ? _e : (_f = target.match(/[?&]next=([^&]+)/)) === null || _f === void 0 ? void 0 : _f[1];
+                if (next) {
+                    targetUrl = new url_1.URL(cleanFacebookUrl(decodeURIComponent(next)));
+                }
+            }
         }
-        catch (_j) {
+        catch (_l) {
             // keep original targetUrl
         }
     }
@@ -1170,7 +1179,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 try {
                     targetUrl = new url_1.URL(resolved);
                 }
-                catch ( /* keep original */_k) { /* keep original */ }
+                catch ( /* keep original */_m) { /* keep original */ }
             }
         }
     }
@@ -1188,7 +1197,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 primary = await fetchTextWithTimeout(cleanedFacebookUrl, facebookPreviewHeaders, 10000);
                 targetUrl = new url_1.URL(cleanedFacebookUrl);
             }
-            catch (_l) {
+            catch (_o) {
                 // keep original failed response
             }
         }
@@ -1474,8 +1483,8 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
             embedPagePromise,
             jinaPromise,
         ]);
-        const embedPageResult = (_e = oembedResults[oembedResults.length - 2]) !== null && _e !== void 0 ? _e : {};
-        const jinaResult = (_f = oembedResults[oembedResults.length - 1]) !== null && _f !== void 0 ? _f : {};
+        const embedPageResult = (_g = oembedResults[oembedResults.length - 2]) !== null && _g !== void 0 ? _g : {};
+        const jinaResult = (_h = oembedResults[oembedResults.length - 1]) !== null && _h !== void 0 ? _h : {};
         const oembedMerged = oembedResults.slice(0, oembedResults.length - 2);
         for (const result of [mbasicResult, graphResult, ...oembedMerged, embedPageResult, jinaResult]) {
             if (!meta.image && result.image)
@@ -1517,7 +1526,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     steps: redditResolveResult.debugAttempts,
                 };
             }
-            catch (_m) {
+            catch (_p) {
                 // keep original targetUrl
             }
         }
@@ -1575,7 +1584,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 }
             }
         }
-        catch ( /* Reddit JSON failed */_o) { /* Reddit JSON failed */ }
+        catch ( /* Reddit JSON failed */_q) { /* Reddit JSON failed */ }
         // Reddit oEmbed — works server-side and returns the real post title.
         // Try this before Jina since it's more reliable.
         if (!meta.title) {
@@ -1596,7 +1605,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     }
                 }
             }
-            catch ( /* ignore */_p) { /* ignore */ }
+            catch ( /* ignore */_r) { /* ignore */ }
         }
         if (!meta.title || !meta.description || !meta.image) {
             attempts["redditJina"] = { attempted: true, ok: false };
@@ -1612,7 +1621,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                 if (!meta.image && redditMeta.image)
                     meta.image = redditMeta.image;
             }
-            catch ( /* ignore */_q) { /* ignore */ }
+            catch ( /* ignore */_s) { /* ignore */ }
         }
         // If title is still a generic error string (e.g. "403" from the error page HTML),
         // clear it so the client falls back to its own "Reddit Post in r/..." label.
@@ -1641,7 +1650,7 @@ async function handleRequest(req, res, fbAppId, fbAppSecret, threadsAppSecret) {
                     meta.image = threadsMeta.image;
             }
         }
-        catch ( /* ignore */_r) { /* ignore */ }
+        catch ( /* ignore */_t) { /* ignore */ }
     }
     const image = meta.image ? new url_1.URL(meta.image, finalUrl).toString() : undefined;
     const proxiedImage = (() => {

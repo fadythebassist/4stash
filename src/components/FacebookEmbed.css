@@ -55,6 +55,7 @@
 }
 
 .fb-card-body {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -113,6 +114,12 @@
 
 .fb-card-inline-play:hover {
   background: rgba(0, 0, 0, 0.88);
+}
+
+.fb-card-body .fb-card-inline-play {
+  position: static;
+  transform: none;
+  margin-top: 4px;
 }
 
 .fb-card-thumb {

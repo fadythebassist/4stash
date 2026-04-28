@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
+import { cleanFacebookUrl } from "@/utils/facebook";
 import "./FacebookEmbed.css";
 
 // Decode HTML entities for proper display
@@ -57,6 +58,14 @@ function isFacebookLoginUrl(url: string): boolean {
     lower.includes("facebook.com/login") ||
     lower.includes("facebook.com/checkpoint")
   );
+}
+
+function isFacebookGroupUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.toLowerCase().includes("/groups/");
+  } catch {
+    return url.toLowerCase().includes("facebook.com/groups/");
+  }
 }
 
 function isGenericFacebookDescription(text?: string): boolean {
@@ -167,7 +176,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
         ? trimmed
         : `https://${trimmed}`;
     try {
-      const parsed = new URL(withProtocol);
+      const parsed = new URL(cleanFacebookUrl(withProtocol) ?? withProtocol);
       if (parsed.hostname.includes("facebook.com")) {
         parsed.protocol = "https:";
         parsed.hash = "";
@@ -227,6 +236,13 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     [normalizedUrl],
   );
 
+  const isGroupPostWithoutPreview = useMemo(
+    () => normalizedUrl
+      ? isFacebookGroupUrl(normalizedUrl) && !thumbnail && !safeDescription
+      : false,
+    [normalizedUrl, thumbnail, safeDescription],
+  );
+
   // Inline button label — mirrors Instagram's wording
   const inlineButtonLabel = useMemo(() => {
     if (contentType === "Reel") return "▶ Play Reel Here";
@@ -236,7 +252,7 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
   }, [contentType]);
 
   // Can this URL be embedded at all?
-  const canViewInline = !isShortShareUrl && !isNotEmbeddable && !!normalizedUrl;
+  const canViewInline = !isShortShareUrl && !isNotEmbeddable && !isGroupPostWithoutPreview && !!normalizedUrl;
 
   // Build the iframe src for public posts/videos that the plugin can render
   const iframeSrc = useMemo(() => {
@@ -255,6 +271,10 @@ const FacebookEmbed: React.FC<FacebookEmbedProps> = ({
     setIframeLoaded(false);
     setIframeFailed(false);
   }, [iframeSrc]);
+
+  useEffect(() => {
+    setThumbnailFailed(false);
+  }, [thumbnail]);
 
   // After iframe fires onLoad, verify it rendered real content (posts only — video plugin
   // doesn't send postMessage events).

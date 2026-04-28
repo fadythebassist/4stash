@@ -3,6 +3,7 @@ import { Item } from "@/types";
 import { useData } from "@/contexts/DataContext";
 import { cleanFacebookUrl, isFacebookUrl } from "@/utils/facebook";
 import { apiUrl } from "@/utils/apiBase";
+import { isGenericInstagramDescription } from "@/utils/instagramMetadata";
 import "./Modal.css";
 
 function decodeHtmlEntities(text: string): string {
@@ -20,8 +21,7 @@ function shouldProxyThumbnail(urlStr?: string): boolean {
   try {
     const hostname = new URL(urlStr, window.location.origin).hostname.toLowerCase();
     return (
-      // Don't proxy cdninstagram.com — time-sensitive signed tokens fail when proxied.
-      hostname.includes("instagram.com") && !hostname.includes("cdninstagram.com") ||
+      hostname.includes("instagram.com") ||
       hostname.endsWith("fbcdn.net") ||
       hostname.includes("facebook.com") ||
       hostname.endsWith("fbsbx.com")
@@ -81,6 +81,10 @@ function isGenericFacebookErrorTitle(title?: string): boolean {
 function isThreadsItem(item: Item): boolean {
   const lowerUrl = (item.url || "").toLowerCase();
   return item.source === "threads" || lowerUrl.includes("threads.com") || lowerUrl.includes("threads.net");
+}
+
+function isInstagramItem(item: Item): boolean {
+  return item.source === "instagram" || (item.url || "").toLowerCase().includes("instagram.com");
 }
 
 function isGenericThreadsTitle(title?: string): boolean {
@@ -206,6 +210,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     if (isFacebookItem(item) && isGenericFacebookDescription(nextContent)) {
       return undefined;
     }
+    if (isInstagramItem(item) && isGenericInstagramDescription(nextContent)) {
+      return undefined;
+    }
     return nextContent;
   }, [resolvedContent, item]);
   const safeDisplayTitle = useMemo(() => {
@@ -257,6 +264,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             ? undefined
             :
           isFacebookItem(item) && isGenericFacebookDescription(nextContent)
+            ? undefined
+            :
+          isInstagramItem(item) && isGenericInstagramDescription(nextContent)
             ? undefined
             : nextContent;
 

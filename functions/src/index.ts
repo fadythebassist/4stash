@@ -266,9 +266,9 @@ function isFacebookVideoUrl(urlStr: string): boolean {
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
-    // Don't proxy cdninstagram.com — these are CDN URLs with time-sensitive signed tokens
-    // that work directly in browsers but fail when proxied (upstream returns 422).
-    h.includes("instagram.com") && !h.includes("cdninstagram.com") ||
+    // Instagram CDN images are CORP-protected in browsers; proxy them with an
+    // Instagram referer so they render inside our app origin.
+    h.includes("instagram.com") ||
     h.endsWith("fbcdn.net") ||
     h.includes("facebook.com") ||
     h.endsWith("fbsbx.com")
@@ -992,14 +992,6 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
 
     const h = targetUrl.hostname.toLowerCase();
 
-    // cdninstagram.com URLs have time-sensitive signed tokens — proxying them fails with 422
-    // because the upstream CDN rejects requests without a valid session. Redirect the client
-    // directly so it can attempt the URL natively (and trigger onError → re-unfurl if expired).
-    if (h.includes("cdninstagram.com")) {
-      res.redirect(302, targetUrl.toString());
-      return;
-    }
-
     const isFbImg = h.endsWith("fbsbx.com") || h.endsWith("fbcdn.net") || h.includes("facebook.com");
     const isIgImg = h.includes("instagram.com");
 
@@ -1109,6 +1101,12 @@ async function handleRequest(req: functions.https.Request, res: functions.Respon
   if (isFacebook) {
     try {
       targetUrl = new URL(cleanFacebookUrl(targetUrl.toString()));
+      if (isFacebookLoginUrl(targetUrl.toString())) {
+        const next = targetUrl.searchParams.get("next") ?? target.match(/[?&]next=([^&]+)/)?.[1];
+        if (next) {
+          targetUrl = new URL(cleanFacebookUrl(decodeURIComponent(next)));
+        }
+      }
     } catch {
       // keep original targetUrl
     }

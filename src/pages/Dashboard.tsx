@@ -72,6 +72,7 @@ const Dashboard: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const isCompactRef = useRef(false);
   const accumulatedRef = useRef(0);
+  const ignoreScrollUntilRef = useRef(0);
 
   // Dismiss mobile keyboard when the native "Search" button is tapped on the virtual keyboard.
   // The `search` event fires on <input type="search"> when the user submits via the keyboard action button.
@@ -89,6 +90,7 @@ const Dashboard: React.FC = () => {
     const HIDE_THRESHOLD = 40;   // px of downward scroll needed to hide
     const SHOW_THRESHOLD = 30;   // px of upward scroll needed to show
     const MIN_SCROLL_Y   = 60;   // don't hide until past this point on page
+    const TOGGLE_COOLDOWN_MS = 280; // ignore scroll noise from the collapse/expand transition
 
     let ticking = false;
     const handleScroll = () => {
@@ -99,6 +101,11 @@ const Dashboard: React.FC = () => {
         const delta = current - lastScrollYRef.current;
         lastScrollYRef.current = current;
         ticking = false;
+
+        if (performance.now() < ignoreScrollUntilRef.current) {
+          accumulatedRef.current = 0;
+          return;
+        }
 
         if (Math.abs(delta) < 2) return;
 
@@ -115,10 +122,12 @@ const Dashboard: React.FC = () => {
         if (!isCompactRef.current && accumulatedRef.current > HIDE_THRESHOLD && current > MIN_SCROLL_Y) {
           isCompactRef.current = true;
           accumulatedRef.current = 0;
+          ignoreScrollUntilRef.current = performance.now() + TOGGLE_COOLDOWN_MS;
           shell.classList.add("dashboard-sticky-shell--compact");
         } else if (isCompactRef.current && accumulatedRef.current < -SHOW_THRESHOLD) {
           isCompactRef.current = false;
           accumulatedRef.current = 0;
+          ignoreScrollUntilRef.current = performance.now() + TOGGLE_COOLDOWN_MS;
           shell.classList.remove("dashboard-sticky-shell--compact");
         }
       });

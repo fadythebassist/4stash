@@ -124,6 +124,16 @@ function normalizeThreadsUrl(urlStr: string): string {
   }
 }
 
+function getThreadsFallbackTitle(urlStr: string): string {
+  try {
+    const parsed = new URL(urlStr);
+    const handle = parsed.pathname.match(/^\/@([^/]+)/)?.[1];
+    return handle ? `Threads post by @${handle}` : "Threads Post";
+  } catch {
+    return "Threads Post";
+  }
+}
+
 const ThreadsLogo: React.FC = () => (
   <svg
     className="social-card-logo"
@@ -156,6 +166,7 @@ const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
 }) => {
   const [thumbError, setThumbError] = useState(false);
   const proxyThumbnail = toProxyThumbnail(thumbnail);
+  const fallbackTitle = displayTitle ?? getThreadsFallbackTitle(embedUrl);
 
   const handleThumbError = () => {
     setThumbError(true);
@@ -193,18 +204,11 @@ const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
         </div>
       ) : (
         <div className="social-card-body">
-          {displayTitle || displayDescription ? (
-            <>
-              {displayTitle && <div className="social-card-title">{displayTitle}</div>}
-              {displayDescription && (
-                <div className="social-card-description">{displayDescription}</div>
-              )}
-            </>
+          <div className="social-card-title">{fallbackTitle}</div>
+          {displayDescription ? (
+            <div className="social-card-description">{displayDescription}</div>
           ) : (
-            <>
-              <div className="social-card-icon">🧵</div>
-              <p className="social-card-cta">Tap to view on Threads</p>
-            </>
+            <p className="social-card-cta">Tap to view on Threads</p>
           )}
         </div>
       )}
@@ -305,10 +309,9 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   const effectiveThumbnail = isLoginWall ? undefined : thumbnail;
 
   // --- Android WebView: skip embed.js entirely ---
-  // The Threads embed iframe loads successfully on Android, but video thumbnails
-  // inside the iframe fail because Meta CDN (fbcdn.net / cdninstagram.com) requires
-  // session cookies that the isolated Capacitor WebView doesn't have. The static
-  // card uses our /api/proxy-image endpoint which works correctly in production.
+  // The iframe can report as processed while still rendering blank in Capacitor.
+  // Use a visible static card instead; when no thumbnail is available it still
+  // shows the Threads handle and a direct open action.
   if (isAndroidWebView()) {
     return (
       <StaticThreadsCard

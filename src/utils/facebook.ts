@@ -32,6 +32,17 @@ export function cleanFacebookUrl(urlStr?: string): string | undefined {
       return normalized;
     }
 
+    if (url.pathname.toLowerCase().startsWith("/login") || url.pathname.toLowerCase().startsWith("/checkpoint")) {
+      const next = url.searchParams.get("next");
+      if (next) {
+        try {
+          return cleanFacebookUrl(decodeURIComponent(next));
+        } catch {
+          return cleanFacebookUrl(next);
+        }
+      }
+    }
+
     const trackingParams = [
       "utm_source",
       "utm_medium",

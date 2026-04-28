@@ -3,6 +3,7 @@ import { Item } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
 import { apiUrl } from "@/utils/apiBase";
+import { isGenericInstagramDescription } from "@/utils/instagramMetadata";
 import "./ContentCard.css";
 
 // Embed components: each platform JS chunk only downloads when the first card
@@ -270,6 +271,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
   }, [resolvedThumbnail, item.thumbnail]);
   const displayContent = useMemo(() => {
     const raw = resolvedContent ?? item.content;
+    if (derivedSource === "instagram" && isGenericInstagramDescription(raw)) {
+      return undefined;
+    }
     if (derivedSource === "threads" && isThreadsLoginWallDescription(raw)) {
       return undefined;
     }
@@ -538,6 +542,8 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 await updateItemRef.current({ id: item.id, content: data.description });
               } catch { /* Non-critical */ }
             }
+          } else if (derivedSource === "instagram" && isGenericInstagramDescription(data.description)) {
+            // Don't persist Instagram login-wall/Jina markdown as item notes.
           } else {
             setResolvedContent(data.description);
             // Persist the resolved description
@@ -676,7 +682,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
           </div>
         </div>
 
-        {displayContent && !shouldShowFacebookPreview && (
+        {displayContent && !shouldShowFacebookPreview && !shouldShowThreadsPreview && !shouldShowInstagramEmbed && (
           <p className={`card-text ${isTextExpanded ? 'expanded' : ''}`}>
             {displayText}
             {needsTruncation && !isTextExpanded && (

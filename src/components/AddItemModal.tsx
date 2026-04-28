@@ -4,6 +4,7 @@ import { fetchLinkMetadata } from "@/services/LinkMetadataService";
 import { moderateItem, checkMetadata } from "@/services/ModerationService";
 import { getGeminiSuggestions } from "@/services/GeminiService";
 import { apiUrl } from "@/utils/apiBase";
+import { cleanInstagramDescription } from "@/utils/instagramMetadata";
 import TweetEmbed from "@/components/TweetEmbed";
 import "./Modal.css";
 
@@ -811,9 +812,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           else fallbackTitle = `Post by @${type}`;
         }
 
-        const description = meta?.description
-          ?.replace(/^\d+\s+Likes,\s+\d+\s+Comments\s+-\s+/i, "")
-          .trim();
+        const description = cleanInstagramDescription(meta?.description);
 
         const metaTitle = meta?.title;
         return {

@@ -172,10 +172,9 @@ function isGenericRedditTitle(title?: string): boolean {
 function shouldProxyImageHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
-    // Don't proxy cdninstagram.com - these are CDN URLs with time-sensitive tokens
-    // that work directly in browsers but fail when proxied
-    // h.includes("cdninstagram.com") ||
-    h.includes("instagram.com") && !h.includes("cdninstagram.com") ||
+    // Instagram CDN images are CORP-protected in browsers; proxy them with an
+    // Instagram referer so they render inside our app origin.
+    h.includes("instagram.com") ||
     h.endsWith("fbcdn.net") ||
     h.includes("facebook.com") ||
     // Facebook crawler thumbnails often come from lookaside.fbsbx.com and are CORP-protected.
@@ -984,6 +983,7 @@ function unfurlPlugin(): Plugin {
             attempts.fallbackMediaUrl.used = true;
           }
         }
+
       }
 
       const isFacebookHost =

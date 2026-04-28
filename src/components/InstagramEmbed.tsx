@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
+import { isGenericInstagramDescription } from "@/utils/instagramMetadata";
 import "./SocialCard.css";
 
 // Quick rollback switch: set to false to keep inline viewing for reels only.
@@ -107,6 +108,7 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
 
   const isGenericDesc =
     !description ||
+    isGenericInstagramDescription(description) ||
     description.includes("likes,") ||
     description.includes("Followers,") ||
     description.length < 10;
