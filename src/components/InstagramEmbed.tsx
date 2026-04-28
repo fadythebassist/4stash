@@ -159,7 +159,12 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
           className="social-card-thumbnail"
           onClick={(e) => {
             e.stopPropagation();
-            if (!canViewInline) handleCardClick();
+            if (canViewInline) {
+              setIframeFailed(false);
+              setPlayInline(true);
+            } else {
+              handleCardClick();
+            }
           }}
           style={{ cursor: "pointer" }}
         >
@@ -190,7 +195,15 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
         /* No thumbnail */
         <div
           className="social-card-body"
-          onClick={(e) => { e.stopPropagation(); handleCardClick(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canViewInline) {
+              setIframeFailed(false);
+              setPlayInline(true);
+            } else {
+              handleCardClick();
+            }
+          }}
           style={{ cursor: "pointer" }}
         >
           {(displayTitle || displayDesc) ? (
@@ -206,20 +219,21 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
                   ? "Tap below to view inside app"
                   : "Tap to view on Instagram"}
               </p>
-              {canViewInline && (
-                <button
-                  type="button"
-                  className="social-card-inline-play"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIframeFailed(false);
-                    setPlayInline(true);
-                  }}
-                >
-                  {inlineButtonLabel}
-                </button>
-              )}
             </>
+          )}
+          {canViewInline && (
+            <button
+              type="button"
+              className="social-card-inline-play"
+              style={{ position: "static", transform: "none", marginTop: "12px" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIframeFailed(false);
+                setPlayInline(true);
+              }}
+            >
+              {inlineButtonLabel}
+            </button>
           )}
         </div>
       )}
