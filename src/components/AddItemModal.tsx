@@ -1088,11 +1088,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         const safeDescription = !isGenericThreadsDescription(meta?.description)
           ? meta?.description
           : undefined;
-        // cdninstagram.com thumbnails are CORS-blocked; skip them
-        const safeThumbnail =
-          meta?.image && !meta.image.includes("cdninstagram.com")
-            ? meta.image
-            : undefined;
+        // Keep any image the server found and let our proxy helper normalize
+        // Instagram/Threads CDN URLs so the preview can actually render them.
+        const safeThumbnail = absolutizeThumbnail(meta?.image);
         // Do NOT use meta.url — the unfurl follows threads.net → threads.com
         // redirects and would overwrite the user's URL. Strip tracking params from fullUrl.
         return {
