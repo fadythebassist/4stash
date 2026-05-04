@@ -1407,6 +1407,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const previewLabel = previewConfig
     ? `${previewConfig.label}${previewContentType ? ` ${previewContentType}` : ""}`
     : "Link preview";
+  const isThreadsPreview = previewSource === "threads";
+  const previewDescription = content.trim();
   const shouldShowPreview = !!(url.trim() || thumbnail || previewSource || fetchingTitle);
 
   return (
@@ -1426,7 +1428,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           {/* Preview section scrolls with the rest of the form content */}
           {shouldShowPreview && (
             previewConfig ? (
-              <div className={`share-preview share-preview--compact share-preview-platform-card share-preview-platform-card--${previewPlatformClass}`}>
+              <div className={`share-preview share-preview--compact share-preview-platform-card share-preview-platform-card--${previewPlatformClass}${isThreadsPreview ? " share-preview-platform-card--threads-compact" : ""}`}>
                 <div className="share-preview-platform-header">
                   {previewSource === "facebook" ? (
                     <FacebookLogo />
@@ -1451,13 +1453,19 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                       {fetchingTitle ? "⏳" : previewConfig.emoji}
                     </div>
                     <div className="share-preview-platform-title">
-                      {fetchingTitle ? "Loading preview…" : previewLabel}
+                      {fetchingTitle ? "Loading preview…" : (title.trim() || previewLabel)}
                     </div>
-                    <div className="share-preview-platform-text">
-                      {fetchingTitle
-                        ? `Fetching ${previewConfig.label} metadata`
-                        : `Preview will use ${previewConfig.label} branding when saved`}
-                    </div>
+                    {!fetchingTitle && isThreadsPreview && previewDescription ? (
+                      <div className="share-preview-platform-text share-preview-platform-text--threads">
+                        {previewDescription}
+                      </div>
+                    ) : (
+                      <div className="share-preview-platform-text">
+                        {fetchingTitle
+                          ? `Fetching ${previewConfig.label} metadata`
+                          : `Preview will use ${previewConfig.label} branding when saved`}
+                      </div>
+                    )}
                   </div>
                 )}
                 <a
