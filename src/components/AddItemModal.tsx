@@ -107,6 +107,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [taggingWithAi, setTaggingWithAi] = useState(false);
   const [detectedSource, setDetectedSource] = useState<string | null>(null);
+  const metadataRequestId = useRef(0);
 
   // Fire Gemini in the background as soon as we have enough metadata.
   // Populates tag chips and pre-selects / auto-creates lists so the user sees
@@ -1107,6 +1108,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     setThumbnail(undefined);
     const source = detectSource(newUrl);
     setDetectedSource(source?.source ?? null);
+    const requestId = ++metadataRequestId.current;
 
     const trimmedUrl = newUrl.trim();
     const existingTitle = title.trim();
@@ -1134,21 +1136,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       (trimmedUrl.includes("facebook.com/share/") ||
         trimmedUrl.includes("fb.watch"));
 
-    const shouldFetchMetadata =
-      !!trimmedUrl &&
-      (shouldResolveFacebookShare ||
-        !existingTitle ||
-        source?.source === "twitter" ||
-        source?.source === "reddit" ||
-        source?.source === "anghami" ||
-        (source?.source === "facebook" &&
-          isGenericFacebookTitle(existingTitle)) ||
-        (source?.source === "instagram" &&
-          isGenericInstagramTitle(existingTitle)) ||
-        (source?.source === "reddit" &&
-          isGenericRedditTitle(existingTitle)) ||
-        (source?.source === "threads" &&
-          isGenericThreadsTitle(existingTitle)));
+    const shouldFetchMetadata = !!trimmedUrl || shouldResolveFacebookShare;
 
     // Auto-fetch metadata if URL is provided and title is missing or generic
     if (shouldFetchMetadata) {
@@ -1159,6 +1147,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           METADATA_TIMEOUT_MS,
           null,
         );
+
+        if (metadataRequestId.current !== requestId) return;
 
         // Update the URL if it resolved to something more specific.
         // This is critical for short/opaque URLs (vt.tiktok.com, fb.watch, facebook.com/share/)
@@ -1207,7 +1197,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       } catch (err) {
         console.error("[AddItemModal] Error fetching title:", err);
       } finally {
-        setFetchingTitle(false);
+        if (metadataRequestId.current === requestId) {
+          setFetchingTitle(false);
+        }
       }
     }
   };
@@ -1371,7 +1363,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
-  const previewSource = detectedSource ?? (url ? detectSource(url)?.source ?? null : null);
+  const previewDetails = url ? detectSource(url) : null;
+  const previewSource = detectedSource ?? previewDetails?.source ?? null;
+  const previewConfig = previewSource
+    ? (sourceConfig[previewSource] ?? {
+        emoji: previewDetails?.icon ?? "🔗",
+        label: previewDetails?.label ?? "Link",
+      })
+    : null;
+  const shouldShowPreview = !!(url.trim() || thumbnail || previewSource || fetchingTitle);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1388,20 +1388,36 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
         <form id="add-item-form" onSubmit={handleSubmit} className="modal-form">
           {/* Preview section scrolls with the rest of the form content */}
-          {thumbnail && (
-            <div className="share-preview">
-              <img
-                src={thumbnail}
-                alt="Preview"
-                className="share-preview-image"
-              />
-              {previewSource && sourceConfig[previewSource] && (
+          {shouldShowPreview && (
+            <div className="share-preview share-preview--compact">
+              {thumbnail ? (
+                <img
+                  src={thumbnail}
+                  alt="Preview"
+                  className="share-preview-image"
+                  onError={() => setThumbnail(undefined)}
+                />
+              ) : (
+                <div className="share-preview-placeholder share-preview-placeholder--compact">
+                  <span className={`share-preview-icon ${previewSource ?? "generic"}`}>
+                    {fetchingTitle ? "⏳" : previewConfig?.emoji ?? "🔗"}
+                  </span>
+                  <span className="share-preview-text">
+                    {fetchingTitle
+                      ? "Loading preview…"
+                      : previewConfig
+                        ? `${previewConfig.label} preview`
+                        : "Link preview"}
+                  </span>
+                </div>
+              )}
+              {previewConfig && (
                 <div className="share-preview-badge">
                   <span className={`share-preview-badge-icon ${previewSource}`}>
-                    {sourceConfig[previewSource].emoji}
+                    {previewConfig.emoji}
                   </span>
                   <span className="share-preview-badge-text">
-                    {sourceConfig[previewSource].label}
+                    {previewConfig.label}
                   </span>
                 </div>
               )}

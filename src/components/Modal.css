@@ -573,6 +573,10 @@
   border: 1px solid var(--border);
 }
 
+.share-preview--compact {
+  flex-shrink: 0;
+}
+
 .share-preview-image {
   width: 100%;
   height: auto;
@@ -603,6 +607,12 @@
   gap: var(--spacing-sm);
   background: var(--bg-secondary);
   color: var(--text-secondary);
+}
+
+.share-preview-placeholder--compact {
+  min-height: 96px;
+  aspect-ratio: auto;
+  padding: var(--spacing-lg);
 }
 
 .share-preview-icon {
