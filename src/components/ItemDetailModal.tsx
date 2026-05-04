@@ -183,7 +183,15 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         videoId = match ? match[1] : null;
       }
 
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+      if (!videoId) return null;
+
+      const params = new URLSearchParams({
+        rel: "0",
+        modestbranding: "1",
+        playsinline: "1",
+      });
+
+      return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
     } catch (err) {
       console.error("Failed to extract YouTube video ID:", err);
       return null;
@@ -349,6 +357,7 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 title={safeDisplayTitle}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
               ></iframe>
             </div>
           ) : (

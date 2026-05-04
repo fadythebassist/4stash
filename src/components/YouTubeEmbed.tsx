@@ -1,11 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import "./SocialCard.css";
 
-// YouTube frequently blocks iframe playback inside Android WebViews with a
-// bot/sign-in wall. The native Android app appends FourstashApp to the UA so
-// the website can still render normal YouTube iframes.
-const IS_APP_WEBVIEW = navigator.userAgent.includes("FourstashApp");
-
 function normalizeUrl(urlStr: string): string | null {
   const trimmed = urlStr.trim();
   if (!trimmed) return null;
@@ -84,10 +79,10 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({
       modestbranding: "1",
       autoplay: autoplay ? "1" : "0",
       mute: autoplay ? "1" : "0",
+      playsinline: "1",
     });
-    // Use youtube-nocookie.com — YouTube's privacy-enhanced embed domain.
-    // It bypasses the "Sign in to confirm you're not a bot" wall that
-    // youtube.com/embed triggers inside Android WebViews.
+    // Use YouTube's official privacy-enhanced embed domain in both browser and
+    // app WebView. If playback fails, fall back to the thumbnail/open action.
     return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
   }, [videoId, autoplay]);
 
@@ -115,7 +110,7 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({
         <span className="social-card-header-text">YouTube</span>
       </div>
 
-      {embedUrl && !failed && !IS_APP_WEBVIEW ? (
+      {embedUrl && !failed ? (
         /* Embed iframe */
         <div className="social-card-embed-wrap social-card-embed-16x9">
           <iframe
@@ -124,6 +119,7 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             loading="lazy"
+            referrerPolicy="strict-origin-when-cross-origin"
             onError={() => setFailed(true)}
           />
         </div>
@@ -160,7 +156,7 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({
         </div>
       )}
 
-      {(embedUrl && !failed && !IS_APP_WEBVIEW) && (displayTitle || displayDesc) && (
+      {embedUrl && !failed && (displayTitle || displayDesc) && (
         <div className="social-card-text">
           {displayTitle && <div className="social-card-title">{displayTitle}</div>}
           {displayDesc && <div className="social-card-description">{displayDesc}</div>}

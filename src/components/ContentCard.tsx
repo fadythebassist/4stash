@@ -766,6 +766,9 @@ const ContentCard: React.FC<ContentCardProps> = ({
             key={`yt-${item.id}-${autoplayVideos ? "on" : "off"}`}
             url={item.url}
             autoplay={autoplayVideos}
+            thumbnail={displayThumbnail}
+            title={displayTitle}
+            description={displayContent}
           />
         )}
 
