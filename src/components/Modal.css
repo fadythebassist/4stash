@@ -567,10 +567,27 @@
 
 
 .share-preview {
+  position: relative;
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--border);
+}
+
+.share-preview .source-badge {
+  position: absolute;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  backdrop-filter: blur(10px);
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .share-preview--compact {

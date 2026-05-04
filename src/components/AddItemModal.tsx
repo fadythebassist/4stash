@@ -277,14 +277,22 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   }, [lists]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sourceConfig: Record<string, { emoji: string; label: string }> = {
-    facebook: { emoji: "📘", label: "Facebook" },
-    instagram: { emoji: "📷", label: "Instagram" },
-    twitter: { emoji: "🐦", label: "X/Twitter" },
-    youtube: { emoji: "▶️", label: "YouTube" },
-    tiktok: { emoji: "🎵", label: "TikTok" },
-    reddit: { emoji: "👽", label: "Reddit" },
-    threads: { emoji: "🧵", label: "Threads" },
+  const sourceConfig: Record<string, { emoji: string; color: string; label: string }> = {
+    youtube: { emoji: "▶️", color: "#ff0000", label: "YouTube" },
+    twitter: { emoji: "𝕏", color: "#000000", label: "X" },
+    tiktok: { emoji: "🎵", color: "#000000", label: "TikTok" },
+    instagram: { emoji: "📷", color: "#e4405f", label: "Instagram" },
+    reddit: { emoji: "👽", color: "#ff4500", label: "Reddit" },
+    facebook: { emoji: "📘", color: "#1877f2", label: "Facebook" },
+    threads: { emoji: "🧵", color: "#000000", label: "Threads" },
+    medium: { emoji: "📝", color: "#000000", label: "Medium" },
+    linkedin: { emoji: "💼", color: "#0077b5", label: "LinkedIn" },
+    pinterest: { emoji: "📌", color: "#e60023", label: "Pinterest" },
+    tumblr: { emoji: "📱", color: "#35465c", label: "Tumblr" },
+    github: { emoji: "💻", color: "#181717", label: "GitHub" },
+    vimeo: { emoji: "▶️", color: "#1ab7ea", label: "Vimeo" },
+    spotify: { emoji: "🎧", color: "#1DB954", label: "Spotify" },
+    anghami: { emoji: "🎶", color: "#6B2EFF", label: "Anghami" },
   };
 
   type UrlMetadata = {
@@ -1368,6 +1376,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   const previewConfig = previewSource
     ? (sourceConfig[previewSource] ?? {
         emoji: previewDetails?.icon ?? "🔗",
+        color: "#666",
         label: previewDetails?.label ?? "Link",
       })
     : null;
@@ -1412,14 +1421,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
                 </div>
               )}
               {previewConfig && (
-                <div className="share-preview-badge">
-                  <span className={`share-preview-badge-icon ${previewSource}`}>
-                    {previewConfig.emoji}
-                  </span>
-                  <span className="share-preview-badge-text">
-                    {previewConfig.label}
-                  </span>
-                </div>
+                <span className="source-badge" style={{ background: previewConfig.color }}>
+                  {previewConfig.emoji}
+                </span>
               )}
             </div>
           )}
