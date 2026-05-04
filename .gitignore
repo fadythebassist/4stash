@@ -45,6 +45,7 @@ GOOGLE_PLAY_PUBLISH_PLAN.md
 android/keystore.properties
 
 # Temp / scratch files
+.opencode/
 nul
 temp_*.txt
 renaming.md

@@ -1386,28 +1386,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           </button>
         </div>
 
-        {/* Preview section — outside the scrollable form so it stays visible */}
-        {thumbnail && (
-          <div className="share-preview" style={{ margin: "0 var(--spacing-lg)", flexShrink: 0 }}>
-            <img
-              src={thumbnail}
-              alt="Preview"
-              className="share-preview-image"
-            />
-            {previewSource && sourceConfig[previewSource] && (
-              <div className="share-preview-badge">
-                <span className={`share-preview-badge-icon ${previewSource}`}>
-                  {sourceConfig[previewSource].emoji}
-                </span>
-                <span className="share-preview-badge-text">
-                  {sourceConfig[previewSource].label}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
         <form id="add-item-form" onSubmit={handleSubmit} className="modal-form">
+          {/* Preview section scrolls with the rest of the form content */}
+          {thumbnail && (
+            <div className="share-preview">
+              <img
+                src={thumbnail}
+                alt="Preview"
+                className="share-preview-image"
+              />
+              {previewSource && sourceConfig[previewSource] && (
+                <div className="share-preview-badge">
+                  <span className={`share-preview-badge-icon ${previewSource}`}>
+                    {sourceConfig[previewSource].emoji}
+                  </span>
+                  <span className="share-preview-badge-text">
+                    {sourceConfig[previewSource].label}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="form-group">
             <label htmlFor="url">URL</label>
             <input
