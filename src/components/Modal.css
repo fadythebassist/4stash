@@ -678,6 +678,7 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border);
+  background: var(--bg-primary);
 }
 
 .share-preview-platform-header {
@@ -693,6 +694,172 @@
 .share-preview-platform-emoji {
   font-size: 1rem;
   line-height: 1;
+}
+
+.share-preview-platform-card--facebook .share-preview-platform-header {
+  background: #1877f2;
+}
+
+.share-preview-platform-card--instagram .share-preview-platform-header {
+  background: linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+}
+
+.share-preview-platform-card--tiktok .share-preview-platform-header,
+.share-preview-platform-card--threads .share-preview-platform-header,
+.share-preview-platform-card--x .share-preview-platform-header,
+.share-preview-platform-card--medium .share-preview-platform-header {
+  background: #000;
+}
+
+.share-preview-platform-card--reddit .share-preview-platform-header {
+  background: #ff4500;
+}
+
+.share-preview-platform-card--youtube .share-preview-platform-header {
+  background: #ff0000;
+}
+
+.share-preview-platform-card--vimeo .share-preview-platform-header {
+  background: #1ab7ea;
+}
+
+.share-preview-platform-card--spotify .share-preview-platform-header {
+  background: linear-gradient(135deg, #1db954 0%, #159443 100%);
+}
+
+.share-preview-platform-card--anghami .share-preview-platform-header {
+  background: linear-gradient(135deg, #6b2eff 0%, #4a19cc 100%);
+}
+
+.share-preview-platform-card--linkedin .share-preview-platform-header {
+  background: #0a66c2;
+}
+
+.share-preview-platform-card--github .share-preview-platform-header {
+  background: #181717;
+}
+
+.share-preview-platform-card--pinterest .share-preview-platform-header {
+  background: #e60023;
+}
+
+.share-preview-platform-card--tumblr .share-preview-platform-header {
+  background: #35465c;
+}
+
+.share-preview-platform-card--generic .share-preview-platform-header {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.share-preview-platform-thumb {
+  width: 100%;
+  background: var(--bg-sunken);
+}
+
+.share-preview-platform-thumb img {
+  width: 100%;
+  height: auto;
+  max-height: min(60vh, 420px);
+  display: block;
+  object-fit: contain;
+}
+
+.share-preview-platform-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 28px 16px;
+  background: var(--bg-secondary);
+}
+
+.share-preview-platform-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.share-preview-platform-title {
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+.share-preview-platform-text {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  text-align: center;
+}
+
+.share-preview-platform-button {
+  display: block;
+  padding: 12px;
+  color: #fff;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  background: var(--share-preview-platform-color, var(--accent-primary));
+}
+
+.share-preview-platform-button:hover {
+  color: #fff;
+  opacity: 0.9;
+  text-decoration: none;
+}
+
+.share-preview-platform-card--facebook {
+  --share-preview-platform-color: #1877f2;
+}
+
+.share-preview-platform-card--instagram {
+  --share-preview-platform-color: linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+}
+
+.share-preview-platform-card--tiktok,
+.share-preview-platform-card--threads,
+.share-preview-platform-card--x,
+.share-preview-platform-card--medium {
+  --share-preview-platform-color: #000;
+}
+
+.share-preview-platform-card--reddit {
+  --share-preview-platform-color: #ff4500;
+}
+
+.share-preview-platform-card--youtube {
+  --share-preview-platform-color: #ff0000;
+}
+
+.share-preview-platform-card--vimeo {
+  --share-preview-platform-color: #1ab7ea;
+}
+
+.share-preview-platform-card--spotify {
+  --share-preview-platform-color: #1db954;
+}
+
+.share-preview-platform-card--anghami {
+  --share-preview-platform-color: #6b2eff;
+}
+
+.share-preview-platform-card--linkedin {
+  --share-preview-platform-color: #0a66c2;
+}
+
+.share-preview-platform-card--github {
+  --share-preview-platform-color: #181717;
+}
+
+.share-preview-platform-card--pinterest {
+  --share-preview-platform-color: #e60023;
+}
+
+.share-preview-platform-card--tumblr {
+  --share-preview-platform-color: #35465c;
 }
 
 .share-preview-platform-header.instagram {

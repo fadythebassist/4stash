@@ -22,6 +22,12 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
+const FacebookLogo: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="white" width="18" height="18" aria-hidden="true">
+    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+  </svg>
+);
+
 // Ensure a thumbnail URL returned by the Cloud Function is absolute.
 // The server returns relative paths like /api/proxy-image?url=... which work on
 // the web (same origin) but break inside the Capacitor WebView (capacitor://localhost).
@@ -279,7 +285,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
   const sourceConfig: Record<string, { emoji: string; color: string; label: string }> = {
     youtube: { emoji: "▶️", color: "#ff0000", label: "YouTube" },
-    twitter: { emoji: "𝕏", color: "#000000", label: "X" },
+    twitter: { emoji: "𝕏", color: "#000000", label: "X (Twitter)" },
     tiktok: { emoji: "🎵", color: "#000000", label: "TikTok" },
     instagram: { emoji: "📷", color: "#e4405f", label: "Instagram" },
     reddit: { emoji: "👽", color: "#ff4500", label: "Reddit" },
@@ -409,6 +415,22 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         icon: "▶️",
         label: "Vimeo",
         contentType: "Video",
+      };
+    }
+    if (lower.includes("spotify.com")) {
+      return {
+        source: "spotify",
+        icon: "🎧",
+        label: "Spotify",
+        contentType: "Audio",
+      };
+    }
+    if (lower.includes("anghami.com")) {
+      return {
+        source: "anghami",
+        icon: "🎶",
+        label: "Anghami",
+        contentType: "Audio",
       };
     }
     
@@ -1380,6 +1402,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         label: previewDetails?.label ?? "Link",
       })
     : null;
+  const previewPlatformClass = previewSource === "twitter" ? "x" : previewSource ?? "generic";
+  const previewContentType = previewDetails?.contentType;
+  const previewLabel = previewConfig
+    ? `${previewConfig.label}${previewContentType ? ` ${previewContentType}` : ""}`
+    : "Link preview";
   const shouldShowPreview = !!(url.trim() || thumbnail || previewSource || fetchingTitle);
 
   return (
@@ -1398,34 +1425,72 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         <form id="add-item-form" onSubmit={handleSubmit} className="modal-form">
           {/* Preview section scrolls with the rest of the form content */}
           {shouldShowPreview && (
-            <div className="share-preview share-preview--compact">
-              {thumbnail ? (
-                <img
-                  src={thumbnail}
-                  alt="Preview"
-                  className="share-preview-image"
-                  onError={() => setThumbnail(undefined)}
-                />
-              ) : (
-                <div className="share-preview-placeholder share-preview-placeholder--compact">
-                  <span className={`share-preview-icon ${previewSource ?? "generic"}`}>
-                    {fetchingTitle ? "⏳" : previewConfig?.emoji ?? "🔗"}
-                  </span>
-                  <span className="share-preview-text">
-                    {fetchingTitle
-                      ? "Loading preview…"
-                      : previewConfig
-                        ? `${previewConfig.label} preview`
-                        : "Link preview"}
-                  </span>
+            previewConfig ? (
+              <div className={`share-preview share-preview--compact share-preview-platform-card share-preview-platform-card--${previewPlatformClass}`}>
+                <div className="share-preview-platform-header">
+                  {previewSource === "facebook" ? (
+                    <FacebookLogo />
+                  ) : (
+                    <span className="share-preview-platform-emoji" aria-hidden="true">
+                      {previewConfig.emoji}
+                    </span>
+                  )}
+                  <span>{previewLabel}</span>
                 </div>
-              )}
-              {previewConfig && (
-                <span className="source-badge" style={{ background: previewConfig.color }}>
-                  {previewConfig.emoji}
-                </span>
-              )}
-            </div>
+                {thumbnail ? (
+                  <div className="share-preview-platform-thumb">
+                    <img
+                      src={thumbnail}
+                      alt={previewLabel}
+                      onError={() => setThumbnail(undefined)}
+                    />
+                  </div>
+                ) : (
+                  <div className="share-preview-platform-body">
+                    <div className="share-preview-platform-icon">
+                      {fetchingTitle ? "⏳" : previewConfig.emoji}
+                    </div>
+                    <div className="share-preview-platform-title">
+                      {fetchingTitle ? "Loading preview…" : previewLabel}
+                    </div>
+                    <div className="share-preview-platform-text">
+                      {fetchingTitle
+                        ? `Fetching ${previewConfig.label} metadata`
+                        : `Preview will use ${previewConfig.label} branding when saved`}
+                    </div>
+                  </div>
+                )}
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="share-preview-platform-button"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Open in {previewConfig.label}
+                </a>
+              </div>
+            ) : (
+              <div className="share-preview share-preview--compact">
+                {thumbnail ? (
+                  <img
+                    src={thumbnail}
+                    alt="Preview"
+                    className="share-preview-image"
+                    onError={() => setThumbnail(undefined)}
+                  />
+                ) : (
+                  <div className="share-preview-placeholder share-preview-placeholder--compact">
+                    <span className={`share-preview-icon ${previewSource ?? "generic"}`}>
+                      {fetchingTitle ? "⏳" : "🔗"}
+                    </span>
+                    <span className="share-preview-text">
+                      {fetchingTitle ? "Loading preview…" : "Link preview"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           <div className="form-group">
