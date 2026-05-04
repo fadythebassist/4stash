@@ -222,12 +222,12 @@
   background: transparent;
   padding: 0.25rem;
   font-size: 1rem;
-  opacity: 0;
+  opacity: 0.72;
   transition: all var(--transition-fast);
 }
 
 .content-card:hover .card-action-btn {
-  opacity: 0.6;
+  opacity: 0.9;
 }
 
 .card-action-btn:hover {

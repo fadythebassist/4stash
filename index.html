@@ -35,6 +35,29 @@
     <meta name="twitter:image" content="https://4stash.com/og-image.png" />
     
     <title>4Stash - Save Content for Later</title>
+    <script>
+      // One-time service worker cache reset (v2 — 2026-05-01)
+      // Forces stale PWA service workers to unregister so users get fresh code.
+      // Safe to remove after all active users have loaded this HTML once.
+      (function(){
+        var KEY = '__sw_reset_v2';
+        if (!localStorage.getItem(KEY) && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(r) { r.unregister(); });
+            if (regs.length > 0) {
+              localStorage.setItem(KEY, '1');
+              // Clear all caches (workbox precache, runtime caches)
+              if (caches) caches.keys().then(function(names) {
+                names.forEach(function(n) { caches.delete(n); });
+              });
+              location.reload();
+            } else {
+              localStorage.setItem(KEY, '1');
+            }
+          });
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

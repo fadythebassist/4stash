@@ -1,6 +1,7 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const GEMINI_TIMEOUT_MS = 8000;
 
 export interface GeminiTagResult {
   tags: string[];
@@ -85,9 +86,12 @@ Respond ONLY with a valid JSON object, no markdown, no explanation. Example:
 {"tags":["ai","productivity","tools"],"listNames":["Tech"],"newListName":"AI Tools"}`;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
@@ -95,7 +99,7 @@ Respond ONLY with a valid JSON object, no markdown, no explanation. Example:
           maxOutputTokens: 300,
         },
       }),
-    });
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       console.error("[GeminiService] API error:", response.status, await response.text());

@@ -1446,6 +1446,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
       workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         // Exclude Firebase Auth popup handler from SW navigation fallback.
         // The Firebase OAuth popup opens /__/auth/handler on the firebaseapp.com
         // domain (which also hosts this SPA). Without this exclusion, the SW

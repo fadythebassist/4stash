@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
     // Load from Firebase Hosting so the WebView origin is https://4stash.com.
     // This allows Instagram/Facebook/Reddit iframes to load (they reject
     // capacitor://localhost). Trade-off: requires network on launch (no offline).
-    url: 'https://4stash.com',
+    url: 'https://4stash.com/login',
     cleartext: false,
   },
   plugins: {

@@ -104,17 +104,19 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setError(null);
     try {
       console.log("📡 Fetching lists and items for user:", currentUser.id);
-      const [fetchedLists, fetchedPage] = await Promise.all([
-        storageService.getLists(currentUser.id),
-        storageService.getItems(
-          currentUser.id,
-          effectiveListId || undefined,
-          { limit: PAGE_LIMIT },
-        ),
-      ]);
+      const listsPromise = storageService.getLists(currentUser.id);
+      const itemsPromise = storageService.getItems(
+        currentUser.id,
+        effectiveListId || undefined,
+        { limit: PAGE_LIMIT },
+      );
+
+      const fetchedLists = await listsPromise;
       console.log("✅ Fetched lists:", fetchedLists);
-      console.log("✅ Fetched items:", fetchedPage.items);
       setLists(fetchedLists);
+
+      const fetchedPage = await itemsPromise;
+      console.log("✅ Fetched items:", fetchedPage.items);
       setItems(fetchedPage.items);
       setHasMoreItems(fetchedPage.hasMore);
       setCursorDate(fetchedPage.nextCursorDate);

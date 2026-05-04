@@ -5,7 +5,6 @@ import { moderateItem, checkMetadata } from "@/services/ModerationService";
 import { getGeminiSuggestions } from "@/services/GeminiService";
 import { apiUrl } from "@/utils/apiBase";
 import { cleanInstagramDescription } from "@/utils/instagramMetadata";
-import TweetEmbed from "@/components/TweetEmbed";
 import "./Modal.css";
 
 interface AddItemModalProps {
@@ -28,7 +27,48 @@ function decodeHtmlEntities(text: string): string {
 // the web (same origin) but break inside the Capacitor WebView (capacitor://localhost).
 function absolutizeThumbnail(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
-  return raw.startsWith("/api/") ? apiUrl(raw) : raw;
+  // Already a proxy path — just absolutize it
+  if (raw.startsWith("/api/")) return apiUrl(raw);
+  // Already proxied
+  if (raw.includes("/api/proxy-image?")) return raw;
+  // External images from social CDNs are CORP-protected and must go through our proxy
+  try {
+    const h = new URL(raw).hostname.toLowerCase();
+    if (
+      h.includes("instagram.com") ||
+      h.endsWith("fbcdn.net") ||
+      h.endsWith("fbsbx.com") ||
+      h.includes("facebook.com") ||
+      h.includes("tiktokcdn.com") ||
+      h.includes("tiktok.com") ||
+      h.includes("twimg.com") ||
+      h.includes("redd.it") ||
+      h.includes("redditmedia.com") ||
+      h.includes("reddituploads.com")
+    ) {
+      return apiUrl(`/api/proxy-image?url=${encodeURIComponent(raw)}`);
+    }
+  } catch {
+    // Not a valid URL — return as-is
+  }
+  return raw;
+}
+
+const METADATA_TIMEOUT_MS = 12000;
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
 }
 
 const AddItemModal: React.FC<AddItemModalProps> = ({
@@ -404,22 +444,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         (source.source === "reddit" && isGenericRedditTitle(initialTitle)) ||
         (source.source === "threads" && isGenericThreadsTitle(initialTitle)));
 
-    // Always resolve short/opaque URLs even when a title was provided by the share intent,
-    // because without resolution the embed cannot render (no video ID / no real post URL).
-    const isShortUrlThatNeedsResolution =
-      isTikTokShortUrl(initialUrl) ||
-      initialUrl.includes("facebook.com/share/") ||
-      initialUrl.includes("fb.watch") ||
-      isRedditShortOrDirtyUrl(initialUrl);
-
-    const shouldFetchInitialMetadata =
-      !initialTitle || hasGenericInitialTitle || isShortUrlThatNeedsResolution;
-    if (!shouldFetchInitialMetadata) {
-      // Title is already good — skip metadata fetch but still run Gemini for list/tag suggestions.
-      const aiSource = source?.source ?? undefined;
-      runGeminiInBackground(initialTitle, initialContent, initialUrl, aiSource);
-      return;
-    }
+    // Always fetch metadata for shared URLs. Even when the source app supplies a
+    // good title, it usually does not supply the thumbnail we need for preview.
 
     // Only set a generic placeholder title if no real title was provided
     if (source && !initialTitle) {
@@ -429,9 +455,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     const fetchInitialMetadata = async () => {
       setFetchingTitle(true);
       try {
-        const meta = await fetchUrlMetadata(initialUrl);
+        const meta = await withTimeout(
+          fetchUrlMetadata(initialUrl),
+          METADATA_TIMEOUT_MS,
+          null,
+        );
         // Only overwrite title if we don't already have a real one from the share intent
-        if (meta?.title && !initialTitle) {
+        if (meta?.title && (!initialTitle || hasGenericInitialTitle)) {
           setTitle(decodeHtmlEntities(meta.title));
         }
         if (meta?.thumbnail) {
@@ -454,6 +484,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
         runGeminiInBackground(aiTitle, aiContent, aiUrl, aiSource);
       } catch (err) {
         console.error("[AddItemModal] Error fetching initial metadata:", err);
+        // Still run Gemini even if metadata fetch failed — use whatever we have
+        const aiSource = source?.source ?? undefined;
+        runGeminiInBackground(initialTitle || "", initialContent || "", initialUrl, aiSource);
       } finally {
         setFetchingTitle(false);
       }
@@ -626,9 +659,12 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
   } | null> => {
     try {
       // Try the API endpoint first
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), METADATA_TIMEOUT_MS);
       const response = await fetch(
         apiUrl(`/api/unfurl?url=${encodeURIComponent(fullUrl)}`),
-      );
+        { signal: controller.signal },
+      ).finally(() => clearTimeout(timeoutId));
       if (response.ok) {
         const data = await response.json();
 
@@ -655,7 +691,12 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
 
     // Fallback to LinkMetadataService
     try {
-      const metadata = await fetchLinkMetadata(fullUrl);
+      const metadata = await withTimeout(
+        fetchLinkMetadata(fullUrl),
+        METADATA_TIMEOUT_MS,
+        null,
+      );
+      if (!metadata) return null;
       return {
         url: fullUrl, // LinkMetadataService doesn't resolve redirects
         title: metadata.title,
@@ -1113,13 +1154,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     if (shouldFetchMetadata) {
       setFetchingTitle(true);
       try {
-        // Add timeout to prevent infinite fetching
-        const timeoutPromise = new Promise<UrlMetadata | null>((resolve) =>
-          setTimeout(() => resolve(null), 5000),
+        const fetched = await withTimeout(
+          fetchUrlMetadata(trimmedUrl),
+          METADATA_TIMEOUT_MS,
+          null,
         );
-        const metaPromise = fetchUrlMetadata(trimmedUrl);
-
-        const fetched = await Promise.race([metaPromise, timeoutPromise]);
 
         // Update the URL if it resolved to something more specific.
         // This is critical for short/opaque URLs (vt.tiktok.com, fb.watch, facebook.com/share/)
@@ -1250,7 +1289,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     }
 
     if (!finalTitle && hasUrl) {
-      const meta = await fetchUrlMetadata(currentUrl.trim());
+      const meta = await withTimeout(
+        fetchUrlMetadata(currentUrl.trim()),
+        METADATA_TIMEOUT_MS,
+        null,
+      );
       const resolvedUrl = meta?.url || currentUrl.trim();
       finalUrl = resolvedUrl;
       finalTitle = meta?.title || "Untitled";
@@ -1260,7 +1303,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
       updateUrl(resolvedUrl);
     } else if (hasUrl && (!finalThumbnail || !finalContent)) {
       // Title might already be a fallback (e.g. "Instagram Photo"), but we still want thumbnail/snippet.
-      const meta = await fetchUrlMetadata(currentUrl.trim());
+      const meta = await withTimeout(
+        fetchUrlMetadata(currentUrl.trim()),
+        METADATA_TIMEOUT_MS,
+        null,
+      );
       const resolvedUrl = meta?.url || currentUrl.trim();
       finalUrl = resolvedUrl;
       if (!finalThumbnail && meta?.thumbnail) finalThumbnail = meta.thumbnail;
@@ -1324,6 +1371,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  const previewSource = detectedSource ?? (url ? detectSource(url)?.source ?? null : null);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -1337,107 +1386,28 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          {/* Preview section when sharing from other apps */}
-          {(url || thumbnail || detectedSource) && (
-            <div className="share-preview">
-              {fetchingTitle ? (
-                <div className="share-preview-loading">
-                  <div className="fetching-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span>Loading preview...</span>
-                </div>
-              ) : detectedSource === "facebook" && url.trim() ? (
-                /* Facebook: show thumbnail if available, otherwise branded card */
-                thumbnail ? (
-                  <div className="share-preview-fb-card">
-                    <div className="share-preview-fb-header">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="white"
-                        width="18"
-                        height="18"
-                      >
-                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                      </svg>
-                      <span>Facebook</span>
-                    </div>
-                    <div className="share-preview-fb-thumb">
-                      <img src={thumbnail} alt="Facebook preview" />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="share-preview-fb-card">
-                    <div className="share-preview-fb-header">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="white"
-                        width="18"
-                        height="18"
-                      >
-                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                      </svg>
-                      <span>Facebook</span>
-                    </div>
-                    <div className="share-preview-fb-body">
-                      <span className="share-preview-fb-icon">
-                        {"\u{1F517}"}
-                      </span>
-                      <span className="share-preview-fb-text">
-                        Link saved — tap to view on Facebook
-                      </span>
-                    </div>
-                  </div>
-                )
-              ) : detectedSource === "twitter" && url.trim() ? (
-                <div className="share-preview-tweet">
-                  <TweetEmbed url={url.trim()} />
-                </div>
-              ) : thumbnail ? (
-                /* Platform-branded card with thumbnail */
-                <div className={`share-preview-platform-card ${detectedSource ?? "generic"}`}>
-                  {detectedSource && sourceConfig[detectedSource] && (
-                    <div className={`share-preview-platform-header ${detectedSource}`}>
-                      <span className="share-preview-platform-emoji">
-                        {sourceConfig[detectedSource].emoji}
-                      </span>
-                      <span>{sourceConfig[detectedSource].label}</span>
-                    </div>
-                  )}
-                  <div className="share-preview-fb-thumb">
-                    <img src={thumbnail} alt="Preview" />
-                  </div>
-                </div>
-              ) : (
-                detectedSource && (
-                  <div className="share-preview-placeholder">
-                    <span className={`share-preview-icon ${detectedSource}`}>
-                      {sourceConfig[detectedSource]?.emoji ?? "🔗"}
-                    </span>
-                    <span className="share-preview-text">
-                      Preview not available
-                    </span>
-                  </div>
-                )
-              )}
-              {detectedSource && sourceConfig[detectedSource] && (
-                <div className="share-preview-badge">
-                  <span
-                    className={`share-preview-badge-icon ${detectedSource}`}
-                  >
-                    {sourceConfig[detectedSource].emoji}
-                  </span>
-                  <span className="share-preview-badge-text">
-                    {sourceConfig[detectedSource].label}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+        {/* Preview section — outside the scrollable form so it stays visible */}
+        {thumbnail && (
+          <div className="share-preview" style={{ margin: "0 var(--spacing-lg)", flexShrink: 0 }}>
+            <img
+              src={thumbnail}
+              alt="Preview"
+              className="share-preview-image"
+            />
+            {previewSource && sourceConfig[previewSource] && (
+              <div className="share-preview-badge">
+                <span className={`share-preview-badge-icon ${previewSource}`}>
+                  {sourceConfig[previewSource].emoji}
+                </span>
+                <span className="share-preview-badge-text">
+                  {sourceConfig[previewSource].label}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
+        <form id="add-item-form" onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
             <label htmlFor="url">URL</label>
             <input
@@ -1464,7 +1434,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Auto-generated from URL or enter manually"
-              disabled={loading || fetchingTitle}
+              disabled={loading}
             />
           </div>
 
@@ -1585,24 +1555,25 @@ const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          <div className="modal-actions">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn btn-secondary"
-              disabled={loading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading || fetchingTitle}
-            >
-              {loading ? "Adding..." : fetchingTitle ? "Fetching..." : "Add Item"}
-            </button>
-          </div>
         </form>
+        <div className="modal-actions">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-secondary"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="add-item-form"
+            className="btn btn-primary"
+            disabled={loading}
+          >
+            {loading ? "Adding..." : "Add Item"}
+          </button>
+        </div>
       </div>
     </div>
   );

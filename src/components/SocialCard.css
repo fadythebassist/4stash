@@ -161,6 +161,24 @@
   max-height: 500px;
 }
 
+/* Play button overlay for video thumbnails (e.g. Threads poster on Android) */
+.social-card-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .social-card-inline-play {
   position: absolute;
   left: 50%;
@@ -178,6 +196,38 @@
 
 .social-card-inline-play:hover {
   background: rgba(0, 0, 0, 0.88);
+}
+
+/* ── Iframe controls row (dismiss + hint) ────────────────────────── */
+.social-card-iframe-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--surface-secondary, rgba(0,0,0,0.04));
+}
+
+.social-card-iframe-dismiss {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--text-primary, #333);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.social-card-iframe-dismiss:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.social-card-iframe-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #888);
+  line-height: 1.3;
 }
 
 /* ── Body (no thumbnail fallback) ─────────────────────────────────── */

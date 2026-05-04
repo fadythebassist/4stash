@@ -6,7 +6,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import com.getcapacitor.BridgeActivity;
@@ -29,11 +31,41 @@ public class MainActivity extends BridgeActivity {
             Log.d(TAG, "onCreate: captured share text, will dispatch after page load");
         }
 
+        // Remove the "; wv" marker from the WebView user agent string.
+        // Third-party embed scripts (Threads, Instagram) detect WebViews via
+        // this marker and serve degraded experiences — showing static posters
+        // with "open in app" redirects instead of inline video players.
+        // By removing the marker, embeds treat our WebView as a regular Chrome
+        // browser and render full interactive content (inline video playback).
+        WebSettings webSettings = getBridge().getWebView().getSettings();
+
+        // Replace the default WebView UA with a standard Chrome Mobile UA.
+        // YouTube (and other embeds) actively block the default Android WebView
+        // UA — this makes the WebView appear as a regular Chrome browser.
+        // We append "FourstashApp/1.0" so our JS can still detect the WebView
+        // context (e.g. to skip embeds that don't work in-app).
+        webSettings.setUserAgentString(
+            "Mozilla/5.0 (Linux; Android 10; Mobile) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/124.0.0.0 Mobile Safari/537.36 FourstashApp/1.0"
+        );
+
+        // Enable DOM storage — required for YouTube's session/auth state.
+        webSettings.setDomStorageEnabled(true);
+        // Allow media to autoplay without a user gesture (muted autoplay).
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
+
+        // Enable third-party cookies so YouTube embed iframes can authenticate.
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+
         // Hook into the WebView's page-load lifecycle so we can reliably
         // fire JS after the SPA has fully initialized, while also intercepting
         // external platform URLs (intent://, fb://, instagram://, etc.) and
         // routing them to the correct native app via Android intents.
         getBridge().getWebView().setWebViewClient(new WebViewClient() {
+
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -41,8 +73,25 @@ public class MainActivity extends BridgeActivity {
                 String scheme = uri.getScheme();
                 String url = uri.toString();
 
+                // Let Instagram/Threads embeds handle their own iframe media
+                // navigation. Only top-level app navigations should be routed
+                // out to Android native intents or the system browser.
+                if (!request.isForMainFrame()) {
+                    return false;
+                }
+
                 // Let the app's own origin load normally inside the WebView.
                 if ("https".equals(scheme) && url.startsWith("https://4stash.com")) {
+                    return false;
+                }
+
+                // Allow threads.net to load inside the WebView so that Threads
+                // embed iframes can navigate for video playback. Without this,
+                // tapping a video inside a Threads embed triggers the external-URL
+                // handler below and opens the Threads native app instead.
+                // Covers www.threads.net, threads.net, and any CDN subdomains.
+                String host = uri.getHost();
+                if ("https".equals(scheme) && host != null && (host.equals("threads.net") || host.endsWith(".threads.net"))) {
                     return false;
                 }
 

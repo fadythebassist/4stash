@@ -3,7 +3,8 @@ import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import { isGenericInstagramDescription } from "@/utils/instagramMetadata";
 import "./SocialCard.css";
 
-// Quick rollback switch: set to false to keep inline viewing for reels only.
+// Use Instagram's official iframe embeds for posts/reels. Direct MP4 extraction
+// is intentionally avoided because Instagram URLs are private/signed and unstable.
 const ENABLE_INLINE_INSTAGRAM_POSTS = true;
 
 function normalizeUrl(urlStr: string): string | null {
@@ -118,13 +119,11 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
 
   const isReel = contentType === "Reel";
   const isPost = contentType === "Post";
-  // Instagram iframes are allowed now that capacitor.config.ts sets
-  // server.url = "https://4stash.com" — the WebView origin matches what
-  // Instagram's embed allows (no longer capacitor://localhost).
-  const canViewInline = !!iframeEmbedUrl && (isReel || (ENABLE_INLINE_INSTAGRAM_POSTS && isPost));
-  const inlineButtonLabel = isReel ? "▶ Play Reel Here" : "View Post Here";
-  // Keep feed stable by default and only load Instagram iframe when user explicitly
-  // asks to view inline. This avoids mass auto-loading failures.
+  const canViewInline =
+    !!iframeEmbedUrl &&
+    !iframeFailed &&
+    (isReel || (ENABLE_INLINE_INSTAGRAM_POSTS && isPost));
+  const inlineButtonLabel = isReel ? "Play Reel Here" : "View Post Here";
   const shouldUsePreviewCard = !!thumbnail && !thumbnailFailed;
 
   return (
@@ -134,33 +133,49 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
         <span className="social-card-header-text">Instagram {contentType}</span>
       </div>
 
-      {canViewInline && playInline && iframeEmbedUrl && !iframeFailed ? (
-        <div
-          className={`social-card-embed-wrap ${
-            isReel ? "social-card-embed-ig-reel" : "social-card-embed-ig-post"
-          }`}
-        >
-          <iframe
-            src={iframeEmbedUrl}
-            title={`Instagram ${contentType}`}
-            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-            allowFullScreen
-            loading="lazy"
-            scrolling="no"
-            onError={() => {
-              setIframeFailed(true);
-              setPlayInline(false);
-            }}
-            style={{ border: 0 }}
-          />
-        </div>
+      {canViewInline && playInline && iframeEmbedUrl ? (
+        <>
+          <div
+            className={`social-card-embed-wrap ${
+              isReel ? "social-card-embed-ig-reel" : "social-card-embed-ig-post"
+            }`}
+          >
+            <iframe
+              src={iframeEmbedUrl}
+              title={`Instagram ${contentType}`}
+              allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+              allowFullScreen
+              loading="lazy"
+              scrolling="no"
+              onError={() => {
+                setIframeFailed(true);
+                setPlayInline(false);
+              }}
+            />
+          </div>
+          {/* Dismiss + hint row — shown under the iframe so users aren't stuck
+              if Instagram's "Watch on Instagram" wall appears inside the embed */}
+          <div className="social-card-iframe-controls">
+            <button
+              type="button"
+              className="social-card-iframe-dismiss"
+              onClick={(e) => { e.stopPropagation(); setPlayInline(false); }}
+            >
+              ✕ Close preview
+            </button>
+            {isReel && (
+              <span className="social-card-iframe-hint">
+                Not playing? Use the button below to open on Instagram.
+              </span>
+            )}
+          </div>
+        </>
       ) : shouldUsePreviewCard ? (
         <div
           className="social-card-thumbnail"
           onClick={(e) => {
             e.stopPropagation();
             if (canViewInline) {
-              setIframeFailed(false);
               setPlayInline(true);
             } else {
               handleCardClick();
@@ -183,7 +198,6 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
               className="social-card-inline-play"
               onClick={(e) => {
                 e.stopPropagation();
-                setIframeFailed(false);
                 setPlayInline(true);
               }}
             >
@@ -198,7 +212,6 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             if (canViewInline) {
-              setIframeFailed(false);
               setPlayInline(true);
             } else {
               handleCardClick();
@@ -214,9 +227,9 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
           ) : (
             <>
               <div className="social-card-icon">📷</div>
-              <p className="social-card-cta">
+          <p className="social-card-cta">
                 {canViewInline
-                  ? "Tap below to view inside app"
+                  ? "Tap to view inside 4Stash"
                   : "Tap to view on Instagram"}
               </p>
             </>
@@ -228,7 +241,6 @@ const InstagramEmbed: React.FC<InstagramEmbedProps> = ({
               style={{ position: "static", transform: "none", marginTop: "12px" }}
               onClick={(e) => {
                 e.stopPropagation();
-                setIframeFailed(false);
                 setPlayInline(true);
               }}
             >

@@ -580,14 +580,23 @@ const ContentCard: React.FC<ContentCardProps> = ({
     };
   }, [derivedSource, item.url, item.thumbnail, item.content, item.title, item.id, thumbnailError]);
 
-  return (
+   return (
     <div
       className={`content-card ${item.type} ${layoutMode === 'list' ? 'list-view' : ''}`}
       style={{ transform: `translateX(-${swipeOffset}px)` }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      onClick={onClick}
+      onClick={(e) => {
+        // Guard: ignore clicks that originate from inside social embed cards.
+        // On Android WebView, switching to a native app (e.g. Threads) and
+        // returning can fire a phantom click event that shouldn't open the
+        // detail modal. Also guards against event propagation edge cases in
+        // cross-origin iframes.
+        const target = e.target as HTMLElement;
+        if (target.closest?.(".social-card")) return;
+        onClick();
+      }}
     >
       {/* Thumbnail — always rendered; CSS controls sizing per layout mode */}
       {!suppressTopMedia && displayThumbnail && !thumbnailError ? (

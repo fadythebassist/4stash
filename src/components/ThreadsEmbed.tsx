@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { openPlatformUrl } from "@/utils/openPlatformUrl";
 import { apiUrl, isAndroidWebView } from "@/utils/apiBase";
 import "./SocialCard.css";
@@ -178,11 +178,15 @@ const StaticThreadsCard: React.FC<StaticThreadsCardProps> = ({
   return (
     <div
       className="social-card social-card--threads"
-      onClick={handleClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        handleClick();
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
+          e.stopPropagation();
           e.preventDefault();
           handleClick();
         }
@@ -239,7 +243,12 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
 }) => {
   const [embedFailed, setEmbedFailed] = useState(false);
   const [embedReady, setEmbedReady] = useState(false);
+  // On Android WebView the Threads embed's <video> doesn't show its first
+  // frame as a poster (renders a grey box). We overlay our own thumbnail
+  // until the user taps it. Not needed on regular browsers.
+  const [showPoster, setShowPoster] = useState(false);
   const blockquoteRef = useRef<HTMLDivElement>(null);
+  const isNativeApp = isAndroidWebView();
 
   const embedUrl = normalizeThreadsUrl(url);
 
@@ -274,9 +283,22 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
         }
         elapsed += 300;
         processThreadsEmbeds();
-        const hasIframe = !!blockquoteRef.current?.querySelector("iframe");
+        const iframe = blockquoteRef.current?.querySelector("iframe");
+        const hasIframe = !!iframe;
         if (hasIframe) {
           clearInterval(pollId);
+          // Patch the embed iframe's allow attribute to grant autoplay and
+          // fullscreen permissions. Threads' embed.js does not set these by
+          // default, which causes Android WebView to intercept video playback
+          // and launch the system video player instead of playing inline.
+          if (iframe instanceof HTMLIFrameElement) {
+            const current = iframe.allow ?? "";
+            const needed = ["autoplay", "fullscreen", "encrypted-media", "picture-in-picture"];
+            const missing = needed.filter(p => !current.includes(p));
+            if (missing.length > 0) {
+              iframe.allow = current ? `${current}; ${missing.join("; ")}` : missing.join("; ");
+            }
+          }
           setEmbedReady(true);
         } else if (elapsed >= 10000) {
           clearInterval(pollId);
@@ -298,6 +320,25 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
     openPlatformUrl(embedUrl);
   };
 
+  // When the embed loads on Android, show our poster overlay if we have a
+  // thumbnail. The flag is set here (not in the polling loop) so that the
+  // embed iframe is fully rendered and stable before we decide to cover it.
+  useEffect(() => {
+    if (embedReady && isNativeApp && thumbnail && !isLoginWallTitle(title) && !isLoginWallDescription(description)) {
+      setShowPoster(true);
+    }
+  }, [embedReady, isNativeApp, thumbnail, title, description]);
+
+  // Dismiss the poster with a small delay so the same touch event that
+  // dismisses the poster does not propagate into the freshly-revealed iframe
+  // and accidentally trigger video playback or navigation.
+  const dismissPoster = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    // Delay hiding the poster so the iframe doesn't receive the same tap
+    setTimeout(() => setShowPoster(false), 100);
+  }, []);
+
   // Filter login-wall metadata and decode HTML entities
   const isLoginWall = isLoginWallTitle(title) || isLoginWallDescription(description);
   const displayTitle = !isLoginWallTitle(title) ? (title ? decodeHtmlEntities(title) : undefined) : undefined;
@@ -307,22 +348,6 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   // let the native embed.js iframe take over. If embed.js also fails, show a
   // plain "tap to view" static card with no misleading thumbnail or description.
   const effectiveThumbnail = isLoginWall ? undefined : thumbnail;
-
-  // --- Android WebView: skip embed.js entirely ---
-  // The iframe can report as processed while still rendering blank in Capacitor.
-  // Use a visible static card instead; when no thumbnail is available it still
-  // shows the Threads handle and a direct open action.
-  if (isAndroidWebView()) {
-    return (
-      <StaticThreadsCard
-        embedUrl={embedUrl}
-        thumbnail={effectiveThumbnail}
-        displayTitle={displayTitle}
-        displayDescription={displayDescription}
-        onThumbnailError={onThumbnailError}
-      />
-    );
-  }
 
   // --- Static fallback (embed.js failed or timed out) ---
   if (embedFailed) {
@@ -346,11 +371,20 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
           <ThreadsLogo />
           <span className="social-card-header-text">Threads</span>
         </div>
-        {/* Hide the raw blockquote until embed.js processes it into an iframe */}
+        {/* The embed wrapper is always in the DOM so the iframe created by
+            embed.js stays alive. Before the embed is ready we use display:none.
+            When the poster overlay is active (Android) we keep the embed in the
+            layout but visually hidden + no pointer events so taps can't leak. */}
         <div
           className="social-card-embed-wrap"
           ref={blockquoteRef}
-          style={embedReady ? undefined : { display: "none" }}
+          style={
+            !embedReady
+              ? { display: "none" }
+              : showPoster
+              ? { visibility: "hidden", height: 0, overflow: "hidden", pointerEvents: "none" }
+              : undefined
+          }
         >
           <blockquote
             className="text-post-media"
@@ -363,8 +397,29 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
             </a>
           </blockquote>
         </div>
+        {/* Poster overlay — Android WebView only. The embed's <video> doesn't
+            show its poster frame in WebView, leaving a grey box. We show our
+            own thumbnail until the user taps to reveal the real embed. */}
+        {showPoster && effectiveThumbnail && (
+          <div
+            className="social-card-thumbnail"
+            onClick={dismissPoster}
+            style={{ cursor: "pointer" }}
+          >
+            <img
+              src={toProxyThumbnail(effectiveThumbnail) ?? effectiveThumbnail}
+              alt="Threads video preview"
+              onError={() => {
+                setShowPoster(false);
+                onThumbnailError?.();
+              }}
+              loading="lazy"
+            />
+            <div className="social-card-play-overlay" aria-label="Play video">▶</div>
+          </div>
+        )}
         {/* Show a placeholder while waiting for embed.js */}
-        {!embedReady && (
+        {!embedReady && !showPoster && (
           <div className="social-card-body">
             <div className="social-card-description" style={{ color: "var(--text-tertiary)" }}>
               Loading preview...
@@ -389,11 +444,15 @@ const ThreadsEmbed: React.FC<ThreadsEmbedProps> = ({
   return (
     <div
       className="social-card social-card--threads"
-      onClick={handleClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        handleClick();
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
+          e.stopPropagation();
           e.preventDefault();
           handleClick();
         }
